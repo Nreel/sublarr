@@ -15,7 +15,7 @@ This guide covers upgrading Sublarr from any beta version to V1.0.
 
 2. **Pull the new image:**
    ```bash
-   docker pull ghcr.io/abrechen2/sublarr:latest
+   docker pull ghcr.io/nreel/sublarr:latest
    docker compose up -d
    ```
 

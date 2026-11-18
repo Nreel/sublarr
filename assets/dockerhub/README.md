@@ -21,7 +21,7 @@ Subtitle manager for Sonarr and Radarr. It finds, checks and repairs subtitles f
 ```yaml
 services:
   sublarr:
-    image: abrechen2/sublarr:latest
+    image: nreel/sublarr:latest
     container_name: sublarr
     ports:
       - "5765:5765"
@@ -45,7 +45,7 @@ Then open `http://<host>:5765`. New here? [Your first 10 minutes](https://sublar
 | `X.Y.Z` | A specific release |
 | `rc-latest` | Newest release candidate |
 
-The same images are on GHCR: `ghcr.io/abrechen2/sublarr`.
+The same images are on GHCR: `ghcr.io/nreel/sublarr`.
 
 ## Links
 

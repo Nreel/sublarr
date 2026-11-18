@@ -49,7 +49,7 @@ https://raw.githubusercontent.com/Abrechen2/docker-templates/main/my-sublarr.xml
 ### Image
 
 The container image is published multi-arch (amd64 + arm64) to GHCR at
-`ghcr.io/abrechen2/sublarr`. The template tracks `:latest`; ensure each
+`ghcr.io/nreel/sublarr`. The template tracks `:latest`; ensure each
 release is built with `docker buildx --platform linux/amd64,linux/arm64`
 so `:latest` stays multi-arch.
 

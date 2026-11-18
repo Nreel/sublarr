@@ -8,13 +8,13 @@
 
 *arr-compatible · Self-hosted · Open Source · Anime-first scoring
 
-[![Version](https://img.shields.io/github/v/release/Abrechen2/sublarr?label=version&color=teal)](https://github.com/Abrechen2/sublarr/releases/latest)
-[![CI](https://github.com/Abrechen2/sublarr/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Abrechen2/sublarr/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/release/Nreel/sublarr?label=version&color=teal)](https://github.com/Nreel/sublarr/releases/latest)
+[![CI](https://github.com/Nreel/sublarr/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Nreel/sublarr/actions/workflows/ci.yml)
 [![security](https://img.shields.io/badge/ruff_%2B_bandit_%2B_pip--audit_%2B_npm_audit_%2B_Semgrep_%2B_Trivy-22c55e.svg)](#-security)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-3776ab.svg)](https://www.python.org/)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
-[![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ed.svg)](https://github.com/Abrechen2/sublarr/pkgs/container/sublarr)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ed.svg)](https://github.com/Nreel/sublarr/pkgs/container/sublarr)
 
 ---
 
@@ -49,7 +49,7 @@ Create a `docker-compose.yml`:
 ```yaml
 services:
   sublarr:
-    image: ghcr.io/abrechen2/sublarr:latest
+    image: ghcr.io/nreel/sublarr:latest
     container_name: sublarr
     ports:
       - "5765:5765"
@@ -71,6 +71,27 @@ Open **http://localhost:5765**. The onboarding wizard walks you through language
 - **Unraid:** search for **Sublarr** in Community Applications (template: [unraid/README.md](unraid/README.md)).
 - **PUID / PGID:** the container starts as root, remaps its `sublarr` user to `PUID`/`PGID`, makes `/config` owned by that user, then drops privileges with `gosu` and runs the app as `PUID:PGID`. `/media` is left untouched — its permissions must already allow that user to read and write. Use `id $USER` on the host to find the right IDs (Unraid uses `99`/`100`).
 - More setups (PostgreSQL, Redis, reverse proxy, resource limits): [Installation](https://sublarr.de/docs/getting-started/installation/).
+
+---
+
+## 📦 Releases & packages
+
+Bumping `backend/VERSION` and pushing to `master` is the whole release procedure — nothing else to run:
+
+| You push | What runs | What appears |
+|---|---|---|
+| `backend/VERSION` → `X.Y.Z` | Version bump → Release | GitHub Release + tag `vX.Y.Z`, image `ghcr.io/nreel/sublarr:X.Y.Z` plus `:latest` / `:stable` |
+| `backend/VERSION` → `X.Y.Z-rc.N` | Version bump → Build & Push Docker Image | `ghcr.io/nreel/sublarr:X.Y.Z-rc.N` and `:rc-latest`, no GitHub Release (release candidates are never promoted automatically) |
+
+Compose always follows the newest release:
+
+```bash
+docker compose pull && docker compose up -d          # :latest
+VERSION=1.21.2 docker compose pull && docker compose up -d   # pinned version
+IMAGE_OWNER=someone-else docker compose up -d --build        # build locally, other owner
+```
+
+Optional repository secrets: `DOCKERHUB_TOKEN` (with `DOCKERHUB_USER`, defaulting to the repo owner) mirrors final releases to Docker Hub as `<user>/sublarr`. Without them only GHCR is published. To rebuild a release deliberately, run the **Release** workflow manually with the version as input.
 
 ---
 
