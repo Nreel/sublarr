@@ -257,6 +257,9 @@ jobs:
       contents: read
     env:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Fork-friendly: mirror to the account that owns this repo unless a
+      # DOCKERHUB_USER secret names a different one.
+      DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER || github.actor }}
 
     steps:
       - name: Skip without a Docker Hub token
@@ -271,14 +274,14 @@ jobs:
         if: env.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
-          username: abrechen2
+          username: ${{ env.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Copy the release tags
         if: env.DOCKERHUB_TOKEN != ''
         run: |
           SRC="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):${{ needs.validate.outputs.version }}"
-          DST=docker.io/abrechen2/sublarr
+          DST="docker.io/$(echo "$DOCKERHUB_USER" | tr '[:upper:]' '[:lower:]')/sublarr"
           docker buildx imagetools create \
             -t "$DST:${{ needs.validate.outputs.version }}" \
             -t "$DST:latest" \

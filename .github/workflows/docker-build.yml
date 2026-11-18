@@ -33,6 +33,7 @@ jobs:
       packages: write
     env:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER || github.actor }}
 
     steps:
       - name: Checkout
@@ -82,7 +83,7 @@ jobs:
       - name: Mirror rc-latest to Docker Hub
         if: contains(inputs.version, '-rc.') && env.DOCKERHUB_TOKEN != ''
         run: |
-          echo "$DOCKERHUB_TOKEN" | docker login docker.io -u abrechen2 --password-stdin
+          echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USER" --password-stdin
           docker buildx imagetools create \
-            -t docker.io/abrechen2/sublarr:rc-latest \
+            -t "docker.io/$(echo "$DOCKERHUB_USER" | tr '[:upper:]' '[:lower:]')/sublarr:rc-latest" \
             "${{ env.REGISTRY }}/$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]'):rc-latest"

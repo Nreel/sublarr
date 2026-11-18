@@ -29,7 +29,7 @@ services:
       - no-new-privileges:true
 
   sublarr:
-    image: ghcr.io/abrechen2/sublarr:${VERSION:-latest}
+    image: ghcr.io/${IMAGE_OWNER:-nreel}/sublarr:${VERSION:-latest}
     build:
       context: .
       args:
