@@ -75,6 +75,9 @@ services:
     cap_add:
       - CHOWN
       - DAC_OVERRIDE
+      # gosu in the entrypoint needs SETUID/SETGID to drop privileges.
+      - SETGID
+      - SETUID
     logging:
       driver: "json-file"
       options:
@@ -123,6 +126,9 @@ services:
     cap_add:
       - CHOWN
       - DAC_OVERRIDE
+      # gosu in the entrypoint needs SETUID/SETGID to drop privileges.
+      - SETGID
+      - SETUID
     logging:
       driver: "json-file"
       options:

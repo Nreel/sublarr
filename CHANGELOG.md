@@ -5,6 +5,20 @@ All notable changes to Sublarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.21.3] - 2026-11-18
+
+### Fixed
+- **Compose deployments restarted in a loop** — The compose files drop every
+  capability and add back only `CHOWN` and `DAC_OVERRIDE`, but the entrypoint
+  re-maps the `sublarr` user to `PUID`/`PGID` and drops privileges with `gosu`,
+  which needs `SETUID`/`SETGID`. Every container started from
+  `docker-compose.yml`, `docker-compose.postgres.yml` or
+  `docker-compose.redis.yml` died with
+  `failed switching to "1000:1000": operation not permitted` and never reached
+  the web UI. Those two capabilities are back now; the app still runs as
+  `PUID:PGID` and never holds them. Unraid templates, which do not drop
+  capabilities, were unaffected.
+
 ## [1.21.2] - 2026-11-18
 
 ### Fixed

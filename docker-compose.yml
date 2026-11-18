@@ -32,7 +32,13 @@ services:
     cap_add:
       - CHOWN
       - DAC_OVERRIDE
-      # Removed SETGID and SETUID -- not needed for gunicorn/Flask
+      # The entrypoint re-maps the sublarr user to PUID/PGID and drops
+      # privileges with `gosu`, which needs SETUID/SETGID. Without them every
+      # container built from these compose files restart-loops with
+      # `failed switching to "1000:1000": operation not permitted`. The app
+      # itself runs as PUID:PGID and never holds these caps.
+      - SETGID
+      - SETUID
     logging:
       driver: "json-file"
       options:
