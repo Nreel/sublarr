@@ -615,7 +615,7 @@ export function WantedPage() {
                       </td>
                     </tr>
                   )}
-                  <tr ref={sentinelRef} aria-hidden="true" />
+                  <tr ref={sentinelRef} aria-hidden="true"><td colSpan={9} style={{ height: 12, padding: 0 }} /></tr>
                 </>
               ) : (
                 <tr>

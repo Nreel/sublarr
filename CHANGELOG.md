@@ -5,6 +5,18 @@ All notable changes to Sublarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.21.2] - 2026-11-18
+
+### Fixed
+- **Wanted list stopped loading more rows** — The infinite-scroll sentinel was
+  an empty table row, so it had no height. On displays with fractional pixel
+  scaling (Windows at 125%, Chrome zoom 100%) the last row of the scroll box
+  landed a hair past the clip edge and the observer never reported an
+  intersection: page 1 was the end of the list, with no error and no way to
+  reach the remaining items. Zooming to 80% made the layout integral and
+  hid the bug. The sentinel row now has a real height, so it is visible inside
+  the scroll box at any scaling and any window width.
+
 ## [1.21.1] - 2026-11-18
 
 ### Fixed
