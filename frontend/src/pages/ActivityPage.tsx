@@ -7,7 +7,7 @@ import { TranslationsTab } from '@/components/activity/TranslationsTab'
 import { QueuePage } from '@/pages/Queue'
 import { UnifiedHistoryTab } from '@/components/activity/UnifiedHistoryTab'
 import { BlacklistPage } from '@/pages/Blacklist'
-import { useJobs, useTranslationEnabled } from '@/hooks/useApi'
+import { useActiveJobCount, useQueueTaskCount, useTranslationEnabled } from '@/hooks/useApi'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,24 +40,21 @@ export function ActivityPage() {
 
   const translationEnabled = useTranslationEnabled()
 
-  // Badge: active + queued translation jobs for the Translations tab (only when enabled)
-  const { data: activeJobs } = useJobs(1, 20, 'running', 3000)
-  const { data: queuedJobs } = useJobs(1, 20, 'queued', 3000)
-
-  const translationsCount = translationEnabled
-    ? ((activeJobs?.data?.length ?? 0) + (queuedJobs?.data?.length ?? 0) || undefined)
-    : undefined
+  // Pill counts: Queue = work items still pending in batch/scan runs,
+  // Translations = jobs in flight. Same figures the nav badges show.
+  const queueCount = useQueueTaskCount()
+  const translationsCount = useActiveJobCount()
 
   const tabs = useMemo(
     () => [
-      { id: 'queue' as const, label: t('tabs.queue', 'Queue') },
+      { id: 'queue' as const, label: t('tabs.queue', 'Queue'), count: queueCount || undefined, tone: 'warning' as const },
       ...(translationEnabled
-        ? [{ id: 'translations' as const, label: t('tabs.translations', 'Translations'), count: translationsCount }]
+        ? [{ id: 'translations' as const, label: t('tabs.translations', 'Translations'), count: translationsCount || undefined, tone: 'accent' as const }]
         : []),
       { id: 'history' as const, label: t('tabs.history', 'History') },
       { id: 'blacklist' as const, label: t('tabs.blacklist', 'Blacklist') },
     ],
-    [t, translationsCount, translationEnabled],
+    [t, queueCount, translationsCount, translationEnabled],
   )
 
   return (

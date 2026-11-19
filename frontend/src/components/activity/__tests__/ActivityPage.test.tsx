@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
+import { useActiveJobCount, useQueueTaskCount } from '@/hooks/useApi'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -50,10 +51,8 @@ vi.mock('@/hooks/useApi', () => ({
     },
     isLoading: false,
   }),
-  useJobs: () => ({
-    data: { data: [], total: 0, page: 1, total_pages: 1 },
-    isLoading: false,
-  }),
+  useActiveJobCount: vi.fn(() => 0),
+  useQueueTaskCount: vi.fn(() => 0),
   useSearchWantedItem: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateWantedStatus: () => ({ mutate: vi.fn(), isPending: false }),
 }))
@@ -156,6 +155,8 @@ describe('ActivityPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockTranslationEnabled = false
+    vi.mocked(useActiveJobCount).mockReturnValue(0)
+    vi.mocked(useQueueTaskCount).mockReturnValue(0)
   })
 
   it('renders the page with header and tabs', () => {
@@ -231,15 +232,35 @@ describe('ActivityPage', () => {
     expect(screen.queryByTestId('tab-content-queue')).not.toBeInTheDocument()
   })
 
-  it('shows translations count badge when there are active/queued jobs', () => {
+  it('shows the translations count for tasks in flight', () => {
+    mockTranslationEnabled = true
+    vi.mocked(useActiveJobCount).mockReturnValue(7)
     renderWithProviders()
 
-    // The Translations tab should have a count badge for active + queued jobs
-    const badge = screen.queryByTestId('tab-count-translations')
-    // May or may not be present depending on mock job data
-    if (badge) {
-      expect(badge).toBeInTheDocument()
-    }
+    expect(screen.getByTestId('tab-count-translations')).toHaveTextContent('7')
+  })
+
+  it('shows no translations count when nothing is in flight', () => {
+    mockTranslationEnabled = true
+    vi.mocked(useActiveJobCount).mockReturnValue(0)
+    renderWithProviders()
+
+    expect(screen.getByTestId('tab-translations')).toBeInTheDocument()
+    expect(screen.queryByTestId('tab-count-translations')).toBeNull()
+  })
+
+  it('shows the queue count for pending work items', () => {
+    vi.mocked(useQueueTaskCount).mockReturnValue(4)
+    renderWithProviders()
+
+    expect(screen.getByTestId('tab-count-queue')).toHaveTextContent('4')
+  })
+
+  it('shows no queue count when the queue is idle', () => {
+    renderWithProviders()
+
+    expect(screen.getByTestId('tab-queue')).toBeInTheDocument()
+    expect(screen.queryByTestId('tab-count-queue')).toBeNull()
   })
 
   it('falls back to queue tab for invalid tab param', () => {

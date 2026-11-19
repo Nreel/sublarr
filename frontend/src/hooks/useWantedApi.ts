@@ -126,29 +126,58 @@ export function useWantedBatchStatus(idleRefetchMs: number | false = 10000) {
   })
 }
 
-export function useWantedBatchExtractStatus() {
+export function useWantedBatchExtractStatus(idleRefetchMs: number | false = false) {
   return useQuery({
     queryKey: ['wanted-batch-extract-status'],
     queryFn: getBatchExtractStatus,
-    refetchInterval: (query) => (query.state.data?.running ? 3000 : false),
+    refetchInterval: (query) => (query.state.data?.running ? 3000 : idleRefetchMs),
   })
 }
 
-export function useWantedBatchProbeStatus() {
+export function useWantedBatchProbeStatus(idleRefetchMs: number | false = false) {
   return useQuery({
     queryKey: ['wanted-batch-probe-status'],
     queryFn: getBatchProbeStatus,
-    refetchInterval: (query) => (query.state.data?.running ? 2000 : false),
+    refetchInterval: (query) => (query.state.data?.running ? 2000 : idleRefetchMs),
   })
 }
 
-export function useScannerStatus() {
+export function useScannerStatus(idleRefetchMs: number | false = 30000) {
   return useQuery({
     queryKey: ['scanner-status'],
     queryFn: getScannerStatus,
     refetchInterval: (query) =>
-      query.state.data?.is_scanning || query.state.data?.is_searching ? 3000 : 30000,
+      query.state.data?.is_scanning || query.state.data?.is_searching ? 3000 : idleRefetchMs,
   })
+}
+
+/**
+ * Work items still pending in the Queue tab: wanted batch search, batch probe,
+ * embedded-sub batch extract, and the wanted scan/search. Each is one global
+ * run reporting `{running, total, processed}`, so this is what is left to do —
+ * an idle Queue is 0. A run counts at least 1 while it is in flight, since the
+ * item being worked on is not yet `processed`.
+ *
+ * Nav badges read this outside the Queue tab, so idle runs still poll here —
+ * WebSocket progress events refresh the same queries immediately (see
+ * GlobalWebSocketListener), and this slow interval only covers a dropped
+ * socket.
+ */
+export function useQueueTaskCount(idleRefetchMs = 30000): number {
+  const { data: batch } = useWantedBatchStatus(idleRefetchMs)
+  const { data: probe } = useWantedBatchProbeStatus(idleRefetchMs)
+  const { data: extract } = useWantedBatchExtractStatus(idleRefetchMs)
+  const { data: scanner } = useScannerStatus(idleRefetchMs)
+
+  const pending = (run?: { running: boolean; total: number; processed: number }) =>
+    run?.running ? Math.max(run.total - run.processed, 1) : 0
+
+  const scanPending =
+    scanner?.is_scanning || scanner?.is_searching
+      ? Math.max((scanner.progress.total ?? 0) - (scanner.progress.current ?? 0), 1)
+      : 0
+
+  return pending(batch) + pending(probe) + pending(extract) + scanPending
 }
 
 export function useStartBatchProbe() {

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
-import { useUpdateInfo } from '@/hooks/useApi'
+import { useUpdateInfo, useActiveJobCount } from '@/hooks/useApi'
+import { useQueueTaskCount } from '@/hooks/useWantedApi'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -14,11 +15,13 @@ vi.mock('@/hooks/useApi', () => ({
   useHealth: () => ({ data: { status: 'healthy', version: '0.33.0' } }),
   useUpdateInfo: vi.fn(() => ({ data: null })),
   useUpdateConfig: () => ({ mutate: vi.fn(), isPending: false }),
+  useActiveJobCount: vi.fn(() => 0),
 }))
 
 vi.mock('@/hooks/useWantedApi', () => ({
   useWantedSummary: () => ({ data: { total: 5 } }),
   useScannerStatus: () => ({ data: { is_scanning: false, is_searching: false } }),
+  useQueueTaskCount: vi.fn(() => 0),
 }))
 
 vi.mock('@/components/shared/ThemeToggle', () => ({
@@ -35,6 +38,8 @@ function renderWithRouter(ui: React.ReactElement, { route = '/' } = {}) {
 describe('IconSidebar', () => {
   beforeEach(() => {
     vi.mocked(useUpdateInfo).mockReturnValue({ data: null })
+    vi.mocked(useActiveJobCount).mockReturnValue(0)
+    vi.mocked(useQueueTaskCount).mockReturnValue(0)
   })
 
   it('renders the logo image', () => {
@@ -75,9 +80,42 @@ describe('IconSidebar', () => {
 
   it('shows badge on Wanted when there are wanted items', () => {
     renderWithRouter(<IconSidebar />)
-    const badge = screen.getByTestId('wanted-badge')
+    const badge = screen.getByTestId('nav-badge-wanted')
     expect(badge).toBeInTheDocument()
     expect(badge).toHaveTextContent('5')
+  })
+
+  it('shows the Queue badge when queue work is pending', () => {
+    vi.mocked(useQueueTaskCount).mockReturnValue(3)
+    renderWithRouter(<IconSidebar />)
+    expect(screen.getByTestId('nav-badge-activity-queue')).toHaveTextContent('3')
+    expect(screen.queryByTestId('nav-badge-activity-translations')).toBeNull()
+  })
+
+  it('shows the Translations badge when jobs are in flight', () => {
+    vi.mocked(useActiveJobCount).mockReturnValue(7)
+    renderWithRouter(<IconSidebar />)
+    expect(screen.getByTestId('nav-badge-activity-translations')).toHaveTextContent('7')
+    expect(screen.queryByTestId('nav-badge-activity-queue')).toBeNull()
+  })
+
+  it('shows Queue before Translations when both are running', () => {
+    vi.mocked(useQueueTaskCount).mockReturnValue(3)
+    vi.mocked(useActiveJobCount).mockReturnValue(7)
+    renderWithRouter(<IconSidebar />)
+    const badges = screen
+      .getAllByTestId(/nav-badge-activity/)
+      .map((el) => `${el.dataset.testid}:${el.textContent}`)
+    expect(badges).toEqual([
+      'nav-badge-activity-queue:3',
+      'nav-badge-activity-translations:7',
+    ])
+  })
+
+  it('shows no Activity badges when nothing is running', () => {
+    renderWithRouter(<IconSidebar />)
+    expect(screen.queryByTestId('nav-badge-activity-queue')).toBeNull()
+    expect(screen.queryByTestId('nav-badge-activity-translations')).toBeNull()
   })
 
   it('has aria-labels on nav items', () => {

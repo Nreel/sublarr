@@ -243,6 +243,19 @@ export function useTranslationEnabled(): boolean {
   return Boolean(data?.translation_enabled);
 }
 
+/**
+ * Tasks in flight right now: running + queued translation jobs. Both the nav
+ * badges and the Activity page Translations pill read this so the two numbers
+ * can never disagree; the job queries are narrow pages, so `total` from the
+ * count row is the real figure, not the rows fetched.
+ */
+export function useActiveJobCount(): number {
+  const translationEnabled = useTranslationEnabled();
+  const { data: running } = useJobs(1, 20, 'running', 3000);
+  const { data: queued } = useJobs(1, 20, 'queued', 3000);
+  return translationEnabled ? (running?.total ?? 0) + (queued?.total ?? 0) : 0;
+}
+
 /** Mutation: disables translation + cancels all queued jobs. */
 export function useDisableTranslation() {
   const queryClient = useQueryClient();

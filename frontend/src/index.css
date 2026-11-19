@@ -513,8 +513,11 @@ a:hover {
   width: auto;
 }
 
-.icon-sidebar:hover .sidebar-badge {
+.icon-sidebar:hover .sidebar-badge-group {
   margin-left: auto;
+}
+
+.icon-sidebar:hover .sidebar-badge {
   padding: 1px 6px;
 }
 

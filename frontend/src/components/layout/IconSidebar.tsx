@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { LayoutDashboard, BookOpen, Bell, Settings, Search, Trash2, ScrollText, BarChart3, HeartPulse, Server } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatVersion } from '@/lib/version'
-import { useHealth, useUpdateInfo } from '@/hooks/useApi'
-import { useWantedSummary } from '@/hooks/useWantedApi'
+import { useHealth, useUpdateInfo, useActiveJobCount } from '@/hooks/useApi'
+import { useQueueTaskCount, useWantedSummary } from '@/hooks/useWantedApi'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
 
@@ -13,16 +13,33 @@ interface NavItem {
   readonly labelKey: string
   readonly icon: typeof LayoutDashboard
   readonly testId: string
-  readonly showBadge?: boolean
+  /** Chips shown after the label, in render order; zero-count ones drop out. */
+  readonly badges?: readonly { testId: string; tone: BadgeTone }[]
 }
+
+type BadgeTone = 'warning' | 'accent'
 
 const mainNavItems: readonly NavItem[] = [
   { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard, testId: 'nav-link-dashboard' },
   { to: '/library', labelKey: 'nav.library', icon: BookOpen, testId: 'nav-link-library' },
-  { to: '/wanted', labelKey: 'nav.wanted', icon: Search, testId: 'nav-link-wanted', showBadge: true },
-  { to: '/activity', labelKey: 'nav.activity', icon: Bell, testId: 'nav-link-activity' },
+  { to: '/wanted', labelKey: 'nav.wanted', icon: Search, testId: 'nav-link-wanted', badges: [{ testId: 'nav-badge-wanted', tone: 'warning' }] },
+  {
+    to: '/activity',
+    labelKey: 'nav.activity',
+    icon: Bell,
+    testId: 'nav-link-activity',
+    badges: [
+      { testId: 'nav-badge-activity-queue', tone: 'warning' },
+      { testId: 'nav-badge-activity-translations', tone: 'accent' },
+    ],
+  },
   { to: '/trash', labelKey: 'nav.trash', icon: Trash2, testId: 'nav-link-trash' },
 ] as const
+
+const badgeTones = {
+  warning: { backgroundColor: 'var(--warning)', color: '#000' },
+  accent: { backgroundColor: 'var(--accent)', color: '#000' },
+} as const
 
 const bottomNavItems: readonly NavItem[] = [
   { to: '/statistics', labelKey: 'nav.statistics', icon: BarChart3, testId: 'nav-link-statistics' },
@@ -40,6 +57,18 @@ export function IconSidebar() {
   const hasUpdate = updateInfo?.available === true
 
   const wantedCount = wantedSummary?.total ?? 0
+
+  // Activity badges: Queue work items still pending (batch search/probe/extract
+  // or a scan) and translation jobs in flight — the same figures the Activity
+  // page pills show.
+  const queueCount = useQueueTaskCount()
+  const translationCount = useActiveJobCount()
+
+  const badgeCounts: Record<string, number> = {
+    'nav-badge-wanted': wantedCount,
+    'nav-badge-activity-queue': queueCount,
+    'nav-badge-activity-translations': translationCount,
+  }
 
   return (
     <aside
@@ -100,7 +129,7 @@ export function IconSidebar() {
             key={item.to}
             item={item}
             label={t(item.labelKey)}
-            badgeCount={item.showBadge ? wantedCount : 0}
+            badgeCounts={badgeCounts}
           />
         ))}
       </nav>
@@ -119,7 +148,7 @@ export function IconSidebar() {
             key={item.to}
             item={item}
             label={t(item.labelKey)}
-            badgeCount={0}
+            badgeCounts={{}}
             showUpdateDot={item.to === '/settings' && hasUpdate}
           />
         ))}
@@ -135,12 +164,12 @@ export function IconSidebar() {
 interface SidebarNavItemProps {
   readonly item: NavItem
   readonly label: string
-  readonly badgeCount: number
+  readonly badgeCounts: Record<string, number>
   readonly showUpdateDot?: boolean
 }
 
-function SidebarNavItem({ item, label, badgeCount, showUpdateDot = false }: SidebarNavItemProps) {
-  const { to, icon: Icon, testId } = item
+function SidebarNavItem({ item, label, badgeCounts, showUpdateDot = false }: SidebarNavItemProps) {
+  const { to, icon: Icon, testId, badges } = item
 
   return (
     <NavLink
@@ -187,17 +216,21 @@ function SidebarNavItem({ item, label, badgeCount, showUpdateDot = false }: Side
           <span className="sidebar-label text-[13px] font-medium truncate opacity-0 transition-opacity duration-200">
             {label}
           </span>
-          {badgeCount > 0 && (
-            <span
-              data-testid="wanted-badge"
-              className="sidebar-label sidebar-badge text-[10px] font-bold rounded-full opacity-0 transition-opacity duration-200"
-              style={{
-                backgroundColor: 'var(--warning)',
-                color: '#000',
-              }}
-            >
-              {badgeCount > 99 ? '99+' : badgeCount}
-            </span>
+          {badges?.some((badge) => badgeCounts[badge.testId] > 0) && (
+            <div className="sidebar-label sidebar-badge-group flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-200">
+              {badges
+                .filter((badge) => badgeCounts[badge.testId] > 0)
+                .map((badge) => (
+                  <span
+                    key={badge.testId}
+                    data-testid={badge.testId}
+                    className="sidebar-badge text-[10px] font-bold rounded-full"
+                    style={badgeTones[badge.tone]}
+                  >
+                    {badgeCounts[badge.testId] > 99 ? '99+' : badgeCounts[badge.testId]}
+                  </span>
+                ))}
+            </div>
           )}
         </>
       )}

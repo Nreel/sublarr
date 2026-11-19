@@ -5,6 +5,19 @@ All notable changes to Sublarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Activity tab counts its work** — The Activity entry in the icon sidebar and
+  the mobile bottom navigation now carries badges for the work in flight, the
+  same way Wanted shows its backlog: an amber count of pending queue tasks
+  (batch search/probe/extract, or a library scan) and a blue count of running
+  plus queued translation jobs. Nav badges, the Queue and Translations tab
+  pills and the Jobs list all read one figure, and it counts every pending task
+  instead of the first 20 fetched rows. WebSocket progress events refresh the
+  nav badges immediately, so the count does not lag behind a run started from
+  the Wanted or Activity pages.
+
 ## [1.21.3] - 2026-11-18
 
 ### Fixed

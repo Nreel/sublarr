@@ -2,6 +2,8 @@ interface PillTab {
   id: string;
   label: string;
   count?: number;
+  /** Color the count is painted with; defaults to the accent. */
+  tone?: 'warning' | 'accent';
 }
 
 interface PillTabsProps {
@@ -27,7 +29,13 @@ export function PillTabs({ tabs, activeTab, onChange }: PillTabsProps) {
         >
           {tab.label}
           {tab.count !== undefined && (
-            <span className="ml-1 text-[10px] font-semibold text-[var(--accent)]">{tab.count}</span>
+            <span
+              className={`ml-1 text-[10px] font-semibold ${
+                tab.tone === 'warning' ? 'text-[var(--warning)]' : 'text-[var(--accent)]'
+              }`}
+            >
+              {tab.count}
+            </span>
           )}
         </button>
       ))}
