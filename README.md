@@ -18,9 +18,7 @@
 
 ---
 
-**[Quick Start](#-quick-start)** · **[Is it for you?](#-is-sublarr-for-you)** · **[Configuration](#️-configuration)** · **[Limitations](#️-known-limitations)** · **[Integrations](#-integrations)** · **[Website](https://sublarr.de)** · **[Docs](https://sublarr.de/docs/)**
-
-**Community:** [Discord](https://discord.gg/WjatsKzHXz) · [Reddit r/Sublarr](https://www.reddit.com/r/Sublarr/) · [GitHub Issues](https://github.com/Abrechen2/sublarr/issues)
+**[Quick Start](#-quick-start)** · **[Configuration](#️-configuration)** · **[Integrations](#-integrations)** · **[Limitations](#️-known-limitations)** · **[Website](https://sublarr.de)** · **[Docs](https://sublarr.de/docs/)**
 
 </div>
 
@@ -29,16 +27,6 @@
 Sublarr is a self-hosted subtitle manager for anime and media libraries. It searches subtitle providers, scores the results (ASS-first), downloads the best match and gives you tools to edit, sync and convert subtitles — all on your LAN.
 
 Connect it to Sonarr/Radarr and it reacts to imports via webhooks, or run it standalone: it watches your media folders and reads `.nfo` metadata, no *arr required.
-
-What sets it apart:
-
-- **Right-episode check and repair** — every search result whose name states a different season or episode is dropped before scoring, for every provider. Subtitles saved earlier for the wrong episode can be found and re-searched under *Settings → System → Subtitle repair*.
-- **Encoding repair** — subtitles delivered in legacy encodings (Windows-125x, Greek, Cyrillic, GBK, …) are read in their language's encoding and saved as UTF-8; files damaged by older builds can be restored provably from the original.
-- **Anime-aware matching** — AniDB absolute episode order, optional Shoko Server mapping, anime season-collapse handling, ASS/signs track handling and dubtitle detection.
-
-<p align="center">
-  <img src="assets/screenshots/tour.gif" alt="Sublarr tour: dashboard, library, series detail and wanted list" width="900" />
-</p>
 
 ---
 
@@ -71,92 +59,6 @@ Open **http://localhost:5765**. The onboarding wizard walks you through language
 - **Unraid:** search for **Sublarr** in Community Applications (template: [unraid/README.md](unraid/README.md)).
 - **PUID / PGID:** the container starts as root, remaps its `sublarr` user to `PUID`/`PGID`, makes `/config` owned by that user, then drops privileges with `gosu` and runs the app as `PUID:PGID`. `/media` is left untouched — its permissions must already allow that user to read and write. Use `id $USER` on the host to find the right IDs (Unraid uses `99`/`100`).
 - More setups (PostgreSQL, Redis, reverse proxy, resource limits): [Installation](https://sublarr.de/docs/getting-started/installation/).
-
----
-
-## 📦 Releases & packages
-
-Bumping `backend/VERSION` and pushing to `master` is the whole release procedure — nothing else to run:
-
-| You push | What runs | What appears |
-|---|---|---|
-| `backend/VERSION` → `X.Y.Z` | Version bump → Release | GitHub Release + tag `vX.Y.Z`, image `ghcr.io/nreel/sublarr:X.Y.Z` plus `:latest` / `:stable` |
-| `backend/VERSION` → `X.Y.Z-rc.N` | Version bump → Build & Push Docker Image | `ghcr.io/nreel/sublarr:X.Y.Z-rc.N` and `:rc-latest`, no GitHub Release (release candidates are never promoted automatically) |
-
-Compose always follows the newest release:
-
-```bash
-docker compose pull && docker compose up -d          # :latest
-VERSION=1.21.2 docker compose pull && docker compose up -d   # pinned version
-IMAGE_OWNER=someone-else docker compose up -d --build        # build locally, other owner
-```
-
-Optional repository secrets: `DOCKERHUB_TOKEN` (with `DOCKERHUB_USER`, defaulting to the repo owner) mirrors final releases to Docker Hub as `<user>/sublarr`. Without them only GHCR is published. To rebuild a release deliberately, run the **Release** workflow manually with the version as input.
-
----
-
-## 🤔 Is Sublarr for you?
-
-**Probably not, if** your library is English-only live-action and [Bazarr](https://github.com/morpheus65535/bazarr) already covers it, you never touch anime, or you need multi-user accounts today.
-
-**Probably yes, if** you run anime (absolute ordering, signs/songs tracks, several English tracks per file), care about the subtitle *format* (styled ASS rather than a flattened SRT), maintain several languages with per-language rules, or want to see *why* a file was chosen and change the answer.
-
-More: [Scope and limitations](https://sublarr.de/docs/getting-started/scope-and-limitations/) · [Migrating from Bazarr](https://sublarr.de/docs/getting-started/migrating-from-bazarr/).
-
----
-
-## ✨ Features
-
-### 🔍 Search & download
-- **28 built-in provider adapters** — 20 subtitle sites (AnimeTosho, Jimaku, OpenSubtitles, SubDL, SubSource, Subf2m, SubsDump, Addic7ed, BetaSeries, Titlovi, Titrari, TVSubtitles, Gestdown, Kitsunekko, Napisy24, Podnapisi, YIFY, Zimuku, LegendasDivX, TurkceAltyazi), a Custom HTTP/JSON adapter ([docs/CUSTOM_PROVIDER_API.md](docs/CUSTOM_PROVIDER_API.md)), embedded-track extraction and 6 Subliminal-based alternates
-- **43 opt-in catalog providers** — a reviewed, pinned copy of the Bazarr+ provider catalog, off by default
-- **ASS-first scoring** with format, release, sync and uploader-trust components; score breakdown on hover; [decision log](https://sublarr.de/docs/user-guide/decision-log/) per search
-- **Language profiles** — per-series/film target languages, mustContain / mustNotContain filters, cutoff, audioExclude
-- Parallel provider search, per-provider circuit breakers and rate-limit budgets, SHA-256 deduplication, machine-translation flagging
-
-### 📺 *arr & media servers
-- Sonarr & Radarr webhooks, multiple instances, tag-based profile assignment, path mapping for remote hosts
-- Library refresh for Jellyfin, Emby, Plex and Kodi; Shoko Server for authoritative AniDB matching
-- Standalone mode: filesystem watching, `.nfo` metadata, extras skipping, symlink support
-
-### 🔧 Subtitle tools
-- [Subtitle editor](https://sublarr.de/docs/user-guide/subtitle-editor/) (CodeMirror, diff view) and [waveform editor](https://sublarr.de/docs/user-guide/waveform-editor/) for retiming
-- Sync with ffsubsync / alass, format conversion (ASS, SRT, VTT, SSA), [post-processing pipeline](https://sublarr.de/docs/user-guide/post-processing/) (HI removal, OCR cleanup, formatting fixes)
-- OCR for PGS/VobSub tracks (Tesseract), Whisper transcription when no text subtitle exists, embedded-stream removal without re-encoding
-- [Subtitle health](https://sublarr.de/docs/user-guide/subtitle-health/) checks and [subtitle repair](https://sublarr.de/docs/user-guide/subtitle-repair/)
-
-### 🖥️ Wanted & automation
-- Wanted scanner, event-driven by default (webhooks, manual triggers, file watcher), with an optional periodic fallback
-- Upgrade system that replaces low-quality subtitles when a better one appears; batch search with live progress
-- [Scheduler admin](https://sublarr.de/docs/user-guide/settings/scheduler/) under *Settings → System → Scheduler* (run now, pause, resume, edit trigger)
-
-### 🌐 Translation
-Off by default. Turn it on in *Settings → Translation* and configure a backend: Ollama, DeepL, LibreTranslate, any OpenAI-compatible endpoint, Google Cloud Translation, Claude, Gemini, DeepSeek, Mistral, ChatGPT, Azure Translator or MyMemory. The result depends on the translation backend and model you choose — use at your own risk. See [Translation](https://sublarr.de/docs/user-guide/translation-llm/).
-
----
-
-## 🖥️ UI Overview
-
-| Dashboard | Library |
-|---|---|
-| ![Dashboard](assets/screenshots/dashboard.webp) | ![Library](assets/screenshots/library.webp) |
-| **Series detail** | **Wanted** |
-| ![Series detail](assets/screenshots/series-detail.webp) | ![Wanted](assets/screenshots/wanted.webp) |
-
-| Page | Description |
-|---|---|
-| **Dashboard** | Customizable widget grid — status, queue, recent activity, automation status |
-| **Library** | Series and movies with subtitle progress and bulk actions |
-| **Wanted** | Missing subtitles with one-click search, failure reasons and retry countdown |
-| **Activity** | Tabs for live queue, history and blacklist (`/queue` and `/history` redirect here) |
-| **Statistics** | Provider success rates, language distribution, quality trends |
-| **Providers** | Per-provider statistics — success rates, response times, circuit-breaker and throttle state, API budget |
-| **Health** | Library problems — series with missing subtitles, stuck wanted items, provider health |
-| **Trash** | Deleted subtitle sidecars and video backups, restorable |
-| **Logs** | Application log viewer |
-| **Settings** | General, Connections, Subtitles, Providers (incl. plugin marketplace — `/plugins` redirects here), Automation, Translation, Notifications, System |
-
-Global search with `Ctrl+K`, keyboard shortcuts (`?`), real-time updates via WebSocket.
 
 ---
 
@@ -249,37 +151,3 @@ cd frontend && npm run lint && npx tsc --noEmit
 Every instance serves its own API reference at `/api/docs` (Swagger UI) and `/api/v1/openapi.json`. Further reading: [Architecture](https://sublarr.de/docs/development/architecture/) · [API reference](https://sublarr.de/docs/development/api-reference/) · [Plugin development](https://sublarr.de/docs/development/plugin-development/) · [Database schema](https://sublarr.de/docs/development/database-schema/) · [ROADMAP.md](ROADMAP.md).
 
 AI was used as a coding assistant during development (scaffolding, test drafting, refactoring sweeps, documentation drafts); architecture, scoring, provider integrations and release decisions were made and debugged by hand.
-
----
-
-## 🤝 Contributing
-
-1. **Bug reports** → open a [GitHub Issue](https://github.com/Abrechen2/sublarr/issues) with log output and config
-2. **Feature requests** → open a Discussion first so the approach can be agreed
-3. **Pull requests** → see [CONTRIBUTING.md](CONTRIBUTING.md) and [Contributing](https://sublarr.de/docs/development/contributing/) for code style, tests and commit format
-
-## 💬 Community
-
-- **Discord** — [discord.gg/WjatsKzHXz](https://discord.gg/WjatsKzHXz) — live chat, install help, release testing
-- **Reddit** — [r/Sublarr](https://www.reddit.com/r/Sublarr/) — announcements, showcases, discussions
-- **GitHub Issues** — [bug reports & feature requests](https://github.com/Abrechen2/sublarr/issues)
-
----
-
-## 📄 License
-
-GPL-3.0 — see [LICENSE](LICENSE).
-
-Sublarr is not affiliated with the *arr project or any subtitle provider.
-
----
-
-<div align="center">
-
-A project by <a href="https://www.abrechen2.de/"><code>&lt;abrechen2 /&gt;</code></a>
-
-<a href="https://www.paypal.com/donate?hosted_button_id=GLXYTD3FV9Y78">
-  <img src="https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif" alt="Donate via PayPal" />
-</a>
-
-</div>
