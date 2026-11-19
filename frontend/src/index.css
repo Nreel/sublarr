@@ -494,30 +494,31 @@ a:hover {
   white-space: nowrap;
 }
 
-/* Icon Sidebar — expanded on hover: left-align, show labels */
-.icon-sidebar:hover .sidebar-nav-item {
+/* Icon Sidebar — expanded state (data-expanded, toggled by the collapse
+   button): left-align, show labels */
+.icon-sidebar[data-expanded='true'] .sidebar-nav-item {
   justify-content: flex-start;
   padding-left: 12px;
   padding-right: 12px;
   gap: 12px;
 }
 
-.icon-sidebar:hover .sidebar-logo-area {
+.icon-sidebar[data-expanded='true'] .sidebar-logo-area {
   justify-content: flex-start !important;
   padding-left: 12px !important;
   gap: 10px;
 }
 
-.icon-sidebar:hover .sidebar-label {
+.icon-sidebar[data-expanded='true'] .sidebar-label {
   opacity: 1 !important;
   width: auto;
 }
 
-.icon-sidebar:hover .sidebar-badge-group {
+.icon-sidebar[data-expanded='true'] .sidebar-badge-group {
   margin-left: auto;
 }
 
-.icon-sidebar:hover .sidebar-badge {
+.icon-sidebar[data-expanded='true'] .sidebar-badge {
   padding: 1px 6px;
 }
 

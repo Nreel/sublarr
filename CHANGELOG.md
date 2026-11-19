@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Sidebar stays open until you collapse it** — The icon sidebar expanded on
+  hover only, so nav labels were invisible until the pointer was over it. It
+  now shows its full label rows by default, and a Collapse/Expand button on
+  its own row at the bottom toggles between the full panel and the icon rail.
+  The main content offsets itself to match, so the open panel never overlaps
+  the page.
+
 ### Added
 - **Activity tab counts its work** — The Activity entry in the icon sidebar and
   the mobile bottom navigation now carries badges for the work in flight, the

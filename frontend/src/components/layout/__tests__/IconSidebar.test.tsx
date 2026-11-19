@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { useUpdateInfo, useActiveJobCount } from '@/hooks/useApi'
 import { useQueueTaskCount } from '@/hooks/useWantedApi'
@@ -126,10 +126,21 @@ describe('IconSidebar', () => {
     expect(screen.getByTestId('nav-link-settings')).toHaveAttribute('aria-label')
   })
 
-  it('has the collapsed sidebar class by default', () => {
+  it('is expanded by default and toggles to the icon rail', () => {
     renderWithRouter(<IconSidebar />)
     const sidebar = screen.getByTestId('icon-sidebar')
+    expect(sidebar).toHaveAttribute('data-expanded', 'true')
+    expect(sidebar.className).toMatch(/w-\[220px\]/)
+
+    const toggle = screen.getByTestId('sidebar-toggle')
+    expect(toggle).toHaveAttribute('aria-label', 'Collapse sidebar')
+    fireEvent.click(toggle)
+
+    expect(sidebar).toHaveAttribute('data-expanded', 'false')
     expect(sidebar.className).toMatch(/w-\[48px\]/)
+    expect(toggle).toHaveAttribute('aria-label', 'Expand sidebar')
+    fireEvent.click(toggle)
+    expect(sidebar).toHaveAttribute('data-expanded', 'true')
   })
 
   it('has a separator between main nav and bottom items', () => {

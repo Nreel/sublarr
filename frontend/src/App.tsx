@@ -132,7 +132,6 @@ function GlobalWebSocketListener() {
     onWantedScanProgress: refreshQueueStatus,
     onWantedScanCompleted: refreshQueueStatus,
     onWantedSearchProgress: refreshQueueStatus,
-    onWantedSearchCompleted: refreshQueueStatus,
     onWebhookReceived: (data: unknown) => {
       const d = data as Record<string, unknown>
       toast(t('global_toasts.webhook_received', { title: String(d.title ?? t('global_toasts.download_received')) }), 'info')

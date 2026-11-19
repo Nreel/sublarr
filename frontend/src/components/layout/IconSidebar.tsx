@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, BookOpen, Bell, Settings, Search, Trash2, ScrollText, BarChart3, HeartPulse, Server } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Bell, Settings, Search, Trash2, ScrollText, BarChart3, HeartPulse, Server, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatVersion } from '@/lib/version'
 import { useHealth, useUpdateInfo, useActiveJobCount } from '@/hooks/useApi'
@@ -64,6 +65,18 @@ export function IconSidebar() {
   const queueCount = useQueueTaskCount()
   const translationCount = useActiveJobCount()
 
+  // Expanded by default; the toggle button collapses to the icon rail.
+  const [expanded, setExpanded] = useState(true)
+
+  // --sidebar-width offsets the main content area (see index.css), so a
+  // full-width panel never overlaps content.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-width', expanded ? '232px' : '60px')
+    return () => {
+      document.documentElement.style.removeProperty('--sidebar-width')
+    }
+  }, [expanded])
+
   const badgeCounts: Record<string, number> = {
     'nav-badge-wanted': wantedCount,
     'nav-badge-activity-queue': queueCount,
@@ -73,10 +86,12 @@ export function IconSidebar() {
   return (
     <aside
       data-testid="icon-sidebar"
+      data-expanded={expanded}
       className={cn(
         'icon-sidebar',
         'fixed left-0 top-0 h-screen z-40 flex flex-col',
-        'w-[48px] hover:w-[220px] transition-[width] duration-200 ease-in-out',
+        expanded ? 'w-[220px]' : 'w-[48px]',
+        'transition-[width] duration-200 ease-in-out',
         'overflow-hidden',
         'hidden md:flex'
       )}
@@ -152,6 +167,25 @@ export function IconSidebar() {
             showUpdateDot={item.to === '/settings' && hasUpdate}
           />
         ))}
+        {/* Toggle sits on its own row like a nav item: centered icon in the
+            rail, icon + label when expanded. Language/theme stay separate. */}
+        <button
+          data-testid="sidebar-toggle"
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
+          aria-expanded={expanded}
+          className={cn(
+            'sidebar-nav-item flex w-full items-center mb-0.5 rounded-md relative',
+            'transition-colors duration-100 hover:bg-[rgba(255,255,255,0.04)]'
+          )}
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          {expanded ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+          <span className="sidebar-label text-[13px] font-medium truncate opacity-0 transition-opacity duration-200">
+            {expanded ? 'Collapse' : 'Expand'}
+          </span>
+        </button>
         <div className="flex items-center justify-center gap-1 py-1">
           <LanguageSwitcher />
           <ThemeToggle />
