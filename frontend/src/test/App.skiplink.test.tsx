@@ -37,6 +37,13 @@ vi.mock('@/hooks/useKeyboardShortcuts', () => ({
   useKeyboardShortcuts: () => undefined,
 }))
 
+// The shell (sidebar + <main id="main-content">) only renders once a session
+// is known; these tests assert its DOM order, not the guard's routing, so pass
+// the guard through instead of standing up a fake session.
+vi.mock('@/components/auth/AuthGuard', () => ({
+  AuthGuard: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
 // Mock react-i18next
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

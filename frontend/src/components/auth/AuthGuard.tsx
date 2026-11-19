@@ -8,14 +8,19 @@ interface AuthGuardProps {
 
 export function AuthGuard({ children }: AuthGuardProps) {
   const location = useLocation()
-  const { data: auth, isLoading } = useQuery({
+  const { data: auth, isLoading, isFetching } = useQuery({
     queryKey: ['auth-status'],
     queryFn: getAuthStatus,
     staleTime: 30_000,
     retry: false,
   })
 
-  if (isLoading) return null
+  // A sign-in or first-run setup invalidates this query and then navigates.
+  // Until the refetch settles the cache still holds the pre-login answer
+  // ("authenticated: false"), and redirecting on it bounced a browser that had
+  // just signed in straight back to /login — the password had to be entered
+  // twice. Render nothing until the read has settled, then decide on fresh data.
+  if (isLoading || isFetching) return null
 
   if (auth && !auth.configured) {
     return <Navigate to="/setup" replace />

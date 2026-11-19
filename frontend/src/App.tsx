@@ -199,6 +199,64 @@ function FirstRunWizardMount() {
   return <FirstRunWizard onClose={() => setWizardOpen(false)} />
 }
 
+/** Everything that reads the API: the app shell, the modals, the wizard.
+ *
+ *  Rendered only inside AuthGuard, so no request can go out while the browser
+ *  holds no session. Mounted unauthenticated, these components fired GETs that
+ *  answered 401, and the axios interceptor turned one of those into a hard
+ *  navigation to /login — a full page reload that wiped the password already
+ *  typed, so signing in looked like it had to be done twice. */
+function AppShell({
+  searchOpen,
+  setSearchOpen,
+  shortcutsModalOpen,
+  closeShortcutsModal,
+}: {
+  searchOpen: boolean
+  setSearchOpen: (v: boolean) => void
+  shortcutsModalOpen: boolean
+  closeShortcutsModal: () => void
+}) {
+  const whatsNew = useWhatsNew()
+  // Don't stack the What's-New modal on top of the first-run wizard — the wizard
+  // (z-50) would intercept its clicks. Suppress What's-New while the wizard is
+  // due; once it's completed or postponed, shouldShowWizard() flips false and
+  // What's-New shows on the next render (sequential, never overlapping).
+  const { data: setupStatus } = useSetupStatus()
+  const wizardActive = shouldShowWizard(setupStatus)
+  // Until the setup status has actually loaded, wizardActive is false (from
+  // undefined) — showing What's-New in that window makes it flicker for a frame
+  // before the first-run wizard takes over. Gate on the status being known.
+  const setupLoaded = setupStatus !== undefined
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      <InterfaceLanguageSync />
+      <UpdateBanner />
+      <WhatsNewModal open={whatsNew.open && !wizardActive && setupLoaded} version={whatsNew.version} onDismiss={whatsNew.dismiss} />
+      <UsageStatsConsentGate enabled={setupLoaded && !wizardActive && !whatsNew.open} />
+      <div className="flex flex-1 min-h-0">
+        <IconSidebar />
+        {/* min-h-screen kept intentionally: avoids content reflow when the banner is dismissed */}
+        <main
+          id="main-content"
+          // 16px side gutter on phones, the original 32px from md up.
+          className="flex-1 min-w-0 min-h-screen main-content-area px-4 pt-6 pb-[60px] md:px-8"
+          style={{ maxWidth: '1680px' }}
+        >
+          <AnimatedRoutes />
+        </main>
+        <StatusBar />
+        <BottomNav />
+      </div>
+      <GlobalSearchModal open={searchOpen} onOpenChange={setSearchOpen} />
+      <QuickActionsFAB />
+      <KeyboardShortcutsModal open={shortcutsModalOpen} onClose={closeShortcutsModal} />
+      <FirstRunWizardMount />
+    </div>
+  )
+}
+
 function AppInner({
   searchOpen,
   setSearchOpen,
@@ -215,17 +273,6 @@ function AppInner({
   const location = useLocation()
   const { t } = useTranslation('common')
   const isAuthRoute = location.pathname === '/setup' || location.pathname === '/login'
-  const whatsNew = useWhatsNew()
-  // Don't stack the What's-New modal on top of the first-run wizard — the wizard
-  // (z-50) would intercept its clicks. Suppress What's-New while the wizard is
-  // due; once it's completed or postponed, shouldShowWizard() flips false and
-  // What's-New shows on the next render (sequential, never overlapping).
-  const { data: setupStatus } = useSetupStatus()
-  const wizardActive = shouldShowWizard(setupStatus)
-  // Until the setup status has actually loaded, wizardActive is false (from
-  // undefined) — showing What's-New in that window makes it flicker for a frame
-  // before the first-run wizard takes over. Gate on the status being known.
-  const setupLoaded = setupStatus !== undefined
 
   return (
     <>
@@ -236,39 +283,19 @@ function AppInner({
       >
         {t('skip_to_main_content')}
       </a>
-      {!isAuthRoute && <InterfaceLanguageSync />}
       <GlobalWebSocketListener />
       <GlobalShortcuts onToggleShortcutsModal={toggleShortcutsModal} />
       {isAuthRoute ? (
         <AnimatedRoutes />
       ) : (
-        <div className="flex flex-col min-h-screen">
-          <UpdateBanner />
-          <WhatsNewModal open={whatsNew.open && !wizardActive && setupLoaded} version={whatsNew.version} onDismiss={whatsNew.dismiss} />
-          <UsageStatsConsentGate enabled={setupLoaded && !wizardActive && !whatsNew.open} />
-          <div className="flex flex-1 min-h-0">
-            <IconSidebar />
-            {/* min-h-screen kept intentionally: avoids content reflow when the banner is dismissed */}
-            <main
-              id="main-content"
-              // 16px side gutter on phones, the original 32px from md up.
-              className="flex-1 min-w-0 min-h-screen main-content-area px-4 pt-6 pb-[60px] md:px-8"
-              style={{ maxWidth: '1680px' }}
-            >
-              <AnimatedRoutes />
-            </main>
-            <StatusBar />
-            <BottomNav />
-          </div>
-        </div>
-      )}
-      {!isAuthRoute && (
-        <>
-          <GlobalSearchModal open={searchOpen} onOpenChange={setSearchOpen} />
-          <QuickActionsFAB />
-          <KeyboardShortcutsModal open={shortcutsModalOpen} onClose={closeShortcutsModal} />
-          <FirstRunWizardMount />
-        </>
+        <AuthGuard>
+          <AppShell
+            searchOpen={searchOpen}
+            setSearchOpen={setSearchOpen}
+            shortcutsModalOpen={shortcutsModalOpen}
+            closeShortcutsModal={closeShortcutsModal}
+          />
+        </AuthGuard>
       )}
       <ToastContainer />
     </>
