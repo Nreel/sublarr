@@ -7,7 +7,6 @@ import { formatVersion } from '@/lib/version'
 import { useHealth, useUpdateInfo, useActiveJobCount } from '@/hooks/useApi'
 import { useQueueTaskCount, useWantedSummary } from '@/hooks/useWantedApi'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
-import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
 
 interface NavItem {
   readonly to: string
@@ -168,7 +167,8 @@ export function IconSidebar() {
           />
         ))}
         {/* Toggle sits on its own row like a nav item: centered icon in the
-            rail, icon + label when expanded. Language/theme stay separate. */}
+            rail, icon + label when expanded. The interface language moved to
+            Settings → General; the sidebar row is theme-only. */}
         <button
           data-testid="sidebar-toggle"
           type="button"
@@ -186,8 +186,7 @@ export function IconSidebar() {
             {expanded ? 'Collapse' : 'Expand'}
           </span>
         </button>
-        <div className="flex items-center justify-center gap-1 py-1">
-          <LanguageSwitcher />
+        <div className="flex items-center justify-center py-1">
           <ThemeToggle />
         </div>
       </div>

@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Interface language moved from the sidebar to Settings** — The DE/EN toggle
+  at the bottom of the sidebar is gone; the interface language is set under
+  Settings → General → Interface preferences, where the stored setting and the
+  rendered UI are one source of truth. The sidebar's bottom row is theme-only.
 - **Sidebar stays open until you collapse it** — The icon sidebar expanded on
   hover only, so nav labels were invisible until the pointer was over it. It
   now shows its full label rows by default, and a Collapse/Expand button on
@@ -16,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the page.
 
 ### Added
+- **Setup asks for the interface language** — The onboarding wizard's
+  Languages step now leads with an interface-language dropdown. Picking
+  Deutsch or English switches the whole UI — the wizard included — instantly
+  and persists the choice, so setup follows your language instead of the
+  browser's.
 - **Activity tab counts its work** — The Activity entry in the icon sidebar and
   the mobile bottom navigation now carries badges for the work in flight, the
   same way Wanted shows its backlog: an amber count of pending queue tasks

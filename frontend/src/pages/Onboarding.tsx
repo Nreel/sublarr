@@ -7,6 +7,7 @@ import { testSonarrInstance, testRadarrInstance, testApiKey } from '@/api/settin
 import { toast } from '@/components/shared/Toast'
 import { apiErrorMessage } from '@/lib/apiError'
 import { Loader2, CheckCircle, ArrowRight, ArrowLeft, Server, Globe, Cpu, Search, Play, Monitor, Plus, TestTube, Trash2, Eye, EyeOff, FolderOpen, Languages, Zap, AlertCircle, Clapperboard, Sparkles, Library, Gauge } from 'lucide-react'
+import { INTERFACE_LANGUAGE_OPTIONS } from '@/styles/settingsShared'
 import type { MediaServerType, MediaServerInstance, MediaServerTestResult } from '@/lib/types'
 
 export const ALL_STEPS = [
@@ -129,7 +130,7 @@ let _uid = 0
 const nextUid = () => `ms-${++_uid}-${Date.now().toString(36)}`
 
 export default function Onboarding() {
-  const { t } = useTranslation('onboarding')
+  const { t, i18n } = useTranslation('onboarding')
   const { t: tc } = useTranslation('common')
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
@@ -167,6 +168,9 @@ export default function Onboarding() {
     target_language_name: 'German',
     source_language: 'en',
     source_language_name: 'English',
+    // Starts at the language the wizard itself is rendered in, so the
+    // dropdown matches what the user sees before touching it.
+    interface_language: i18n.language?.startsWith('en') ? 'en' : 'de',
     tmdb_api_key: '',
     tvdb_api_key: '',
     automation_enabled: 'true',
@@ -800,6 +804,36 @@ export default function Onboarding() {
 
           {currentStepDef.id === 'language' && (
             <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                  {t('language_step.interface_language')}
+                </label>
+                <select
+                  data-testid="select-interface-language"
+                  value={values.interface_language}
+                  onChange={(e) => {
+                    const code = e.target.value
+                    set('interface_language', code)
+                    // Switch the wizard itself immediately — the choice is
+                    // what the user should read for the rest of setup. Persist
+                    // it right away like Settings → General does: the global
+                    // config sync re-applies the stored interface_language on
+                    // every refresh, so an unsaved choice would snap the UI
+                    // back before the step save. The Next save re-sends it.
+                    i18n.changeLanguage(code)
+                    void updateConfig({ interface_language: code }).catch(() => {})
+                  }}
+                  className="w-full px-3 py-2 rounded-md text-sm focus:outline-none"
+                  style={inputStyle}
+                >
+                  {INTERFACE_LANGUAGE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {t('language_step.interface_language_hint')}
+                </p>
+              </div>
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                   {t('language_step.target_language')}

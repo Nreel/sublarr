@@ -14,6 +14,7 @@
     "target_language_name": "German",
     "source_language": "en",
     "source_language_name": "English",
+    "interface_language": "en",
     "upgrade_enabled": "true",
     "wanted_search_interval_hours": "6"
   },
@@ -23,6 +24,7 @@
     "target_language_name": "German",
     "source_language": "en",
     "source_language_name": "English",
+    "interface_language": "en",
     "tmdb_api_key": "tmdb",
     "tvdb_api_key": "k",
     "upgrade_enabled": "true",
@@ -37,6 +39,7 @@
     "target_language_name": "German",
     "source_language": "en",
     "source_language_name": "English",
+    "interface_language": "en",
     "upgrade_enabled": "true",
     "wanted_search_interval_hours": "0"
   }

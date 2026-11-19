@@ -58,10 +58,12 @@
     "subdl_api_key": "SubDL API Key"
   },
   "language_step": {
+    "interface_language": "Oberflächensprache",
+    "interface_language_hint": "Die Sprache der Benutzeroberfläche — der Wizard wechselt sofort nach der Auswahl. Später änderbar unter Einstellungen → Allgemein.",
     "target_language": "Zielsprache",
     "source_language": "Quellsprache",
     "help": "Untertitel werden in der Zielsprache gesucht. Die Quellsprache wird verwendet, wenn Sublarr übersetzen oder transkribieren muss.",
-    "description": "Wähle, in welcher Sprache Untertitel gesucht werden."
+    "description": "Wähle die Oberflächensprache und die Sprache, in der Untertitel gesucht werden."
   },
   "automation_step": {
     "auto_search_label": "Automatisch nach fehlenden Untertiteln suchen",

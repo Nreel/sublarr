@@ -27,7 +27,6 @@ import { formatVersion } from '@/lib/version'
 import { useHealth, useUpdateInfo } from '@/hooks/useApi'
 import { getAuthStatus, logout } from '@/api/client'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
-import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
 import { ScanProgressIndicator } from '@/components/shared/ScanProgressIndicator'
 
 interface NavItem {
@@ -289,9 +288,9 @@ export function Sidebar() {
             </a>
           </div>
 
-          <div className="flex items-center justify-end gap-1 mb-1.5">
+          {/* Interface language moved to Settings → General; theme stays here. */}
+          <div className="flex items-center justify-end mb-1.5">
             <ThemeToggle />
-            <LanguageSwitcher />
           </div>
 
           <div className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>

@@ -19,6 +19,7 @@ const VALUES = {
   target_language_name: 'German',
   source_language: 'en',
   source_language_name: 'English',
+  interface_language: 'en',
   tmdb_api_key: 'tmdb',
   tvdb_api_key: '',
   automation_enabled: 'true',

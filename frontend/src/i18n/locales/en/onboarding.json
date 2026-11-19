@@ -58,10 +58,12 @@
     "subdl_api_key": "SubDL API Key"
   },
   "language_step": {
+    "interface_language": "Interface language",
+    "interface_language_hint": "The language the UI is shown in — the wizard switches as soon as you pick one. Changeable later under Settings → General.",
     "target_language": "Target language",
     "source_language": "Source language",
     "help": "Subtitles are searched in the target language. Source language is used when Sublarr needs to translate or transcribe.",
-    "description": "Choose which language to search subtitles in."
+    "description": "Choose the interface language and which language to search subtitles in."
   },
   "automation_step": {
     "auto_search_label": "Search for missing subtitles automatically",

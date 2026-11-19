@@ -48,3 +48,5 @@ def test_the_saved_values_are_the_running_settings(client):
     assert settings.path_mapping == "/data/media=/media"
     assert settings.wanted_search_interval_hours == 6
     assert settings.upgrade_enabled is True
+    # The wizard's interface-language choice survives into the running UI.
+    assert settings.interface_language == "en"
