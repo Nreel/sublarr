@@ -146,14 +146,19 @@ class TestGetClient:
     @patch("translation.openai_compat._HAS_OPENAI", True)
     @patch("translation.openai_compat.OpenAI")
     def test_creates_client_with_correct_params(self, mock_openai_cls):
-        backend = _make_backend(api_key="sk-abc", base_url="http://local/v1", request_timeout="30")
+        backend = _make_backend(
+            api_key="sk-abc", base_url="http://local/v1", request_timeout="30", max_retries="2"
+        )
         mock_openai_cls.return_value = MagicMock()
         client = backend._get_client()
+        # Both knobs are honoured: the client used to pin max_retries=0 on a
+        # "retries handled ourselves" comment while nothing retried transport
+        # errors, so one 503 opened the breaker.
         mock_openai_cls.assert_called_once_with(
             api_key="sk-abc",
             base_url="http://local/v1",
             timeout=30,
-            max_retries=0,
+            max_retries=2,
         )
         assert client is not None
 

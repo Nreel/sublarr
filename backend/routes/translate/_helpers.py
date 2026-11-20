@@ -9,6 +9,18 @@ from services.translation_jobs import run_job, update_stats
 logger = logging.getLogger(__name__)
 
 
+def _as_bool(value) -> bool:
+    """Coerce a JSON/form value to a bool; "false"/"0"/"no"/"" are False.
+
+    Form-encoded and curl ``-d`` callers send booleans as strings, and
+    ``bool("false")`` is True — a user posting ``force=false`` used to get
+    their existing subtitles overwritten.
+    """
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
+
 # --- Phase 28-01: LLM Backend Presets ---
 
 BACKEND_TEMPLATES = [
@@ -139,9 +151,14 @@ def _is_translation_enabled() -> bool:
 
             return bool(getattr(get_settings(), "translation_enabled", False))
         return value.lower() in ("true", "1", "yes")
-    except Exception:
+    except Exception as exc:
         # On any lookup failure default to False so a corrupt config never
-        # silently re-enables a feature the user explicitly disabled.
+        # silently re-enables a feature the user explicitly disabled. But
+        # say so: a transient DB error here turns EVERY translate endpoint
+        # into a 503, and without a log line that looks like a mystery
+        # "Translation is disabled" response with the UI still showing the
+        # toggle on.
+        logger.warning("translation_enabled lookup failed, failing closed: %s", exc)
         return False
 
 
@@ -163,19 +180,36 @@ def _run_job(job_data):
 
 
 def _build_arr_context(data):
-    """Build arr_context including language direction and optional Sonarr IDs."""
-    from config import get_settings
+    """Build arr_context from the request payload.
 
-    settings = get_settings()
-    context = {
-        "source_language": getattr(settings, "source_language", "en"),
-        "target_language": getattr(settings, "target_language", "de"),
-    }
-    series_id = data.get("sonarr_series_id")
-    episode_id = data.get("sonarr_episode_id")
-    if series_id and episode_id:
-        context["sonarr_series_id"] = series_id
-        context["sonarr_episode_id"] = episode_id
+    Id keys are forwarded individually - Radarr movies and standalone titles
+    need their ids too, or ``get_profile_for_item`` falls to the DEFAULT
+    profile and the file is translated toward the global target with the
+    wrong backend/glossary (the old builder required BOTH Sonarr ids and
+    silently dropped everything else).
+
+    Languages are forwarded only when the caller supplies them. Stamping the
+    GLOBAL settings languages onto every job was a lie that persisted in the
+    job row: the queue-state UI showed ``settings.target_language`` for jobs
+    actually resolving to a profile target, and retries re-forwarded it.
+    Absent means "resolve from the wanted row / profile", which is exactly
+    what ``translate_file`` then does.
+    """
+    context = {}
+    for key in (
+        "sonarr_series_id",
+        "sonarr_episode_id",
+        "radarr_movie_id",
+        "standalone_series_id",
+        "standalone_movie_id",
+    ):
+        value = data.get(key)
+        if value:
+            context[key] = value
+    for key in ("source_language", "target_language"):
+        value = data.get(key)
+        if value:
+            context[key] = str(value)
     return context
 
 

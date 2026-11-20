@@ -67,7 +67,17 @@ class ClaudeBackend(LLMBackend):
 
     def _get_client(self) -> anthropic.Anthropic:
         if self._client is None:
-            self._client = anthropic.Anthropic(api_key=self.api_key)
+            # Pin the SDK's own timeout: the default is 600 s per request,
+            # so one hung call holds a concurrency slot far past
+            # ``timeout_s`` and starves every other job on this backend.
+            # Keep the SDK's small internal retry (2) - bounded by this
+            # timeout it matches openai_compat's honoured ``max_retries``
+            # knob, letting transient 503s recover without being booked as
+            # backend health failures - but never at 600 s scale.
+            self._client = anthropic.Anthropic(
+                api_key=self.api_key,
+                timeout=float(self.timeout_s),
+            )
         return self._client
 
     def _build_request(self, messages: list[dict], max_tokens: int) -> dict:

@@ -26,21 +26,35 @@ class JobRepository(BaseRepository):
 
     def create_job(self, file_path: str, force: bool = False, arr_context: dict = None) -> dict:
         """Create a new translation job in the database."""
-        job_id = str(uuid.uuid4())[:8]
         now = self._now()
         context_json = json.dumps(arr_context) if arr_context else ""
 
-        job = Job(
-            id=job_id,
-            file_path=file_path,
-            status="queued",
-            force=int(force),
-            bazarr_context_json=context_json,
-            created_at=now,
-            completed_at=None,
-        )
-        self.session.add(job)
-        self._commit()
+        # IDs are 8 hex chars (~4.3e9 space): a collision is unlikely but
+        # real (~1.2% by 10k jobs), and an unhandled IntegrityError both
+        # 500s the caller and leaves the session dirty (BaseRepository._commit
+        # does not roll back). Roll back and re-issue a fresh id.
+        for attempt in range(5):
+            job_id = str(uuid.uuid4())[:8]
+            job = Job(
+                id=job_id,
+                file_path=file_path,
+                status="queued",
+                force=int(force),
+                bazarr_context_json=context_json,
+                created_at=now,
+                completed_at=None,
+            )
+            self.session.add(job)
+            try:
+                self._commit()
+                break
+            except IntegrityError:
+                self.session.rollback()
+                logger.warning(
+                    "Job id %s collided (attempt %d/5) - re-issuing", job_id, attempt + 1
+                )
+        else:
+            raise RuntimeError("Could not create translation job: job id collisions persist")
 
         return {
             "id": job_id,
@@ -161,33 +175,59 @@ class JobRepository(BaseRepository):
         self._commit()
         return result.rowcount
 
-    def get_outdated_jobs_count(self, current_hash: str) -> int:
-        """Get count of completed jobs with a different config hash."""
-        stmt = (
-            select(func.count())
-            .select_from(Job)
-            .where(
-                Job.status == "completed",
-                Job.config_hash != "",
-                Job.config_hash != current_hash,
-            )
-        )
-        return self.session.execute(stmt).scalar()
-
-    def get_outdated_jobs(self, current_hash: str, limit: int = 100) -> list:
-        """Get completed jobs with a different config hash."""
-        stmt = (
+    def _coarse_outdated_stmt(self):
+        """Completed jobs with a stamped hash (per-backend filter in Python)."""
+        return (
             select(Job)
             .where(
                 Job.status == "completed",
                 Job.config_hash != "",
-                Job.config_hash != current_hash,
             )
             .order_by(Job.completed_at.desc())
-            .limit(limit)
         )
-        rows = self.session.execute(stmt).scalars().all()
-        return [self._row_to_job(r) for r in rows]
+
+    @staticmethod
+    def _is_outdated(job: dict, current_hash) -> bool:
+        """Compare a stamped hash against the CURRENT config hash.
+
+        ``current_hash`` is either a plain hash (compared verbatim) or a
+        ``hash_for_backend(backend_name)`` callable. The callable form is
+        required: the stamp embeds the backend that produced the result
+        (see :meth:`config_settings.get_translation_config_hash`), so
+        comparing every job against one default-backend hash marks all
+        non-default-backend jobs permanently outdated — /retranslate/batch
+        re-translated them forever and the count never reached 0.
+        """
+        stamped = job.get("config_hash") or ""
+        if callable(current_hash):
+            backend = (job.get("stats") or {}).get("backend_name") or "ollama"
+            return bool(stamped) and stamped != current_hash(backend)
+        return bool(stamped) and stamped != current_hash
+
+    def get_outdated_jobs_count(self, current_hash) -> int:
+        """Get count of completed jobs with a different config hash.
+
+        ``current_hash``: hash string, or callable ``backend_name -> hash``.
+        """
+        rows = self.session.execute(self._coarse_outdated_stmt()).scalars().all()
+        if callable(current_hash):
+            return sum(1 for r in rows if self._is_outdated(self._row_to_job(r), current_hash))
+        return sum(1 for r in rows if (r.config_hash or "") != current_hash)
+
+    def get_outdated_jobs(self, current_hash, limit: int = 100) -> list:
+        """Get completed jobs with a different config hash.
+
+        ``current_hash``: hash string, or callable ``backend_name -> hash``.
+        """
+        rows = self.session.execute(self._coarse_outdated_stmt()).scalars().all()
+        out = []
+        for r in rows:
+            d = self._row_to_job(r)
+            if self._is_outdated(d, current_hash):
+                out.append(d)
+                if len(out) >= limit:
+                    break
+        return out
 
     # ---- Daily Stats ----
 

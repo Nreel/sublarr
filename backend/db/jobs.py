@@ -83,13 +83,20 @@ def get_stats_summary() -> dict:
     return _get_repo().get_stats_summary()
 
 
-def get_outdated_jobs_count(current_hash: str) -> int:
-    """Get count of completed jobs with a different config hash."""
+def get_outdated_jobs_count(current_hash) -> int:
+    """Count completed jobs whose stamped hash differs from current config.
+
+    ``current_hash``: a hash string, or a ``backend_name -> hash`` callable
+    (required when stamps were made per backend — see the repository).
+    """
     return _get_repo().get_outdated_jobs_count(current_hash)
 
 
-def get_outdated_jobs(current_hash: str, limit: int = 100) -> list:
-    """Get completed jobs with a different config hash (candidates for re-translation)."""
+def get_outdated_jobs(current_hash, limit: int = 100) -> list:
+    """Get completed jobs with a different config hash (candidates for re-translation).
+
+    ``current_hash``: a hash string, or a ``backend_name -> hash`` callable.
+    """
     return _get_repo().get_outdated_jobs(current_hash, limit)
 
 

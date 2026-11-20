@@ -268,7 +268,7 @@ def retry_job(job_id):
           description: Job or file not found
     """
     from config import get_settings
-    from db.jobs import create_job, get_job
+    from db.jobs import create_job, get_job, update_job
 
     job = get_job(job_id)
     if not job:
@@ -289,13 +289,32 @@ def retry_job(job_id):
         return jsonify({"error": "Translation is disabled in configuration"}), 503
 
     new_job = create_job(file_path, force=True, arr_context=job.get("arr_context"))
-    _app = current_app._get_current_object()
 
-    def _run_with_ctx():
-        with _app.app_context():
-            _run_job(new_job)
+    # Prefer the configured job queue: it is sized by the translation
+    # concurrency limit (app.py create_job_queue max_workers). Running on the
+    # shared background pool bypassed that limit - a retry could stack onto
+    # the queue's own backend concurrency and trip provider rate limits.
+    queue = getattr(current_app, "job_queue", None)
+    if queue is not None:
+        try:
+            queue.enqueue(_run_job, new_job, job_id=new_job["id"])
+        except Exception as exc:
+            update_job(new_job["id"], "failed", error=f"Queue unavailable: {exc}")
+            logger.warning("Retry enqueue failed for %s: %s", file_path, exc)
+            return jsonify({"error": f"Failed to queue retry: {exc}"}), 503
+    else:
+        _app = current_app._get_current_object()
 
-    submit_background(_run_with_ctx)
+        def _run_with_ctx():
+            with _app.app_context():
+                _run_job(new_job)
+
+        try:
+            submit_background(_run_with_ctx)
+        except Exception as exc:
+            update_job(new_job["id"], "failed", error=f"Failed to start retry: {exc}")
+            logger.exception("Retry submit failed for %s", file_path)
+            return jsonify({"error": f"Failed to start retry: {exc}"}), 503
 
     return jsonify(
         {

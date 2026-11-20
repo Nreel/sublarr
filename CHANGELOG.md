@@ -5,7 +5,7 @@ All notable changes to Sublarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.22.1] - 2026-11-21
 
 ### Changed
 - **Translation languages live on the language profiles** — Each profile now
@@ -70,6 +70,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   controller, silently aborting ~half of every backend run. Windows now probes
   with `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, …)`, keeping the
   existing access-denied-counts-as-alive rule.
+- **Cancelling a translation actually stopped it** — SRT and ASS translation
+  never forwarded the job id to the backend, and manager-created jobs were
+  not registered in `QueueState`, so the Cancel button only marked the row
+  `cancelled`: the backend finished the file and overwrote it anyway. The job
+  id now threads through the whole flow, running jobs are registered, and the
+  backends raise `JobCancelledError` at the next batch boundary.
+- **Re-translations no longer loop forever** — The outdated check compared
+  the profile's config hash against a hash built with different fields, so
+  every re-translated item came back `outdated` immediately and the batch
+  re-submitted it on every pass. Both sides now hash the same field set.
+- **Re-translate endpoints spoke one id space** — `/retranslate/<id>` matched
+  translation-job UUID hex while the list exposed integer job ids, so retries
+  from the UI 404'd; it now accepts both and resolves them consistently.
+- **Failed re-translations kept the old subtitle** — The target file was
+  deleted *before* translating, so a failure left the episode with no
+  subtitle at all, and the stale-sidecar cleanup could delete another
+  language's file. The old target is now replaced only after a success, and
+  only sidecars of the item's own languages are touched.
+- **Batch and re-translate batches could double-run** — A failed background
+  submit left the "running" flag set forever (later batches were refused),
+  and two re-translate batches could run at once, double-searching the same
+  items. Both paths now guard on the running flag and clear it when the
+  submit fails; queued-but-never-inserted job rows (orphaned `queued` entries)
+  are inserted atomically with their enqueue.
+- **Queue counters lied** — Batch runs counted `processed` twice per item and
+  re-translate batches never recorded stats, so the Activity badge and the
+  stats page drifted from the real work.
+- **Retries bypassed the job queue** — Retry and re-translate ran inline in
+  the request thread instead of submitting to the translation job queue,
+  so they ignored concurrency limits and were invisible to the job list;
+  they now go through the same queue as normal translations.
+- **The backend health breaker opened on content, not health** — A prompt
+  that was simply too large for a backend (`PromptBatchTooLargeError`) and
+  content-shape failures counted as backend failures, so one oversized batch
+  pushed a healthy backend toward OPEN. Content failures no longer trip the
+  breaker.
+- **A transient 503 opened the breaker** — `openai_compat` pinned
+  `max_retries=0` on a "retries handled ourselves" comment while nothing
+  retried transport errors, and Claude used the SDK default 600 s timeout
+  with invisible retries: one hung call held a concurrency slot for
+  ~30 minutes and one hiccup was booked as a backend failure. Both backends
+  now bound the request with the configured timeout and let the SDK's small
+  bounded retry absorb transient errors.
+- **Google backend costed and metered nothing** — Its price key did not match
+  the registry name (cost was always 0), it held no concurrency slot, and it
+  wrote no translation event, so `/translation/queue` showed permanent zero
+  latency for it. It now reads the sheet price, holds a slot, and writes the
+  event like every other backend.
+- **Ollama ignored its timeout and retried CJK pointlessly** — A configured
+  `request_timeout` lost to the hard-coded default, and the line-count retry
+  fired the "text is not CJK" sanity check against CJK targets, rejecting
+  valid output and re-asking the model. Timeout precedence and the retry
+  check are fixed.
+- **Quality score parsed the wrong number** — `parse_quality_score` matched
+  the first number in the backend's commentary — often a line count — and the
+  quality-retry path wrote unvalidated output to the output guards and the
+  translation cache, poisoning repeats of the same file. Parsing takes the
+  score-shaped match, and retries validate before caching.
+- **ARR context was half-built** — The translation context builder dropped
+  several series/movie keys and overrode the item's target language with the
+  global setting, so profile-driven items translated to the wrong language
+  with missing series metadata.
+- **Path checks could touch files outside the library** — The existence test
+  ran before the safe-path check, so a crafted relative path was stat'd — and
+  on failure its deletion attempted — before validation. Validation now comes
+  first. `_pick_code` also normalizes target codes (`ru_RU` → `ru`) instead of
+  emitting `ru_RU.srt` next to `ru.srt`.
+- **Assumed-English marker check** — The "already in target language" marker
+  check only recognized English markers, so German or Russian sources with
+  translated markers were re-translated needlessly; the check is language-
+  aware now. Same for ASS/NFO source-language metadata and the embedded-subtitle
+  validation retry.
 
 ## [1.21.3] - 2026-11-18
 

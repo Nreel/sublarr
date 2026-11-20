@@ -1338,6 +1338,10 @@ ARR_CONTEXT_KEYS = (
     "radarr_movie_id",
     "standalone_series_id",
     "standalone_movie_id",
+    # ``wanted_item_path_refusal`` distinguishes a legacy standalone row (no
+    # standalone ids) by ``instance_name == "standalone"``; dropped here it
+    # degrades to the untagged media-root fallback.
+    "instance_name",
 )
 
 

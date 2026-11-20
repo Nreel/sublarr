@@ -1,7 +1,9 @@
 """In-memory active translation-job tracker.
 
-Single source of truth for 'what is translating right now?' — populated
-by TranslationManager as jobs start/progress/finish. No DB persistence.
+Single source of truth for 'what is translating right now?' — registered by
+``services.translation_jobs.run_job`` when a job starts, progressed by
+``translator.manager._translate_in_batches`` per finished batch, and closed
+when the job ends. No DB persistence.
 """
 
 from __future__ import annotations
@@ -9,10 +11,32 @@ from __future__ import annotations
 import threading
 import time
 from collections import deque
+from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 _MAX_RECENT = 20
+
+# The job ID of the translation running on the current thread/task. Set by
+# ``services.translation_jobs.run_job`` (and any direct caller that wants
+# cancellation), read by the backends' cancel checks and by
+# ``TranslationManager.translate_with_fallback`` — the job ID travels down the
+# call stack without threading a parameter through every flow helper.
+_current_job_id: ContextVar[str | None] = ContextVar("sublarr_translation_job_id", default=None)
+
+
+def current_job_id() -> str | None:
+    """Job ID registered for the executing translation, or None."""
+    return _current_job_id.get()
+
+
+def set_current_job_id(job_id: str | None) -> Token:
+    """Bind ``job_id`` to the current context; reset with the returned token."""
+    return _current_job_id.set(job_id)
+
+
+def reset_current_job_id(token: Token) -> None:
+    _current_job_id.reset(token)
 
 
 @dataclass
@@ -80,6 +104,7 @@ class QueueState:
         done: int | None = None,
         cost_micro_usd_delta: int = 0,
         backend: str | None = None,
+        total_lines: int | None = None,
     ) -> None:
         with self._lock:
             state = self._active.get(job_id)
@@ -91,6 +116,8 @@ class QueueState:
                 state.cost_micro_usd += cost_micro_usd_delta
             if backend:
                 state.backend = backend
+            if total_lines:
+                state.total_lines = total_lines
 
     def cancel(self, job_id: str) -> None:
         with self._lock:

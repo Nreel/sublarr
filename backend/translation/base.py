@@ -73,6 +73,7 @@ class TranslationBackend(ABC):
         *,
         lookback: list[str] | None = None,
         lookahead: list[str] | None = None,
+        job_id: str | None = None,
     ) -> TranslationResult:
         """Translate a batch of subtitle lines.
 
@@ -82,6 +83,9 @@ class TranslationBackend(ABC):
             target_lang: ISO 639-1 target language code
             glossary_entries: Optional list of {source_term, target_term} dicts
             series_context: Optional series/show context for the system prompt
+            job_id: Optional translation-job ID. When set, backends check
+                ``translation.queue_state`` for a cancel request BEFORE
+                spending API budget and raise ``JobCancelledError``.
             lookback: Optional lines BEFORE the batch, provided as context
                 only. LLM backends may attach these to the prompt to resolve
                 pronouns and maintain consistency across batch boundaries.

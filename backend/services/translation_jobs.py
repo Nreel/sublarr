@@ -93,6 +93,29 @@ def run_job(job_data):
         update_job(job_id, "failed", error=refusal)
         return None
 
+    # Register in the in-memory queue tracker and bind the job ID to this
+    # context so backend cancel checks (QueueState.is_cancelled) actually see
+    # it. Without this registration POST /translation/queue/<id>/cancel was a
+    # permanent 404 and the JobCancelledError paths in the backends dead code.
+    from translation.llm_base import JobCancelledError
+    from translation.queue_state import (
+        get_queue_state,
+        reset_current_job_id,
+        set_current_job_id,
+    )
+
+    qs = get_queue_state()
+    arr_ctx = job_data.get("arr_context") or {}
+    qs.register_job(
+        job_id=job_id,
+        file_path=job_data["file_path"],
+        source_lang=arr_ctx.get("source_language", ""),
+        target_lang=arr_ctx.get("target_language", ""),
+        backend="",
+        total_lines=0,
+    )
+    token = set_current_job_id(job_id)
+
     try:
         update_job(job_id, "running")
 
@@ -116,10 +139,21 @@ def run_job(job_data):
             },
         )
 
+        qs.finish_job(job_id, status=status)
         return result
+
+    except JobCancelledError as e:
+        # Operator cancel: not a backend failure, no stat, breaker untouched.
+        logger.info("Job %s cancelled by request: %s", job_id, e)
+        update_job(job_id, "cancelled", error=str(e))
+        qs.finish_job(job_id, status="cancelled")
+        return None
 
     except Exception as e:
         logger.exception("Job %s failed", job_id)
         update_job(job_id, "failed", error=str(e))
         record_stat(success=False)
+        qs.finish_job(job_id, status="failed", error_type=type(e).__name__)
         return None
+    finally:
+        reset_current_job_id(token)

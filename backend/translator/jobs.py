@@ -53,7 +53,16 @@ def _record_config_hash_for_result(result, file_path):
         return
     try:
         settings = get_settings()
-        backend_name = result.get("stats", {}).get("backend_name", "ollama")
+        backend_name = result.get("stats", {}).get("backend_name") or "ollama"
+        if backend_name in ("translation_memory", "none"):
+            # Cache-only run (or an empty fallback chain): no real backend
+            # produced this file, so the hash must be taken for the
+            # configured default backend. Stamping under the pseudo-backend
+            # name embeds a hash no current config can ever match, keeping
+            # the job permanently outdated.
+            from db.config import get_config_entry
+
+            backend_name = get_config_entry("translation_default_backend") or "ollama"
         config_hash = settings.get_translation_config_hash(backend_name=backend_name)
         from db.translation import record_translation_config
 

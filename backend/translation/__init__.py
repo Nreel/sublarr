@@ -140,6 +140,16 @@ class TranslationManager:
         last_error = None
         attempted = 0
 
+        # The executing job (registered by services.translation_jobs.run_job),
+        # if any. Backends use it for their pre-spend cancel check.
+        # Imported here rather than at module top: llm_base pulls in
+        # translator.* and would make ``import translation`` circular.
+        from translation.llm_base import JobCancelledError
+        from translation.prompt_safety import PromptBatchTooLargeError
+        from translation.queue_state import current_job_id
+
+        job_id = current_job_id()
+
         for backend_name in fallback_chain:
             # Check circuit breaker
             cb = self._get_circuit_breaker(backend_name)
@@ -159,14 +169,29 @@ class TranslationManager:
 
             try:
                 start_time = time.time()
-                result = backend.translate_batch(
-                    lines,
-                    source_lang,
-                    target_lang,
-                    glossary_entries,
-                    lookback=lookback,
-                    lookahead=lookahead,
-                )
+                cap = getattr(backend, "max_batch_size", 0) or 0
+                if cap and len(lines) > cap:
+                    result = self._translate_capped(
+                        backend,
+                        lines,
+                        source_lang,
+                        target_lang,
+                        glossary_entries,
+                        lookback=lookback,
+                        lookahead=lookahead,
+                        job_id=job_id,
+                        cap=cap,
+                    )
+                else:
+                    result = backend.translate_batch(
+                        lines,
+                        source_lang,
+                        target_lang,
+                        glossary_entries,
+                        lookback=lookback,
+                        lookahead=lookahead,
+                        job_id=job_id,
+                    )
                 elapsed_ms = (time.time() - start_time) * 1000
 
                 if result.success:
@@ -180,7 +205,12 @@ class TranslationManager:
                     last_error = result.error
                     cb.record_failure()
                     self._record_failure(backend_name, result.error or "Unknown error")
-            except TranslationContentError as e:
+            except JobCancelledError:
+                # Operator cancel, not a backend health statement: propagate
+                # so the chain stops here instead of re-paying for the same
+                # lines on every remaining backend and tripping breakers.
+                raise
+            except (TranslationContentError, PromptBatchTooLargeError) as e:
                 # The backend answered — only this batch's content was
                 # unusable. That is not a health signal, so it must not count
                 # towards the breaker: five pathological files are enough to
@@ -213,6 +243,51 @@ class TranslationManager:
             error=error,
             success=False,
         )
+
+    def _translate_capped(
+        self,
+        backend: TranslationBackend,
+        lines: list[str],
+        source_lang: str,
+        target_lang: str,
+        glossary_entries: list[dict] | None,
+        *,
+        lookback: list[str] | None,
+        lookahead: list[str] | None,
+        job_id: str | None,
+        cap: int,
+    ) -> TranslationResult:
+        """Translate a batch oversized for this backend as sub-requests.
+
+        ``settings.batch_size`` is one global knob, but API backends carry a
+        lower per-request ceiling (DeepL: 50 texts). Sending an oversized
+        chunk 400s the request and books it as a backend health failure —
+        five of those open DeepL's breaker for every unrelated job. Splitting
+        to the declared ``max_batch_size`` keeps the transport contract
+        satisfied and the breaker honest.
+        """
+        merged = TranslationResult(
+            translated_lines=[],
+            backend_name=backend.name,
+            characters_used=0,
+            success=True,
+        )
+        for i in range(0, len(lines), cap):
+            chunk = lines[i : i + cap]
+            result = backend.translate_batch(
+                chunk,
+                source_lang,
+                target_lang,
+                glossary_entries,
+                lookback=lookback,
+                lookahead=lookahead,
+                job_id=job_id,
+            )
+            if not result.success:
+                return result
+            merged.translated_lines.extend(result.translated_lines)
+            merged.characters_used += result.characters_used
+        return merged
 
     def evaluate_line_quality(
         self,

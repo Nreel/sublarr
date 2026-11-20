@@ -168,7 +168,14 @@ class OpenAICompatBackend(LLMBackend):
                         api_key=self._api_key,
                         base_url=self._base_url,
                         timeout=self._request_timeout,
-                        max_retries=0,  # We handle retries ourselves
+                        # Honour the configured max_retries knob. It used to
+                        # be a dead property: the client pinned 0 on a
+                        # "retries handled ourselves" comment, but nothing
+                        # retried transport errors — llm_base only re-asks on
+                        # line-count/content mismatches. One 503 from the
+                        # endpoint was booked as a backend health failure and
+                        # pushed the breaker toward OPEN.
+                        max_retries=self._max_retries,
                     )
         return self._client
 
@@ -262,6 +269,24 @@ class OpenAICompatBackend(LLMBackend):
             "usage": getattr(completion, "usage", None),
             "model": getattr(completion, "model", self._model),
         }
+
+    def _call_openai(self, prompt: str) -> str:
+        """Raw single-prompt call used by the quality evaluator.
+
+        ``TranslationManager._call_backend_raw`` looks for exactly this
+        method name (mirroring Ollama's ``_call_ollama``). Without it
+        ``evaluate_line_quality`` returned None for every
+        OpenAI-compatible backend — the quality gate silently never ran
+        for LM Studio / vLLM / Azure-OpenAI setups.
+        """
+        payload = self._build_request([{"role": "user", "content": prompt}], max_tokens=64)
+        payload["temperature"] = 0.0
+        raw = self._call_api(payload, self._request_timeout)
+        choices = raw.get("choices") or []
+        if not choices:
+            raise RuntimeError("openai_compat: no choices in evaluation response")
+        message = choices[0].get("message") or {}
+        return message.get("content") or ""
 
     def _parse_response(self, raw: dict) -> LLMResponse:
         """Extract translations + usage stats from the completion response."""

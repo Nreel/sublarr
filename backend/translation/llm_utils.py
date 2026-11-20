@@ -24,7 +24,7 @@ _CJK_RE = re.compile(
     r"\uf900-\ufaff]"  # CJK Compatibility Ideographs
 )
 
-# Score extraction from LLM evaluation responses (matches 0-100, prefers last match)
+# Score extraction from LLM evaluation responses (matches 0-100; first match wins)
 _SCORE_RE = re.compile(r"\b(100|[1-9]?\d)\b")
 
 # Default quality score when LLM evaluation fails or is not available
@@ -621,7 +621,11 @@ def parse_quality_score(response_text: str) -> int:
         return DEFAULT_QUALITY_SCORE
 
     try:
-        score = int(matches[-1])
+        # FIRST integer, as the docstring promises. The last match turned
+        # prose answers like "Quality: 95 out of 100" into the scale's
+        # denominator (100) - every line scored perfect, so the quality
+        # retry loop silently never fired.
+        score = int(matches[0])
         return max(0, min(100, score))
     except (ValueError, OverflowError):
         return DEFAULT_QUALITY_SCORE

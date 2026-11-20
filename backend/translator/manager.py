@@ -400,6 +400,18 @@ def _translate_in_batches(
     Returns:
         tuple[list[str], TranslationResult]: All translated lines and last result
     """
+    # Report the real work to the in-memory queue tracker (registered by
+    # services.translation_jobs.run_job). Without this the active view shows
+    # backend="" and 0/0 forever, since cache hits never reach a backend and
+    # nothing else feeds QueueState.
+    from translation.queue_state import current_job_id, get_queue_state
+
+    job_id = current_job_id()
+    if job_id and fallback_chain:
+        get_queue_state().update_progress(
+            job_id, total_lines=len(lines), backend=fallback_chain[0]
+        )
+
     if len(lines) <= batch_size:
         # Single batch path: no surrounding lines to provide as context.
         return _translate_batch_or_split(
@@ -472,5 +484,11 @@ def _translate_in_batches(
         )
         all_translated.extend(chunk_lines)
         last_result = chunk_result
+        if job_id:
+            get_queue_state().update_progress(
+                job_id,
+                done=len(all_translated),
+                backend=chunk_result.backend_name,
+            )
 
     return all_translated, last_result

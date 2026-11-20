@@ -78,6 +78,7 @@ class MockBackend(TranslationBackend):
         *,
         lookback=None,
         lookahead=None,
+        job_id=None,
     ):
         if self.should_fail:
             return TranslationResult(

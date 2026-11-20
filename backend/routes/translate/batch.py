@@ -14,6 +14,7 @@ from extensions import socketio
 from routes.batch_state import batch_lock, batch_state
 from routes.translate import bp
 from routes.translate._helpers import (
+    _as_bool,
     _is_translation_enabled,
     _send_callback,
     _update_stats,
@@ -92,12 +93,20 @@ def batch_start():
     from config import get_settings
     from translator import scan_directory, translate_file
 
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     directory = data.get("directory")
-    force = data.get("force", False)
-    dry_run = data.get("dry_run", False)
-    page = max(1, int(data.get("page", 1) or 1))
-    per_page = max(1, min(int(data.get("per_page", 100) or 100), 500))
+    force = _as_bool(data.get("force", False))
+    dry_run = _as_bool(data.get("dry_run", False))
+    # A non-numeric page/per_page must not 500 the endpoint (form callers
+    # post strings).
+    try:
+        page = max(1, int(data.get("page") or 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        per_page = max(1, min(int(data.get("per_page") or 100), 500))
+    except (TypeError, ValueError):
+        per_page = 100
     callback_url = data.get("callback_url")
 
     if not directory:
@@ -179,30 +188,43 @@ def batch_start():
 
                     try:
                         result = translate_file(f["path"], force=force)
-                        with batch_lock:
-                            batch_state["processed"] += 1
-                            if result["success"]:
-                                if result["stats"].get("skipped"):
-                                    batch_state["skipped"] += 1
-                                else:
-                                    batch_state["succeeded"] += 1
-                            else:
-                                batch_state["failed"] += 1
-                                batch_state["errors"].append(
-                                    {
-                                        "file": f["path"],
-                                        "error": result.get("error"),
-                                    }
-                                )
+                    except Exception as e:
+                        logger.exception("Batch: failed on %s", f["path"])
+                        result = {"success": False, "error": str(e), "stats": {}}
 
+                    # Tally exactly once per file. Before this restructure
+                    # the counters were incremented INSIDE the try, so a
+                    # socketio.emit/_send_callback/_update_stats failure fell
+                    # into the except branch and counted the same file a
+                    # second time (processed > total, failed inflated).
+                    with batch_lock:
+                        batch_state["processed"] += 1
+                        if result["success"]:
+                            if result.get("stats", {}).get("skipped"):
+                                batch_state["skipped"] += 1
+                            else:
+                                batch_state["succeeded"] += 1
+                        else:
+                            batch_state["failed"] += 1
+                            batch_state["errors"].append(
+                                {
+                                    "file": f["path"],
+                                    "error": result.get("error"),
+                                }
+                            )
+                        processed_now = batch_state["processed"]
+                        total_now = batch_state["total"]
+
+                    # Progress reporting must never re-enter the tally path.
+                    try:
                         _update_stats(result)
 
                         # WebSocket notification
                         socketio.emit(
                             "batch_progress",
                             {
-                                "processed": batch_state["processed"],
-                                "total": batch_state["total"],
+                                "processed": processed_now,
+                                "total": total_now,
                                 "current_file": f["path"],
                                 "success": result["success"],
                             },
@@ -216,22 +238,12 @@ def batch_start():
                                     "event": "file_completed",
                                     "file": f["path"],
                                     "success": result["success"],
-                                    "processed": batch_state["processed"],
-                                    "total": batch_state["total"],
+                                    "processed": processed_now,
+                                    "total": total_now,
                                 },
                             )
-
-                    except Exception as e:
-                        logger.exception("Batch: failed on %s", f["path"])
-                        with batch_lock:
-                            batch_state["processed"] += 1
-                            batch_state["failed"] += 1
-                            batch_state["errors"].append(
-                                {
-                                    "file": f["path"],
-                                    "error": str(e),
-                                }
-                            )
+                    except Exception:
+                        logger.warning("Batch: progress reporting failed for %s", f["path"], exc_info=True)
             finally:
                 with batch_lock:
                     batch_state["running"] = False
@@ -263,7 +275,27 @@ def batch_start():
                 },
             )
 
-    submit_background(_run_batch)
+    try:
+        submit_background(_run_batch)
+    except Exception as exc:
+        # The runner never started: release the flag or EVERY later /batch
+        # call returns 409 "Batch already running" until the process
+        # restarts.
+        with batch_lock:
+            batch_state.update(
+                {
+                    "running": False,
+                    "total": 0,
+                    "processed": 0,
+                    "succeeded": 0,
+                    "failed": 0,
+                    "skipped": 0,
+                    "current_file": None,
+                    "errors": [],
+                }
+            )
+        logger.exception("Batch: submit to background worker failed")
+        return jsonify({"error": f"Failed to start batch: {exc}"}), 503
 
     return jsonify(
         {

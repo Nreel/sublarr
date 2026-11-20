@@ -112,9 +112,13 @@ def _evaluate_and_retry_lines(
                 "this pass, so a re-run starts from them rather than from nothing"
             )
 
-        if remembered[idx] is not None:
-            # This exact translation already went through this pass. Asking the
-            # model to judge it a second time buys the same answer.
+        if remembered[idx] is not None and remembered[idx] >= threshold:
+            # This exact translation already went through this pass AND
+            # passed it. Asking the model to judge it a second time buys the
+            # same answer. A remembered FAIL must NOT be reused: the retry
+            # below would be skipped, the known-bad line shipped again on
+            # every run, and _remember_score re-persisted it — the memory
+            # poisoning loop this pass used to have.
             final_lines[idx] = trans
             scores.append(remembered[idx])
             reused += 1
@@ -147,7 +151,35 @@ def _evaluate_and_retry_lines(
                     [src], source_lang, target_lang, fallback_chain, glossary_entries
                 )
                 if result.success and result.translated_lines:
+                    # A retry must clear the SAME content guards as a normal
+                    # batch (manager._verify_batch: chat filler, wrong script,
+                    # untranslated echo). Without this the retry path was the
+                    # one hole in the guard: a chatty reply ("Sure! Here are
+                    # the lines…") or an echoed source became ``best_trans``,
+                    # entered the subtitle file, and was stored by
+                    # _remember_score with a numeric score — after which the
+                    # memory replays it forever as a vetted line.
+                    from translator.manager import _verify_batch
+
+                    try:
+                        _verify_batch(
+                            result,
+                            1,
+                            f"Quality retry (line {idx})",
+                            target_lang=target_lang,
+                            source_lines=[src],
+                        )
+                    except RuntimeError as guard_exc:
+                        logger.info(
+                            "Quality retry %d rejected for line %d: %s", retry, idx, guard_exc
+                        )
+                        break
+                    # A retry that answers with whitespace is worse than the
+                    # line in hand, whatever the evaluator says about the
+                    # (empty) text — never let it become the best.
                     new_trans = result.translated_lines[0]
+                    if not new_trans.strip():
+                        break
                     new_score = manager.evaluate_line_quality(
                         src, new_trans, source_lang, target_lang, fallback_chain
                     )
@@ -231,8 +263,14 @@ def _write_quality_sidecar(subtitle_path, scores):
         logger.warning("Failed to write quality sidecar %s: %s", sidecar_path, exc)
 
 
-def _check_translation_quality(original_texts, translated_texts):
+def _check_translation_quality(original_texts, translated_texts, target_lang=None):
     """Check translation quality and return warnings.
+
+    ``target_lang``: ISO code of the language being translated INTO. The
+    English-marker heuristic must be skipped when the target IS English —
+    en->en never happens, but ja->en, zh->en, de->en etc. legitimately
+    produce English text, and the old unconditional check flagged every
+    English-target translation as suspicious.
 
     Returns list of warning strings (empty if quality seems OK).
     """
@@ -251,8 +289,10 @@ def _check_translation_quality(original_texts, translated_texts):
                 warnings.append(f"Line {i}: suspicious length ratio {ratio:.1f}x")
                 break  # Only report first occurrence
 
-    # Check for common English words in translation
-    if translated_texts:
+    # Check for common English words in translation. Meaningless when the
+    # target language is English itself.
+    target_is_english = (target_lang or "").lower().split("-")[0].split("_")[0] == "en"
+    if translated_texts and not target_is_english:
         sample = " ".join(translated_texts[:20]).lower().split()
         eng_count = sum(1 for w in sample if w in ENGLISH_MARKER_WORDS)
         if len(sample) > 10 and eng_count / len(sample) > 0.3:

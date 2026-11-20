@@ -334,7 +334,11 @@ class OllamaBackend(LLMBackend):
         """
         mode = payload.pop("_mode", "generate")
         endpoint = "/api/chat" if mode == "chat" else "/api/generate"
-        effective_timeout = timeout_s or self._request_timeout
+        # Configured value wins: llm_base._attempt always passes its own
+        # ``timeout_s`` (class attr 120), so the old ``timeout_s or ...``
+        # order meant the Settings UI "Timeout (seconds)" field only ever
+        # affected the legacy _call_ollama helpers, never the real path.
+        effective_timeout = self._request_timeout or timeout_s
 
         resp = requests.post(
             f"{self._url}{endpoint}",
@@ -456,6 +460,15 @@ class OllamaBackend(LLMBackend):
             lookback=lookback,
             lookahead=lookahead,
         )
+
+        # The drift detector is meaningful only when the TARGET is not a CJK
+        # language: translating into Chinese/Japanese/Korean makes CJK output
+        # simply correct. The old unconditional check flagged every en->zh
+        # line as tainted, so each batch paid a second full Ollama inference
+        # forever - and the retry was "tainted" too, so it was always
+        # discarded (2x cost, zero benefit).
+        if target_lang.split("-")[0].split("_")[0].lower() in ("zh", "ja", "ko"):
+            return resp
 
         tainted = [i for i, t in enumerate(resp.translations) if has_cjk_hallucination(t)]
         if not tainted:

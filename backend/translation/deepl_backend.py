@@ -162,6 +162,7 @@ class DeepLBackend(TranslationBackend):
         *,
         lookback: list[str] | None = None,
         lookahead: list[str] | None = None,
+        job_id: str | None = None,
     ) -> TranslationResult:
         """Translate a batch of lines using DeepL API.
 
@@ -173,6 +174,7 @@ class DeepLBackend(TranslationBackend):
             series_context: Ignored (DeepL has no system-prompt concept)
             lookback: Ignored (DeepL has no system-prompt concept)
             lookahead: Ignored (DeepL has no system-prompt concept)
+            job_id: Checked for a cancel request before spending API budget
 
         Returns:
             TranslationResult with translated lines
@@ -180,6 +182,12 @@ class DeepLBackend(TranslationBackend):
         # Non-LLM backends accept context kwargs for a uniform interface,
         # but DeepL's REST contract has no prompt/system concept — drop them.
         del series_context, lookback, lookahead
+        if job_id:
+            from translation.llm_base import JobCancelledError
+            from translation.queue_state import get_queue_state
+
+            if get_queue_state().is_cancelled(job_id):
+                raise JobCancelledError(f"Job {job_id} was cancelled")
         if not _DEEPL_AVAILABLE:
             raise RuntimeError("deepl package not installed. Install with: pip install deepl")
 

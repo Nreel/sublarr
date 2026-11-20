@@ -7,8 +7,15 @@ with the Translation API enabled and service account credentials.
 
 import logging
 import os
+import time
+from datetime import UTC, datetime
+from decimal import Decimal
 
 from translation.base import TranslationBackend, TranslationResult
+from translation.concurrency import get_concurrency
+from translation.cost_tracker import calculate_char_cost_micro_usd
+from translation.price_sheet import get_char_price
+from translator.events import write_translation_event
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +48,12 @@ class GoogleTranslateBackend(TranslationBackend):
     supports_glossary = True  # Native API support
     supports_batch = True
     max_batch_size = 1024
+    # Class-level defaults (same pattern as azure_translator/mymemory): the
+    # concurrency slot and event/cost writer read these on every batch, and
+    # instances built without __init__ (tests, out-of-tree callers) must
+    # still have the attributes.
+    cost_per_1m_chars = Decimal("20.00")
+    timeout_s = 60.0
 
     config_fields = [
         {
@@ -71,6 +84,10 @@ class GoogleTranslateBackend(TranslationBackend):
 
     def __init__(self, **config):
         super().__init__(**config)
+        # Per-million-char price (see price_sheet.CHAR_PRICES_USD per 1M chars);
+        # the registry name is "google", so the price key must match it.
+        self.cost_per_1m_chars = get_char_price(self.name)
+        self.timeout_s = 60.0
 
     @property
     def _project_id(self) -> str:
@@ -116,6 +133,7 @@ class GoogleTranslateBackend(TranslationBackend):
         *,
         lookback: list[str] | None = None,
         lookahead: list[str] | None = None,
+        job_id: str | None = None,
     ) -> TranslationResult:
         """Translate a batch of subtitle lines via Google Cloud Translation API.
 
@@ -128,6 +146,9 @@ class GoogleTranslateBackend(TranslationBackend):
         """
         # Non-LLM backend: drop prompt-only arguments.
         del series_context, lookback, lookahead
+        from translation.llm_base import JobCancelledError
+        from translation.queue_state import get_queue_state
+
         if not lines:
             return TranslationResult(
                 translated_lines=[],
@@ -135,36 +156,51 @@ class GoogleTranslateBackend(TranslationBackend):
                 success=True,
             )
 
-        import time
+        if job_id and get_queue_state().is_cancelled(job_id):
+            raise JobCancelledError(f"Job {job_id} was cancelled")
 
-        start_time = time.time()
+        started_at = datetime.now(UTC)
+        started_mono = time.monotonic()
+        status = "ok"
+        error_type: str | None = None
+        error_msg: str | None = None
+        translated_lines: list[str] = []
+        chars_in = sum(len(line) for line in lines)
+        chars_out: int | None = None
 
         try:
-            client = self._create_client()
+            # Azure, DeepL, LibreTranslate and the LLM backends all hold a
+            # BackendConcurrency slot around their request; Google alone ran
+            # unthrottled, so its latency metric (queue_state._JobState.
+            # last_latency_ms <- write_translation_event) was permanently 0
+            # and the /translation/queue view lied about the active backend.
+            with get_concurrency().slot(self.name, timeout_s=self.timeout_s):
+                client = self._create_client()
 
-            response = client.translate_text(
-                request={
-                    "parent": self._parent,
-                    "contents": lines,
-                    "mime_type": "text/plain",
-                    "source_language_code": source_lang,
-                    "target_language_code": target_lang,
-                }
-            )
+                response = client.translate_text(
+                    request={
+                        "parent": self._parent,
+                        "contents": lines,
+                        "mime_type": "text/plain",
+                        "source_language_code": source_lang,
+                        "target_language_code": target_lang,
+                    }
+                )
 
-            translated_lines = [t.translated_text for t in response.translations]
-            elapsed_ms = (time.time() - start_time) * 1000
+                translated_lines = [t.translated_text for t in response.translations]
+                chars_out = sum(len(t) for t in translated_lines)
 
-            return TranslationResult(
-                translated_lines=translated_lines,
-                backend_name=self.name,
-                response_time_ms=elapsed_ms,
-                characters_used=sum(len(l) for l in lines),
-                success=True,
-            )
-
+        except JobCancelledError:
+            status = "cancelled"
+            error_type = "JobCancelledError"
+            error_msg = "Job cancelled before/during request"
+            raise
         except RuntimeError as e:
             # Package not installed
+            status = "error"
+            error_type = type(e).__name__
+            error_msg = str(e)
+            logger.error("Google Translation failed: %s", e)
             return TranslationResult(
                 translated_lines=[],
                 backend_name=self.name,
@@ -172,15 +208,45 @@ class GoogleTranslateBackend(TranslationBackend):
                 success=False,
             )
         except Exception as e:
-            elapsed_ms = (time.time() - start_time) * 1000
+            status = "error"
+            error_type = type(e).__name__
+            error_msg = str(e)
             logger.error("Google Translation failed: %s", e)
             return TranslationResult(
                 translated_lines=[],
                 backend_name=self.name,
-                response_time_ms=elapsed_ms,
                 error=f"Google Translation error: {e}",
                 success=False,
             )
+        finally:
+            finished_at = datetime.now(UTC)
+            latency_ms = int((time.monotonic() - started_mono) * 1000)
+            cost = calculate_char_cost_micro_usd(chars_in, self.cost_per_1m_chars)
+            write_translation_event(
+                backend=self.name,
+                source_lang=source_lang,
+                target_lang=target_lang,
+                lines_count=len(lines),
+                chars_in=chars_in,
+                chars_out=chars_out,
+                cost_micro_usd=cost,
+                cache_hit=False,
+                started_at=started_at,
+                finished_at=finished_at,
+                status=status,
+                error_type=error_type,
+                error_msg=error_msg,
+                job_id=job_id,
+            )
+            self._last_latency_ms = latency_ms
+
+        return TranslationResult(
+            translated_lines=translated_lines,
+            backend_name=self.name,
+            response_time_ms=float(latency_ms),
+            characters_used=chars_in,
+            success=True,
+        )
 
     def health_check(self) -> tuple[bool, str]:
         """Check if Google Cloud Translation is reachable and configured."""

@@ -39,7 +39,7 @@ PRICE_SHEET_LLM: dict[tuple[str, str], tuple[Decimal, Decimal]] = {
 PRICE_SHEET_CHARS: dict[str, Decimal] = {
     "deepl": Decimal("20.00"),
     "deepl_pro": Decimal("25.00"),
-    "google_translate": Decimal("20.00"),
+    "google": Decimal("20.00"),  # registry name is "google", not the module name
     "azure_translator": Decimal("10.00"),
     "libretranslate": Decimal("0"),  # self-hosted free
     "mymemory": Decimal("0"),  # free tier only

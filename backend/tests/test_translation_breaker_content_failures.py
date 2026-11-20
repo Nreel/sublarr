@@ -71,6 +71,7 @@ class _RaisingBackend(TranslationBackend):
         *,
         lookback=None,
         lookahead=None,
+        job_id=None,
     ):
         raise type(self).exc
 

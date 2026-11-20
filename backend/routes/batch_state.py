@@ -26,6 +26,21 @@ batch_state = {
 }
 batch_lock = threading.Lock()
 
+# --- Retranslate batch state ------------------------------------------------
+# /retranslate/batch had no running flag: two overlapping POSTs translated
+# the same outdated jobs twice (double API spend, two writers stamping the
+# same rows). Same guard shape as batch_state above.
+
+retranslate_batch_state = {
+    "running": False,
+    "total": 0,
+    "processed": 0,
+    "succeeded": 0,
+    "failed": 0,
+    "current_file": None,
+}
+retranslate_lock = threading.Lock()
+
 # --- Wanted batch-search state ----------------------------------------------
 
 wanted_batch_state = {

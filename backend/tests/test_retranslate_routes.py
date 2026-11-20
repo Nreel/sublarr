@@ -17,19 +17,26 @@ from db.wanted import get_wanted_item, upsert_wanted_item
 # already pointed at the system temp dir, which pytest's tmp_path nests under).
 
 
-def _run_sync(monkeypatch):
-    """Make submit_background execute inline instead of on the thread pool."""
+def _run_sync(monkeypatch, client=None):
+    """Make the route's background work execute inline.
+
+    Covers both submission paths: the shared pool (submit_background) and
+    the preferred job queue - with a queue configured the route enqueues,
+    which runs on a worker thread the test would not wait for.
+    """
     monkeypatch.setattr(
         "routes.translate.retranslate.submit_background",
         lambda fn, *a, **k: fn(*a, **k),
     )
+    if client is not None:
+        monkeypatch.setattr(client.application, "job_queue", None, raising=False)
 
 
 class TestRetranslateSingleWithJobId:
     def test_job_id_path_does_not_touch_wanted_items(self, client, tmp_path, monkeypatch):
         """Re-translating a plain job (no associated wanted item) must not
         call the finalize helper at all — there's nothing to resolve."""
-        _run_sync(monkeypatch)
+        _run_sync(monkeypatch, client)
 
         with client.application.app_context():
             save_config_entry("translation_enabled", "true")
@@ -61,7 +68,7 @@ class TestRetranslateSingleWithWantedItem:
         """A genuine (non-skip) successful re-translation must flag the MT
         output and flip the wanted item to provisional — mirroring exactly
         what /wanted/batch-translate already does."""
-        _run_sync(monkeypatch)
+        _run_sync(monkeypatch, client)
 
         from services import mt_provisional
 
@@ -98,7 +105,7 @@ class TestRetranslateSingleWithWantedItem:
         """A skip (target already exists) must not flip the item to
         provisional and must not record an MT row — same contract as
         _finalize_retranslation's existing unit tests."""
-        _run_sync(monkeypatch)
+        _run_sync(monkeypatch, client)
 
         media = tmp_path / "ep.mkv"
         media.write_text("x")
@@ -127,7 +134,7 @@ class TestRetranslateSingleWithWantedItem:
             assert get_wanted_item(item_id)["status"] == "wanted"
 
     def test_failed_result_leaves_wanted_item_untouched(self, client, tmp_path, monkeypatch):
-        _run_sync(monkeypatch)
+        _run_sync(monkeypatch, client)
 
         media = tmp_path / "ep.mkv"
         media.write_text("x")
@@ -168,7 +175,7 @@ class TestRetranslateBatch:
     retranslate gap this file's other tests cover)."""
 
     def test_success_records_mt_row_and_history_entry(self, client, tmp_path, monkeypatch):
-        _run_sync(monkeypatch)
+        _run_sync(monkeypatch, client)
 
         media = tmp_path / "ep.mkv"
         media.write_text("x")
@@ -211,7 +218,7 @@ class TestRetranslateBatch:
             assert activity_row is not None
 
     def test_skip_result_records_no_mt_row(self, client, tmp_path, monkeypatch):
-        _run_sync(monkeypatch)
+        _run_sync(monkeypatch, client)
 
         media = tmp_path / "ep.mkv"
         media.write_text("x")
@@ -251,7 +258,7 @@ class TestRetranslateBatch:
         jobs forever and outdated_count never decrements (bug found 2026-07-08).
         Unlike the mocked-get_outdated_jobs tests above, this exercises the real
         job row through the real get_outdated_jobs query end-to-end."""
-        _run_sync(monkeypatch)
+        _run_sync(monkeypatch, client)
 
         media = tmp_path / "ep.mkv"
         media.write_text("x")
@@ -301,7 +308,7 @@ class TestRetranslateUsesItemLanguage:
         return media
 
     def test_single_wanted_item_replaces_its_own_language(self, client, tmp_path, monkeypatch):
-        _run_sync(monkeypatch)
+        _run_sync(monkeypatch, client)
         media = self._media(tmp_path)
         with client.application.app_context():
             save_config_entry("translation_enabled", "true")
@@ -313,11 +320,19 @@ class TestRetranslateUsesItemLanguage:
             patch("db.jobs.create_job", wraps=__import__("db.jobs").jobs.create_job) as cj,
             patch(
                 "routes.translate.retranslate._run_job",
-                return_value={"success": False, "error": "x", "stats": {}},
+                return_value={
+                    "success": True,
+                    "output_path": str(tmp_path / "ep.ru.ass"),
+                    "stats": {},
+                },
             ),
         ):
             resp = client.post(f"/api/v1/retranslate/{item_id}")
         assert resp.status_code == 202
+        # The item's own stale sidecar is replaced after a SUCCESSFUL
+        # re-translation (format switch .ru.srt -> .ru.ass); on failure the
+        # old file survives (#9 - a transient backend error must not
+        # destroy a valid subtitle).
         assert not (tmp_path / "ep.ru.srt").exists()
         assert (tmp_path / "ep.de.srt").exists()
         assert cj.call_args.kwargs["arr_context"]["translate_to"] == "ru"
@@ -340,7 +355,7 @@ class TestRetranslateUsesItemLanguage:
         assert cj.call_args.kwargs["arr_context"]["translate_to"] == "ru"
 
     def test_batch_uses_the_profile_language(self, client, tmp_path, monkeypatch):
-        _run_sync(monkeypatch)
+        _run_sync(monkeypatch, client)
         media = self._media(tmp_path)
         with client.application.app_context():
             save_config_entry("translation_enabled", "true")
@@ -351,7 +366,10 @@ class TestRetranslateUsesItemLanguage:
                 "translator.translate_file",
                 return_value={
                     "success": True,
-                    "output_path": str(tmp_path / "ep.ru.srt"),
+                    # Format switch: the fresh output is the .ass; the stale
+                    # .ru.srt sidecar must be replaced only AFTER this
+                    # success (#9), and never the other-language one.
+                    "output_path": str(tmp_path / "ep.ru.ass"),
                     "stats": {"format": "srt"},
                 },
             ) as tf,

@@ -249,6 +249,7 @@ class LLMBackend(TranslationBackend):
                 status=status,
                 error_type=error_type,
                 error_msg=error_msg,
+                job_id=job_id,
             )
 
             # Expose monotonic latency on the instance so tests/metrics can

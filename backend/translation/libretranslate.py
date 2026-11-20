@@ -63,6 +63,7 @@ class LibreTranslateBackend(TranslationBackend):
         *,
         lookback: list[str] | None = None,
         lookahead: list[str] | None = None,
+        job_id: str | None = None,
     ) -> TranslationResult:
         """Translate lines one-by-one via LibreTranslate REST API.
 
@@ -74,19 +75,36 @@ class LibreTranslateBackend(TranslationBackend):
             series_context: Ignored (LibreTranslate has no prompt concept)
             lookback: Ignored (LibreTranslate has no prompt concept)
             lookahead: Ignored (LibreTranslate has no prompt concept)
+            job_id: Checked for a cancel request between lines
 
         Returns:
             TranslationResult with translated lines
         """
         # Non-LLM backend: accept context kwargs for uniform interface but drop them.
         del series_context, lookback, lookahead
+        from translation.llm_base import JobCancelledError
+        from translation.queue_state import get_queue_state
+
         url = self.config.get("url", "http://libretranslate:5000").rstrip("/")
         api_key = self.config.get("api_key", "")
-        timeout = int(self.config.get("request_timeout", 30))
+        # A non-numeric config entry must not raise here: a bare ValueError
+        # out of translate_batch is booked as a backend health failure by
+        # translate_with_fallback and opens the breaker for every unrelated
+        # job (the UI accepts free text in this field).
+        try:
+            timeout = int(self.config.get("request_timeout", 30))
+        except (ValueError, TypeError):
+            timeout = 30
 
         translated = []
         try:
             for line in lines:
+                if job_id:
+                    from translation.llm_base import JobCancelledError
+                    from translation.queue_state import get_queue_state
+
+                    if get_queue_state().is_cancelled(job_id):
+                        raise JobCancelledError(f"Job {job_id} was cancelled")
                 payload = {
                     "q": line,
                     "source": source_lang,
@@ -110,6 +128,8 @@ class LibreTranslateBackend(TranslationBackend):
                 backend_name=self.name,
                 characters_used=sum(len(line) for line in lines),
             )
+        except JobCancelledError:
+            raise
         except Exception as e:
             logger.error("LibreTranslate translation failed: %s", e)
             return TranslationResult(

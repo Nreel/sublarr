@@ -9,7 +9,12 @@ from translation.base import TranslationResult
 
 def _make_backend(**config_overrides):
     """Create a GoogleTranslateBackend instance without __init__ side effects."""
+    from translation.concurrency import get_concurrency
     from translation.google_translate import GoogleTranslateBackend
+
+    # translate_batch now holds a concurrency slot (uniform with the other
+    # backends); slot() requires registration, as in the azure tests.
+    get_concurrency().register("google", 2)
 
     backend = GoogleTranslateBackend.__new__(GoogleTranslateBackend)
     backend.config = {

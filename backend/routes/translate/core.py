@@ -76,9 +76,9 @@ def translate_async():
           description: File not found
     """
     from config import get_settings
-    from db.jobs import create_job
+    from db.jobs import create_job, update_job
 
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     file_path = data.get("file_path")
     force = data.get("force", False)
 
@@ -102,7 +102,18 @@ def translate_async():
 
     arr_context = _build_arr_context(data)
     job = create_job(file_path, force, arr_context)
-    current_app.job_queue.enqueue(_run_job, job, job_id=job["id"])
+    queue = getattr(current_app, "job_queue", None)
+    try:
+        if queue is None:
+            raise RuntimeError("No translation job queue configured")
+        queue.enqueue(_run_job, job, job_id=job["id"])
+    except Exception as exc:
+        # The row already exists. Left "queued" it never resolves: /jobs
+        # shows a phantom job forever and clear-queued has to sweep it.
+        # Resolve it now with the reason.
+        update_job(job["id"], "failed", error=f"Queue unavailable: {exc}")
+        logger.warning("Translate enqueue failed for %s: %s", file_path, exc)
+        return jsonify({"error": f"Failed to queue translation: {exc}"}), 503
 
     return jsonify(
         {
@@ -183,11 +194,11 @@ def translate_sync():
           description: Translation failed
     """
     from config import get_settings
-    from db.jobs import create_job
+    from db.jobs import create_job, update_job
     from error_handler import TranslationError
     from translator import translate_file
 
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     file_path = data.get("file_path")
     force = data.get("force", False)
 
@@ -206,6 +217,7 @@ def translate_sync():
 
     arr_context = _build_arr_context(data)
     queue = getattr(current_app, "job_queue", None)
+    job = None
 
     if queue is not None:
         job = create_job(file_path, force, arr_context)
@@ -226,9 +238,20 @@ def translate_sync():
     try:
         result = translate_file(file_path, force=force, arr_context=arr_context)
         _update_stats(result)
+        if job is not None:
+            # The row exists (enqueue failed and we ran in-request): finish
+            # it with the real outcome instead of orphaning it as "queued".
+            update_job(
+                job["id"],
+                "completed" if result["success"] else "failed",
+                result=result,
+                error=result.get("error"),
+            )
         status_code = 200 if result["success"] else 500
         return jsonify(result), status_code
     except Exception as e:
+        if job is not None:
+            update_job(job["id"], "failed", error=str(e))
         raise TranslationError(
             str(e),
             context={"file_path": file_path},

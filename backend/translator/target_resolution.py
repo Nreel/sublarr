@@ -58,11 +58,20 @@ def _pick_code(profile_targets: list[str], wanted_items: list[dict]) -> str | No
         for i in wanted_items
         if i.get("target_language")
     ]
+    # Return the NORMALIZED code. Profile targets are stored verbatim
+    # (repositories/profiles.py writes ``target_languages_json`` with no
+    # cleaner), so a legacy alias like "ger" used to flow out raw: sidecars
+    # named ``Movie.ger.ass`` and translation-memory rows keyed under
+    # ``target_lang="ger"`` beside the canonical "de" ones - split-brain
+    # cache keys and inconsistent cleanup for the same logical language.
     for code in profile_targets:
-        if normalize_language_code(code) in wanted:
-            return code
-    if profile_targets:
-        return profile_targets[0]
+        norm = normalize_language_code(code or "")
+        if norm and norm in wanted:
+            return norm
+    for code in profile_targets:
+        norm = normalize_language_code(code or "")
+        if norm:
+            return norm
     return wanted[0] if wanted else None
 
 
@@ -89,17 +98,23 @@ def resolve_translation_target(
         return fallback
 
     targets = list(profile.get("target_languages") or [])
-    code = (arr_context or {}).get(TRANSLATE_TO_KEY) or _pick_code(targets, items)
+    stamped = normalize_language_code((arr_context or {}).get(TRANSLATE_TO_KEY) or "")
+    code = stamped or _pick_code(targets, items)
     if not code:
         return fallback
+    # ``code`` is canonical here (both branches normalize), so the name and
+    # sidecar/cache keys never depend on a legacy alias stored on the row or
+    # in the profile.
     names = list(profile.get("target_language_names") or [])
-    name = (
-        names[targets.index(code)] if code in targets and targets.index(code) < len(names) else ""
-    )
+    name = ""
+    for raw, nm in zip(targets, names):
+        if normalize_language_code(raw or "") == code:
+            name = nm
+            break
     return TranslationTarget(
         code,
         name or language_name(code),
-        _ordered_sources(profile, normalize_language_code(code), fallback.sources),
+        _ordered_sources(profile, code, fallback.sources),
     )
 
 

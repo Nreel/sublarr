@@ -48,7 +48,12 @@ def retranslate_status():
 
     s = get_settings()
     current_hash = s.get_translation_config_hash()
-    outdated = get_outdated_jobs_count(current_hash)
+    # Per-backend comparison (see _is_outdated): a plain-hash comparison
+    # against the default backend's hash counted every non-default-backend
+    # job as outdated forever.
+    outdated = get_outdated_jobs_count(
+        lambda backend_name: s.get_translation_config_hash(backend_name=backend_name)
+    )
 
     return jsonify(
         {
@@ -60,7 +65,7 @@ def retranslate_status():
     )
 
 
-@bp.route("/retranslate/<int:job_id>", methods=["POST"])
+@bp.route("/retranslate/<job_id>", methods=["POST"])
 def retranslate_single(job_id):
     """Re-translate a single item (deletes old sub, forces re-translation).
     ---
@@ -76,8 +81,8 @@ def retranslate_single(job_id):
           name: job_id
           required: true
           schema:
-            type: integer
-          description: Job ID or wanted item ID
+            type: string
+          description: Translation job ID (uuid hex) or wanted item ID (integer)
       responses:
         202:
           description: Re-translation started
@@ -96,14 +101,20 @@ def retranslate_single(job_id):
           description: Item or file not found
     """
     from config import get_settings
-    from db.jobs import create_job, get_job
+    from db.jobs import create_job, get_job, update_job
     from db.wanted import get_wanted_item
 
     wanted_item = None
-    job = get_job(str(job_id))
+    # Job IDs are uuid hex strings; wanted item IDs are integers. The old
+    # <int:...> converter made /retranslate/<uuid-hex> a permanent 404 —
+    # re-translating a completed job (the primary UI action) was dead.
+    job = get_job(job_id)
     if not job:
         # Try as wanted item ID
-        wanted_item = get_wanted_item(job_id)
+        try:
+            wanted_item = get_wanted_item(int(job_id))
+        except ValueError:
+            wanted_item = None
         if not wanted_item:
             return jsonify({"error": "Item not found"}), 404
         from services.standalone_library import wanted_item_path_refusal
@@ -115,12 +126,14 @@ def retranslate_single(job_id):
     else:
         file_path = job["file_path"]
 
-    if not os.path.exists(file_path):
-        return jsonify({"error": f"File not found: {file_path}"}), 404
-
-    # Security: ensure file_path is under the configured media_path
+    # Security first: ensure file_path is under the configured media_path.
+    # Checked before existence, so a 404 never confirms a path outside
+    # media_path (same ordering as /translate).
     if not is_safe_path(file_path, get_settings().media_path):
         return jsonify({"error": "file_path must be under the configured media_path"}), 403
+
+    if not os.path.exists(file_path):
+        return jsonify({"error": f"File not found: {file_path}"}), 404
 
     if not _is_translation_enabled():
         return jsonify({"error": "Translation is disabled in configuration"}), 503
@@ -134,20 +147,18 @@ def retranslate_single(job_id):
     )
 
     if wanted_item and wanted_item.get("target_language"):
-        target_code = wanted_item["target_language"]
+        from config_language_data import normalize_language_code
+
+        # Canonicalize legacy aliases ("ger" -> "de"): the sidecar delete
+        # patterns and the translate_to stamp below key off this code.
+        target_code = normalize_language_code(wanted_item["target_language"])
     else:
         target_code = resolve_translation_target(file_path, (job or {}).get("arr_context")).code
 
-    # Delete existing translated subtitle
-    base = os.path.splitext(file_path)[0]
-    for fmt in ["ass", "srt"]:
-        for pattern in target_sidecar_patterns(target_code, fmt):
-            target = base + pattern
-            if os.path.exists(target):
-                os.remove(target)
-                logger.info("Re-translate: removed %s", target)
-
-    # Re-translate with force
+    # Re-translate with force. Stale target sidecars are removed only AFTER
+    # the new translation succeeds (inside _run): deleting them here meant a
+    # failed re-translation left the file with no target subtitle at all —
+    # the previous good translation destroyed by a transient backend error.
     context = dict((job or {}).get("arr_context") or {})
     if wanted_item:
         from wanted_search.process import _build_arr_context
@@ -160,6 +171,18 @@ def retranslate_single(job_id):
     def _run():
         with _app.app_context():
             result = _run_job(new_job)
+            if result and result.get("success"):
+                # Remove target sidecars the forced re-translation did not
+                # overwrite (e.g. the file switched .en.srt -> .en.ass).
+                # After success only: see the note above the create_job call.
+                base = os.path.splitext(file_path)[0]
+                fresh = result.get("output_path")
+                for fmt in ["ass", "srt"]:
+                    for pattern in target_sidecar_patterns(target_code, fmt):
+                        stale = base + pattern
+                        if os.path.exists(stale) and stale != fresh:
+                            os.remove(stale)
+                            logger.info("Re-translate: removed stale %s", stale)
             # When called with a wanted-item ID (not an existing job ID), the
             # wanted row must be resolved on success — otherwise it sits in
             # "wanted" forever even though its target subtitle now exists on
@@ -179,7 +202,24 @@ def retranslate_single(job_id):
                 },
             )
 
-    submit_background(_run)
+    # Prefer the configured job queue — it is sized by the translation
+    # concurrency limit; the shared background pool bypassed it (same fix as
+    # /jobs/<id>/retry).
+    queue = getattr(current_app, "job_queue", None)
+    if queue is not None:
+        try:
+            queue.enqueue(_run, new_job, job_id=new_job["id"])
+        except Exception as exc:
+            update_job(new_job["id"], "failed", error=f"Queue unavailable: {exc}")
+            logger.warning("Re-translate enqueue failed for %s: %s", file_path, exc)
+            return jsonify({"error": f"Failed to queue re-translation: {exc}"}), 503
+    else:
+        try:
+            submit_background(_run)
+        except Exception as exc:
+            update_job(new_job["id"], "failed", error=f"Failed to start: {exc}")
+            logger.exception("Re-translate submit failed for %s", file_path)
+            return jsonify({"error": f"Failed to start re-translation: {exc}"}), 503
 
     return jsonify(
         {
@@ -228,7 +268,9 @@ def retranslate_batch():
                     type: integer
     """
     from config import get_settings
-    from db.jobs import get_outdated_jobs, update_job
+    from db.jobs import get_outdated_jobs, record_stat, update_job
+    from routes.batch_state import retranslate_batch_state, retranslate_lock
+    from services.translation_jobs import update_stats
     from translator import translate_file
     from translator.target_resolution import resolve_translation_target, target_sidecar_patterns
 
@@ -236,11 +278,33 @@ def retranslate_batch():
         return jsonify({"error": "Translation is disabled in configuration"}), 503
 
     s = get_settings()
-    current_hash = s.get_translation_config_hash()
-    outdated = get_outdated_jobs(current_hash)
+    # The stamped hash embeds the backend that produced each job; outdated
+    # is therefore decided per backend (see JobRepository._is_outdated).
+    # Fetch every candidate, not the repository default page of 100: with
+    # more than 100 outdated jobs the run silently processed 100, the
+    # progress total lied about the rest, and the UI looped forever
+    # showing a stale count.
+    outdated = get_outdated_jobs(
+        lambda backend_name: s.get_translation_config_hash(backend_name=backend_name),
+        limit=10_000,
+    )
 
     if not outdated:
         return jsonify({"status": "nothing_to_do", "count": 0})
+
+    with retranslate_lock:
+        if retranslate_batch_state["running"]:
+            return jsonify({"error": "Re-translation batch already running"}), 409
+        retranslate_batch_state.update(
+            {
+                "running": True,
+                "total": len(outdated),
+                "processed": 0,
+                "succeeded": 0,
+                "failed": 0,
+                "current_file": None,
+            }
+        )
 
     total = len(outdated)
     _app = current_app._get_current_object()
@@ -253,94 +317,138 @@ def retranslate_batch():
 
             from services.standalone_library import wanted_item_path_refusal
 
-            for job in outdated:
-                file_path = job["file_path"]
-                context = job.get("arr_context") or {}
-                if wanted_item_path_refusal({**context, "file_path": file_path}):
-                    processed += 1
-                    failed += 1
-                    continue
-                if not os.path.exists(file_path):
-                    processed += 1
-                    failed += 1
-                    continue
-
-                # Remove existing target subs of the language this file's
-                # profile translates into (#254), then translate into it.
-                target = resolve_translation_target(file_path, context)
-                base = os.path.splitext(file_path)[0]
-                for fmt in ["ass", "srt"]:
-                    for pattern in target_sidecar_patterns(target.code, fmt):
-                        sidecar = base + pattern
-                        if os.path.exists(sidecar):
-                            os.remove(sidecar)
-
-                try:
-                    result = translate_file(
-                        file_path,
-                        force=True,
-                        arr_context=context or None,
-                        target_language=target.code,
-                        target_language_name=target.name,
-                    )
-                    processed += 1
-                    if result["success"]:
-                        succeeded += 1
-                        stats = result.get("stats") or {}
-                        output_path = result.get("output_path")
-                        # Refresh the original outdated job row so it leaves
-                        # the outdated set. translate_file stamps the current
-                        # config_hash into result["stats"] on success; without
-                        # writing it back to the job, get_outdated_jobs keeps
-                        # returning this same job forever and outdated_count
-                        # never decrements (bug found 2026-07-08). Mirrors
-                        # services.translation_jobs.run_job's update_job call.
-                        job_id = job.get("id")
-                        if job_id:
-                            update_job(job_id, "completed", result=result)
-                        # A successful, non-skipped translation must be
-                        # flagged the same way every other translate-
-                        # completion site does (retranslate_single,
-                        # wanted_search) -- otherwise it produces no History
-                        # entry at all (bug found 2026-07-08). No wanted item
-                        # is involved here (jobs are independent of
-                        # wanted_items), so record the MT row directly
-                        # instead of routing through finalize_translation.
-                        if output_path and not stats.get("skipped"):
-                            from services.mt_provisional import record_mt_output
-
-                            out_fmt = stats.get("format") or (
-                                "ass" if output_path.endswith(".ass") else "srt"
-                            )
-                            record_mt_output(file_path, output_path, target.code, out_fmt)
-                    else:
+            try:
+                for job in outdated:
+                    file_path = job["file_path"]
+                    context = job.get("arr_context") or {}
+                    if wanted_item_path_refusal({**context, "file_path": file_path}):
+                        processed += 1
                         failed += 1
-                except Exception as e:
-                    processed += 1
-                    failed += 1
-                    logger.warning("Re-translate batch: error on %s: %s", file_path, e)
+                        record_stat(success=False)
+                        continue
+                    if not os.path.exists(file_path):
+                        processed += 1
+                        failed += 1
+                        record_stat(success=False)
+                        continue
 
-                socketio.emit(
-                    "retranslation_progress",
+                    # The language this file's profile translates into (#254).
+                    target = resolve_translation_target(file_path, context)
+
+                    try:
+                        result = translate_file(
+                            file_path,
+                            force=True,
+                            arr_context=context or None,
+                            target_language=target.code,
+                            target_language_name=target.name,
+                        )
+                    except Exception as e:
+                        processed += 1
+                        failed += 1
+                        record_stat(success=False)
+                        logger.warning("Re-translate batch: error on %s: %s", file_path, e)
+                        result = None
+
+                    if result is not None:
+                        processed += 1
+                        # Daily stats must see these runs too: before this
+                        # the batch path updated job rows but never
+                        # daily_stats, so re-translation spend was invisible
+                        # in /stats while real API/LLM cost accrued.
+                        update_stats(result)
+                        if result["success"]:
+                            succeeded += 1
+                            stats = result.get("stats") or {}
+                            output_path = result.get("output_path")
+                            # Remove stale target sidecars only AFTER the new
+                            # translation succeeded: deleting before the run
+                            # meant a failed re-translation destroyed the
+                            # only good subtitle on disk.
+                            base = os.path.splitext(file_path)[0]
+                            for fmt in ["ass", "srt"]:
+                                for pattern in target_sidecar_patterns(target.code, fmt):
+                                    stale = base + pattern
+                                    if os.path.exists(stale) and stale != output_path:
+                                        os.remove(stale)
+                            # Refresh the original outdated job row so it
+                            # leaves the outdated set. translate_file stamps
+                            # the current config_hash into result["stats"] on
+                            # success; without writing it back to the job,
+                            # get_outdated_jobs keeps returning this same job
+                            # forever and outdated_count never decrements
+                            # (bug found 2026-07-08). Mirrors
+                            # services.translation_jobs.run_job's update_job
+                            # call.
+                            job_id = job.get("id")
+                            if job_id:
+                                update_job(job_id, "completed", result=result)
+                            # A successful, non-skipped translation must be
+                            # flagged the same way every other translate-
+                            # completion site does (retranslate_single,
+                            # wanted_search) -- otherwise it produces no
+                            # History entry at all (bug found 2026-07-08).
+                            if output_path and not stats.get("skipped"):
+                                from services.mt_provisional import record_mt_output
+
+                                out_fmt = stats.get("format") or (
+                                    "ass" if output_path.endswith(".ass") else "srt"
+                                )
+                                record_mt_output(file_path, output_path, target.code, out_fmt)
+                        else:
+                            failed += 1
+
+                    with retranslate_lock:
+                        retranslate_batch_state.update(
+                            {
+                                "processed": processed,
+                                "succeeded": succeeded,
+                                "failed": failed,
+                                "current_file": file_path,
+                            }
+                        )
+
+                    socketio.emit(
+                        "retranslation_progress",
+                        {
+                            "processed": processed,
+                            "total": total,
+                            "succeeded": succeeded,
+                            "failed": failed,
+                            "current_file": file_path,
+                        },
+                    )
+
+                emit_event(
+                    "translation_complete",
                     {
-                        "processed": processed,
-                        "total": total,
+                        "count": processed,
                         "succeeded": succeeded,
                         "failed": failed,
-                        "current_file": file_path,
                     },
                 )
+            finally:
+                with retranslate_lock:
+                    retranslate_batch_state.update({"running": False, "current_file": None})
 
-            emit_event(
-                "translation_complete",
+    try:
+        submit_background(_run_retranslate)
+    except Exception as exc:
+        # Runner never started: release the guard flag, or /retranslate/batch
+        # is bricked with 409 until restart.
+        with retranslate_lock:
+            retranslate_batch_state.update(
                 {
-                    "count": processed,
-                    "succeeded": succeeded,
-                    "failed": failed,
-                },
+                    "running": False,
+                    "total": 0,
+                    "processed": 0,
+                    "succeeded": 0,
+                    "failed": 0,
+                    "current_file": None,
+                }
             )
-
-    submit_background(_run_retranslate)
+        logger.exception("Re-translate batch: submit to background worker failed")
+        return jsonify({"error": f"Failed to start re-translation batch: {exc}"}), 503
 
     return jsonify(
         {
