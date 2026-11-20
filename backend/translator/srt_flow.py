@@ -211,7 +211,9 @@ def _translate_srt(
         )
 
     # Quality check
-    quality_warnings = _core._check_translation_quality(dialog_texts, translated_texts, target_lang=tgt_lang)
+    quality_warnings = _core._check_translation_quality(
+        dialog_texts, translated_texts, target_lang=tgt_lang
+    )
     if validation_errors:
         quality_warnings.extend([f"Validation: {e}" for e in validation_errors])
     for w in quality_warnings:

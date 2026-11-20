@@ -394,7 +394,9 @@ def translate_ass(
             )
 
         # Quality check
-        quality_warnings = _core._check_translation_quality(dialog_texts, translated_texts, target_lang=tgt_lang)
+        quality_warnings = _core._check_translation_quality(
+            dialog_texts, translated_texts, target_lang=tgt_lang
+        )
         for w in quality_warnings:
             logger.warning("Quality: %s", w)
 
@@ -595,7 +597,9 @@ def _translate_external_ass(
                 f"Translation count mismatch: expected {len(dialog_texts)}, got {len(translated_texts)}"
             )
 
-        quality_warnings = _core._check_translation_quality(dialog_texts, translated_texts, target_lang=tgt_lang)
+        quality_warnings = _core._check_translation_quality(
+            dialog_texts, translated_texts, target_lang=tgt_lang
+        )
         if validation_errors:
             quality_warnings.extend([f"Validation: {e}" for e in validation_errors])
         for w in quality_warnings:
