@@ -21,7 +21,7 @@ _SETTINGS = SimpleNamespace(
 )
 
 _RU_PROFILE = {
-    "source_language": "ja",
+    "source_languages": ["ja"],
     "target_languages": ["ru", "uk"],
     "target_language_names": ["Russian", "Ukrainian"],
 }
@@ -40,7 +40,7 @@ def lookups():
 def test_profile_target_wins_over_global_default(lookups):
     lookups.profile.return_value = _RU_PROFILE
     target = resolve_translation_target("/media/show/e01.mkv", {"sonarr_series_id": 7})
-    assert target == TranslationTarget("ru", "Russian", "ja")
+    assert target == TranslationTarget("ru", "Russian", ["ja"])
     lookups.profile.assert_called_once_with({"sonarr_series_id": 7})
 
 
@@ -51,7 +51,7 @@ def test_wanted_item_of_the_file_picks_the_profile(lookups):
     target = resolve_translation_target("/media/show/e01.mkv")
     lookups.profile.assert_called_once_with(item)
     # The wanted row names the language still missing for this file.
-    assert target == TranslationTarget("uk", "Ukrainian", "ja")
+    assert target == TranslationTarget("uk", "Ukrainian", ["ja"])
 
 
 def test_wanted_rows_follow_profile_order(lookups):
@@ -71,14 +71,14 @@ def test_no_context_uses_the_default_profile(lookups):
 
 def test_profile_without_targets_falls_back_to_settings(lookups):
     lookups.profile.return_value = {"target_languages": []}
-    assert resolve_translation_target("/media/x.mkv") == TranslationTarget("de", "German", "en")
+    assert resolve_translation_target("/media/x.mkv") == TranslationTarget("de", "German", ["en"])
 
 
 def test_lookup_failure_falls_back_to_settings_and_logs(lookups):
     lookups.profile.side_effect = RuntimeError("db down")
     with patch("translator.target_resolution.logger") as log:
         target = resolve_translation_target("/media/x.mkv")
-    assert target == TranslationTarget("de", "German", "en")
+    assert target == TranslationTarget("de", "German", ["en"])
     assert "db down" in str(log.warning.call_args)
 
 
@@ -104,14 +104,12 @@ def test_translate_file_without_target_uses_the_profile(tmp_path):
         raise _StopError
 
     pkg = MagicMock()
-    pkg.get_settings.return_value = SimpleNamespace(
-        **vars(_SETTINGS), auto_translate_source_languages=["en"]
-    )
+    pkg.get_settings.return_value = SimpleNamespace(**vars(_SETTINGS))
     with (
         patch("translator.core._pkg", return_value=pkg),
         patch(
             "translator.core.resolve_translation_target",
-            return_value=TranslationTarget("ru", "Russian", "ja"),
+            return_value=TranslationTarget("ru", "Russian", ["ja"]),
         ) as resolve,
         patch("translator.core.detect_existing_target_for_lang", side_effect=_detect),
         pytest.raises(_StopError),
@@ -127,9 +125,7 @@ def test_translate_file_explicit_target_skips_the_lookup(tmp_path):
     mkv = tmp_path / "e01.mkv"
     mkv.write_bytes(b"")
     pkg = MagicMock()
-    pkg.get_settings.return_value = SimpleNamespace(
-        **vars(_SETTINGS), auto_translate_source_languages=["en"]
-    )
+    pkg.get_settings.return_value = SimpleNamespace(**vars(_SETTINGS))
     with (
         patch("translator.core._pkg", return_value=pkg),
         patch("translator.core.resolve_translation_target") as resolve,
@@ -146,7 +142,7 @@ def test_explicit_translate_to_in_context_wins(lookups):
     target = resolve_translation_target(
         "/media/x.mkv", {"sonarr_series_id": 7, "translate_to": "uk"}
     )
-    assert target == TranslationTarget("uk", "Ukrainian", "ja")
+    assert target == TranslationTarget("uk", "Ukrainian", ["ja"])
 
 
 def test_target_sidecar_patterns_follow_the_language():
@@ -164,9 +160,7 @@ def test_explicit_target_without_name_is_not_named_after_the_global_one(tmp_path
     mkv = tmp_path / "e01.mkv"
     mkv.write_bytes(b"")
     pkg = MagicMock()
-    pkg.get_settings.return_value = SimpleNamespace(
-        **vars(_SETTINGS), auto_translate_source_languages=["en"]
-    )
+    pkg.get_settings.return_value = SimpleNamespace(**vars(_SETTINGS))
     with (
         patch("translator.core._pkg", return_value=pkg),
         patch("translator.core.detect_existing_target_for_lang", return_value="ass"),

@@ -244,7 +244,7 @@ class TestEmbeddedSourceHandoff:
         )
         monkeypatch.setattr(
             "services.mt_provisional._resolve_profile_for_item",
-            lambda item: {"source_language": "ja"},
+            lambda item: {"source_languages": ["ja"]},
         )
 
         self._run(monkeypatch, item_id, any_source=False)

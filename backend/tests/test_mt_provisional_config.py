@@ -20,8 +20,7 @@ def test_new_profile_has_provisional_mt_defaults(app_ctx):
     repo = ProfileRepository()
     profile_id = repo.create_profile(
         name="Provisional MT Defaults",
-        source_lang="en",
-        source_name="English",
+        source_langs=["en"],
         target_langs=["de"],
         target_names=["German"],
     )
@@ -46,8 +45,7 @@ def test_update_profile_accepts_mt_keep_seeking_original(app_ctx):
     repo = ProfileRepository()
     profile_id = repo.create_profile(
         name="MT Keep Seeking PUT",
-        source_lang="en",
-        source_name="English",
+        source_langs=["en"],
         target_langs=["de"],
         target_names=["German"],
     )
@@ -169,8 +167,7 @@ def test_update_profile_accepts_mt_on_original_found_and_min_score(app_ctx):
     repo = ProfileRepository()
     profile_id = repo.create_profile(
         name="MT Phase2 Update",
-        source_lang="en",
-        source_name="English",
+        source_langs=["en"],
         target_langs=["de"],
         target_names=["German"],
     )
@@ -193,8 +190,7 @@ def test_update_profile_rejects_invalid_mt_on_original_found(app_ctx):
     repo = ProfileRepository()
     profile_id = repo.create_profile(
         name="MT Phase2 Update Invalid",
-        source_lang="en",
-        source_name="English",
+        source_langs=["en"],
         target_langs=["de"],
         target_names=["German"],
     )
@@ -209,8 +205,7 @@ def test_update_profile_rejects_negative_min_original_score(app_ctx):
     repo = ProfileRepository()
     profile_id = repo.create_profile(
         name="MT Phase2 Update Negative",
-        source_lang="en",
-        source_name="English",
+        source_langs=["en"],
         target_langs=["de"],
         target_names=["German"],
     )

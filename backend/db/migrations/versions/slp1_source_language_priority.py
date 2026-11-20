@@ -69,7 +69,9 @@ def downgrade() -> None:
                 )
             if "source_language_name" not in cols:
                 batch.add_column(
-                    sa.Column("source_language_name", sa.Text(), nullable=False, server_default="English")
+                    sa.Column(
+                        "source_language_name", sa.Text(), nullable=False, server_default="English"
+                    )
                 )
         if "source_languages_json" in _columns():
             from config_language_data import language_name

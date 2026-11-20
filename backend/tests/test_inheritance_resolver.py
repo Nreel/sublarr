@@ -96,8 +96,7 @@ def _mk_profile(**overrides):
     lp = LanguageProfile(
         id=10,
         name="Anime DE",
-        source_language="en",
-        source_language_name="English",
+        source_languages_json='["en"]',
         target_languages_json='["de"]',
         target_language_names_json='["German"]',
         is_default=0,

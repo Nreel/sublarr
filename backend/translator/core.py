@@ -138,6 +138,10 @@ def translate_file(
     from config_language_data import language_name, normalize_language_code
 
     settings = _get_settings()
+    # Explicit callers pass no profile resolution (and must not pay for one):
+    # the source priority stays empty until filled below by the caller
+    # override or the global fallback.
+    source_pref: list[str] = []
     if target_language:
         tgt_lang = target_language
         tgt_name = target_language_name or language_name(target_language)

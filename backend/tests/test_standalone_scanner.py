@@ -35,7 +35,9 @@ def _no_pending_kind_rows(tmp_path):
         # POSIX paths only; on Windows the folders sit under a drive root, so
         # the tmp dir itself is the root (with a trailing separator, like the
         # real _enabled_roots returns).
-        patch.object(StandaloneScanner, "_enabled_roots", return_value=(os.path.join(str(tmp_path), ""),)),
+        patch.object(
+            StandaloneScanner, "_enabled_roots", return_value=(os.path.join(str(tmp_path), ""),)
+        ),
     ):
         yield
 
@@ -1202,7 +1204,9 @@ class TestCleanupStaleMovies:
         ]
         with (
             patch.object(StandaloneScanner, "_watched_roots_reachable", return_value=True),
-            patch.object(StandaloneScanner, "_enabled_roots", return_value=(os.path.join(str(tmp_path), ""),)),
+            patch.object(
+                StandaloneScanner, "_enabled_roots", return_value=(os.path.join(str(tmp_path), ""),)
+            ),
             patch("db.standalone.get_standalone_movies", return_value=movies),
             patch("services.standalone_manager.delete_movie_cascade") as cascade,
         ):

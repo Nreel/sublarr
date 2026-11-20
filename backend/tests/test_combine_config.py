@@ -23,8 +23,7 @@ _DEFAULT_POSITION = {"primary": "bottom", "secondary": "top"}
 def _make(repo: ProfileRepository, name: str, **extra) -> int:
     return repo.create_profile(
         name=name,
-        source_lang="en",
-        source_name="English",
+        source_langs=["en"],
         target_langs=["de", "en"],
         target_names=["German", "English"],
         **extra,

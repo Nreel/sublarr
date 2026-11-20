@@ -210,8 +210,7 @@ class TestApproveIntegration:
 
             profile_id = ProfileRepository().create_profile(
                 name="approve-integration-profile",
-                source_lang="en",
-                source_name="English",
+                source_langs=["en"],
                 target_langs=["de"],
                 target_names=["German"],
             )
