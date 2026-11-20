@@ -8,19 +8,38 @@ while the array served other media work. A Pi or a slow NAS fails every remux.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from unittest.mock import MagicMock
 
 import pytest
 
+from utils import io_timeout
+
 GB = 1024**3
 
 
-def _video(tmp_path, size_gb: float):
+def _video(tmp_path, size_gb: float, monkeypatch):
+    """A real-but-tiny video file that *reports* ``size_gb``.
+
+    ``compute_io_timeout`` is the only thing that looks at the size, and it
+    asks ``os.path.getsize``. Materialising a literal 7-25 GB file is what
+    made this module the slowest in the suite (344 s for the 7 GB case):
+    NTFS cannot truncate to a sparse size here, so ``truncate`` zero-fills
+    the whole range. Same convention as ``tests/test_io_timeout.py`` —
+    inject the size, never write the bytes.
+    """
     path = tmp_path / "episode.mkv"
-    with open(path, "wb") as fh:
-        fh.truncate(int(size_gb * GB))  # sparse: no disk space used
-    return str(path)
+    path.write_bytes(b"\0")
+    target = os.fspath(path)
+    reported = int(size_gb * GB)
+    real_getsize = os.path.getsize
+
+    def _getsize(candidate):
+        return reported if os.fspath(candidate) == target else real_getsize(candidate)
+
+    monkeypatch.setattr(io_timeout.os.path, "getsize", _getsize)
+    return target
 
 
 class _StopError(Exception):
@@ -48,7 +67,7 @@ def _extract(tmp_path, monkeypatch, size_gb: float) -> int:
     )
     with pytest.raises(_StopError):
         extract_subtitle_stream(
-            _video(tmp_path, size_gb), {"sub_index": 0, "format": "ass"},
+            _video(tmp_path, size_gb, monkeypatch), {"sub_index": 0, "format": "ass"},
             str(tmp_path / "episode.en.ass"),
         )  # fmt: skip
     return seen["timeout"]
@@ -71,7 +90,9 @@ def test_reading_embedded_cue_starts_scales_with_the_file(tmp_path, monkeypatch)
         "services.subtitle_health.raw_io.list_subtitle_streams",
         lambda _path: [{"codec": "ass", "forced": False, "sub_index": 0}],
     )
-    assert subtitle_timing._embedded_starts(_video(tmp_path, 12)) is None  # never raises
+    assert (
+        subtitle_timing._embedded_starts(_video(tmp_path, 12, monkeypatch)) is None
+    )  # never raises
     assert seen["timeout"] >= 12 * 60
 
 
@@ -89,7 +110,7 @@ def test_ffsubsync_against_a_large_video_scales_with_the_file(tmp_path, monkeypa
     subtitle = tmp_path / "episode.de.srt"
     subtitle.write_text("1\n00:00:01,000 --> 00:00:02,000\nHallo\n", encoding="utf-8")
     try:
-        video_sync.sync_with_ffsubsync(str(subtitle), _video(tmp_path, 25))
+        video_sync.sync_with_ffsubsync(str(subtitle), _video(tmp_path, 25, monkeypatch))
     except Exception:
         pass
     assert seen["timeout"] >= 25 * 60
@@ -101,5 +122,5 @@ def test_ocr_frame_dump_scales_with_the_file(tmp_path, monkeypatch):
     seen = _capture_timeout(monkeypatch, "services.ocr_extractor.subprocess.run")
     monkeypatch.setattr(ocr_extractor, "TESSERACT_AVAILABLE", True)
     with pytest.raises(_StopError):
-        ocr_extractor.batch_ocr_track(_video(tmp_path, 12), 3)
+        ocr_extractor.batch_ocr_track(_video(tmp_path, 12, monkeypatch), 3)
     assert seen["timeout"] >= 12 * 60

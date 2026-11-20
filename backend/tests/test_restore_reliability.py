@@ -603,9 +603,16 @@ def test_a_failure_before_the_database_restore_rolls_the_key_back(
 
 
 def test_a_sqlite_restore_gives_up_instead_of_waiting_forever(tmp_path, monkeypatch):
-    """timeout= only configures SQLite's busy handler; the backup API retries
-    SQLITE_BUSY indefinitely, so a destination held by a writer could occupy the
-    restore thread for good."""
+    """The restore must give up on a destination held by another writer.
+
+    Two bounds exist and both matter here. The progress-callback deadline
+    only fires *between* pages, so with a locked destination the very first
+    step never copies and the bound that actually applies is SQLite's busy
+    handler (``_SQLITE_RESTORE_BUSY_TIMEOUT_MS``, 30 s in production). Pin
+    that to 200 ms: the behaviour under test is "gives up and leaves the
+    destination untouched", and paying the production 30 s busy wait for it
+    made this the slowest single test in the suite (42 s).
+    """
     import sqlite3
 
     import database_backup
@@ -618,6 +625,7 @@ def test_a_sqlite_restore_gives_up_instead_of_waiting_forever(tmp_path, monkeypa
     blocker = sqlite3.connect(target, isolation_level=None)
     blocker.execute("BEGIN EXCLUSIVE")
     monkeypatch.setattr(database_backup, "_SQLITE_RESTORE_DEADLINE_S", 2)
+    monkeypatch.setattr(database_backup, "_SQLITE_RESTORE_BUSY_TIMEOUT_MS", 200)
     try:
         with pytest.raises(Exception) as exc:
             database_backup._sqlite_copy(str(source), str(target))

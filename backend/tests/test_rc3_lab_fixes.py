@@ -172,12 +172,18 @@ def test_worker_health_uses_own_live_heartbeat(age, hostname, healthy):
 
 
 def test_worker_health_without_cap_kill(monkeypatch):
-    from worker_health import worker_is_healthy
+    """EPERM from the liveness probe still proves the PID exists.
 
-    now = datetime.now(UTC)
-    worker = SimpleNamespace(hostname="here", pid=1, last_heartbeat=now, worker_ttl=420)
+    Windows is skipped: there the probe is ``OpenProcess``, because
+    ``os.kill(pid, 0)`` is ``GenerateConsoleCtrlEvent`` (``CTRL_C_EVENT``
+    is 0) and would Ctrl-C the caller's console group instead of probing.
+    """
+    from worker_health import _pid_exists
+
+    if os.name == "nt":
+        pytest.skip("os.kill(pid, 0) is not a liveness probe on Windows")
     monkeypatch.setattr("worker_health.os.kill", Mock(side_effect=PermissionError()))
-    assert worker_is_healthy(worker, hostname="here", now=now)
+    assert _pid_exists(1)
 
 
 def test_radarr_path_outside_the_media_roots_is_refused(

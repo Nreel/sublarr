@@ -5,16 +5,45 @@ import socket
 from datetime import UTC, datetime
 
 
-def worker_is_healthy(worker, *, hostname, now):
-    if worker.hostname != hostname or not worker.pid or not worker.last_heartbeat:
-        return False
+def _pid_exists(pid: int) -> bool:
+    """True when ``pid`` names a live process we are allowed to see.
+
+    ``os.kill(pid, 0)`` is the POSIX liveness idiom and is what this used to
+    call, but on Windows ``signal.CTRL_C_EVENT`` is 0, so CPython routes
+    ``os.kill(pid, 0)`` to ``GenerateConsoleCtrlEvent`` — it does not probe the
+    PID, it fires Ctrl-C at that console process group (the caller's own group
+    included). Under pytest that raised ``KeyboardInterrupt`` in the controller
+    and silently aborted the run halfway; on a native Windows install it would
+    interrupt the server's own console. Probe with ``OpenProcess`` instead.
+    """
+    if os.name == "nt":
+        import ctypes
+
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        ERROR_ACCESS_DENIED = 5
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+        if handle:
+            kernel32.CloseHandle(handle)
+            return True
+        # Access denied still proves the PID is taken (same reasoning as the
+        # PermissionError branch below).
+        return kernel32.GetLastError() == ERROR_ACCESS_DENIED
     try:
-        os.kill(worker.pid, 0)
+        os.kill(pid, 0)
     except PermissionError:
         # Docker healthchecks can run as root without CAP_KILL while gosu
         # runs the worker as PUID. EPERM still proves that the PID exists.
-        pass
+        return True
     except (OSError, TypeError):
+        return False
+    return True
+
+
+def worker_is_healthy(worker, *, hostname, now):
+    if worker.hostname != hostname or not worker.pid or not worker.last_heartbeat:
+        return False
+    if not _pid_exists(worker.pid):
         return False
     heartbeat = worker.last_heartbeat
     if heartbeat.tzinfo is None:

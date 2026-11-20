@@ -59,6 +59,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nav badges immediately, so the count does not lag behind a run started from
   the Wanted or Activity pages.
 
+### Fixed
+- **The RQ worker healthcheck fired Ctrl-C instead of probing the PID** —
+  `worker_health.worker_is_healthy` used `os.kill(pid, 0)`, the POSIX
+  liveness idiom. On Windows `signal.CTRL_C_EVENT` is `0`, so CPython routes
+  that call to `GenerateConsoleCtrlEvent`: it signaled the caller's console
+  process group instead of checking whether the worker existed. A native
+  Windows deployment running the healthcheck interrupted its own console, and
+  the same call in the test suite raised `KeyboardInterrupt` in the pytest
+  controller, silently aborting ~half of every backend run. Windows now probes
+  with `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, …)`, keeping the
+  existing access-denied-counts-as-alive rule.
+
 ## [1.21.3] - 2026-11-18
 
 ### Fixed

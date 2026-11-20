@@ -23,11 +23,130 @@ else:
     _SESSION_CONFIG_DIR = tempfile.mkdtemp(prefix="sublarr-cfg-")
     os.environ["SUBLARR_CONFIG_DIR"] = _SESSION_CONFIG_DIR
 
+# The source-checkout default for ``log_file`` is ``log/sublarr.log`` *relative
+# to the working directory*, so every test run appended to backend/log/ and the
+# support-export tests then anonymised that whole file: 183k lines and ~2.7 s
+# per export test once the log had grown to 10 MB. Point each worker's log at
+# its own session temp dir instead — small, hermetic, and nothing accumulates
+# in the checkout. SUBLARR_LOG_FILE is a BootSettings field, so it keeps
+# working through reload_settings(). setdefault: an explicit value still wins.
+if "SUBLARR_LOG_FILE" not in os.environ:
+    _SESSION_LOG_DIR = _SESSION_CONFIG_DIR or tempfile.mkdtemp(prefix="sublarr-log-")
+    os.environ["SUBLARR_LOG_FILE"] = os.path.join(_SESSION_LOG_DIR, "log", "sublarr.log")
+else:
+    _SESSION_LOG_DIR = None
+
+import socket
+import sqlite3
+
 import pytest
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 
 from app import create_app
 from config import reload_settings
 from db import close_db, get_db, init_db
+
+
+def _stub_vendored_opensubtitles_login():
+    """Give the vendored OpenSubtitles provider a token without the network.
+
+    Its ``initialize()`` is a live XML-RPC ``LogIn`` — vendor code, not ours —
+    so refusing the socket (below) is not enough: the provider manager catches
+    the failure and logs a full ``exc_info`` traceback for *every* app the
+    suite builds (~2.8k of them). That pile of multi-KB tracebacks is what
+    grew each worker's log into the megabytes and then made the support-export
+    tests anonymise thousands of log lines per call (4.4 s each). A
+    placeholder token keeps the provider "initialized", exactly like the
+    successful anonymous login it used to get.
+    """
+    try:
+        # Side-effect import: puts the vendored Subliminal tree on sys.path so
+        # the runtime module is top-level ``subliminal`` — NOT
+        # ``providers._vendor.subliminal``, which is a *second* copy of the same
+        # file and whose classes nothing instantiates. It has to happen in its
+        # own statement: isort sorts third-party before first-party, which
+        # would put ``subliminal`` first and make it fail to import.
+        import providers._vendor  # noqa: F401
+    except ImportError:  # pragma: no cover — vendored module always ships
+        return
+    try:
+        from subliminal.providers.opensubtitles import OpenSubtitlesProvider
+    except ImportError:  # pragma: no cover — vendored module always ships
+        return
+
+    def _initialize(self):
+        self.token = "offline-test-token"
+
+    def _terminate(self):
+        self.token = None
+        try:
+            self.server.close()
+        except Exception:  # noqa: BLE001 — best-effort, mirrors the vendor's own cleanup
+            pass
+
+    OpenSubtitlesProvider.initialize = _initialize
+    OpenSubtitlesProvider.terminate = _terminate
+
+
+_stub_vendored_opensubtitles_login()
+
+
+def _blocked_socket_connect(self, address):
+    """Refuse every outbound connect: the suite must not touch a network.
+
+    ``create_app()`` builds the provider manager eagerly, and the Subliminal
+    OpenSubtitles provider logs in over HTTPS from ``initialize()``. That made
+    every ``client`` / ``app_ctx`` test wait on a live round-trip: measured
+    2026-11-20 at ~190 connects and 75-122 s of connect() time per xdist
+    worker, with single calls reaching the 10 s transport timeout, and it
+    flaked tests whenever the login was slow.
+
+    Loopback is refused too, because the health endpoint probes the default
+    ``ollama_url`` (``http://localhost:11434``) on every liveness request and
+    a refused loopback connect costs 2 s on Windows — that alone was the
+    constant ~3 s on every test that hit ``/health``. Nothing in the suite
+    needs a real socket; the Flask test client, fakeredis and the mocked
+    HTTP clients cover it.
+    """
+    raise ConnectionRefusedError(
+        f"outbound network is disabled in tests (connect to {address!r}); "
+        "mock the HTTP client instead"
+    )
+
+
+socket.socket.connect = _blocked_socket_connect
+
+
+@event.listens_for(Engine, "connect")
+def _sqlite_fast_test_pragmas(dbapi_connection, connection_record):
+    """Strip SQLite durability guarantees for every engine this process opens.
+
+    ``create_app()`` runs ``metadata.create_all()`` (133 DDL statements) on a
+    fresh database, and the suite builds ~2.8k of those per run via the
+    ``client`` / ``app_ctx`` fixtures. Under SQLite's defaults each statement is
+    its own transaction that fsyncs: 4.1 s per database on this workstation,
+    0.04 s once the journal lives in memory and ``synchronous`` is off
+    (measured 2026-11-20). No test needs crash durability, so pay it once per
+    *connection* instead of once per statement.
+
+    ``journal_mode=MEMORY`` is only switched for a database still on the
+    rollback journal: ``create_app()`` sets WAL right after ``create_all()``,
+    and flipping the mode back on every later connection would need an
+    exclusive lock — exactly the kind of contention the threaded tests here
+    are meant to detect.
+    """
+    if not isinstance(dbapi_connection, sqlite3.Connection):
+        return
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA synchronous=OFF")
+        cursor.execute("PRAGMA temp_store=MEMORY")
+        mode = cursor.execute("PRAGMA journal_mode").fetchone()
+        if mode and str(mode[0]).lower() == "delete":
+            cursor.execute("PRAGMA journal_mode=MEMORY")
+    finally:
+        cursor.close()
 
 
 def pytest_sessionfinish(session, exitstatus):
@@ -58,6 +177,8 @@ def pytest_sessionfinish(session, exitstatus):
         pass
     if _SESSION_CONFIG_DIR:
         shutil.rmtree(_SESSION_CONFIG_DIR, ignore_errors=True)
+    if _SESSION_LOG_DIR and _SESSION_LOG_DIR != _SESSION_CONFIG_DIR:
+        shutil.rmtree(_SESSION_LOG_DIR, ignore_errors=True)
 
 
 def _shutdown_event_dispatchers_for_test(app):

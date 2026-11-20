@@ -35,6 +35,11 @@ spec.components.security_scheme(
     },
 )
 
+# View-function identity of the last successful ``register_all_paths`` call.
+# ``spec`` is module-global, so re-registering an identical set of view
+# functions can only re-parse the same docstrings. See the function docstring.
+_registered_signature: frozenset[tuple[str, int]] | None = None
+
 
 def _register_pydantic_components() -> int:
     """Surface every Pydantic model in ``schemas.api_components`` as an
@@ -65,7 +70,25 @@ def register_all_paths(app):
     Must be called AFTER register_blueprints() and within app context so all
     views are discoverable. Silently skips views without ``---`` markers or
     that fail parsing.
+
+    Registration is memoised on the identity of the view functions: ``spec`` is
+    module-global, and re-registering the same functions only re-parses every
+    docstring with PyYAML (~1.1 s for 328 paths, measured 2026-11-20). The
+    suite builds an app per test with the same route modules, so without this
+    memo that parse is paid ~2.8k times per run. Production calls
+    ``create_app()`` once; a restarting worker that imports a route module
+    afresh gets new function objects and re-registers as before.
     """
+    global _registered_signature
+    # ``id(view)`` is not stable: a few endpoints are per-app closures
+    # (``serve_spa``, ``prometheus_metrics``, swagger UI's ``show``), so key on
+    # the code object instead — shared by every instance of the same ``def``.
+    signature = frozenset(
+        (name, id(getattr(view, "__code__", view))) for name, view in app.view_functions.items()
+    )
+    if signature == _registered_signature:
+        return
+
     component_count = _register_pydantic_components()
     if component_count:
         logger.info("OpenAPI: registered %d Pydantic components", component_count)
@@ -92,4 +115,5 @@ def register_all_paths(app):
                 logger.debug("Skipped OpenAPI path for %s: %s", name, exc)
                 skipped += 1
 
+    _registered_signature = signature
     logger.info("OpenAPI: registered %d paths, skipped %d views", registered, skipped)

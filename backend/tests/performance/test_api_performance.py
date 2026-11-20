@@ -1,6 +1,17 @@
 """Performance tests for API endpoints using pytest-benchmark."""
 
+import os
+
 import pytest
+
+# pytest-benchmark switches itself off in xdist workers, and these tests read
+# benchmark.stats["mean"] — under `-n auto` that is None and every one of them
+# dies with a TypeError. The suite defaults to xdist now, so skip instead of
+# failing: run `pytest -p no:xdist tests/performance` for the real numbers.
+pytestmark = pytest.mark.skipif(
+    "PYTEST_XDIST_WORKER" in os.environ,
+    reason="pytest-benchmark is disabled in xdist workers; run serially",
+)
 
 
 @pytest.mark.benchmark
