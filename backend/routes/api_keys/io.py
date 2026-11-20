@@ -209,12 +209,15 @@ def _import_zip(uploaded) -> tuple:
                     continue
                 try:
                     # The export writes the profile dicts as the API returns
-                    # them (source_language, target_languages, ...); older
-                    # archives used the short names. Read both.
+                    # them (source_languages, target_languages, ...); older
+                    # archives used the short names and the single
+                    # source_language. Read all of them.
+                    sources = p.get("source_languages") or p.get("source_langs")
+                    if not sources and p.get("source_language"):
+                        sources = [p.get("source_language")]
                     create_language_profile(
                         name=p.get("name", "Imported"),
-                        source_lang=p.get("source_language", p.get("source_lang", "en")),
-                        source_name=p.get("source_language_name", p.get("source_name", "English")),
+                        source_langs=sources or ["en"],
                         target_langs=p.get("target_languages", p.get("target_langs", [])),
                         target_names=p.get("target_language_names", p.get("target_names", [])),
                         translation_backend=p.get("translation_backend", "ollama"),

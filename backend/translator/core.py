@@ -9,7 +9,6 @@ import sys
 # (a) ``translator.core.X`` is a valid patch target for tests, and (b) the
 # moved flow functions can resolve them through the ``_core.*`` namespace.
 from translator._helpers import (  # noqa: F401 — re-exported for patches
-    _FALLBACK_SOURCE_LANGUAGES,
     _extract_series_id,
     _fail_result,
     _get_whisper_fallback_min_score,
@@ -147,24 +146,24 @@ def translate_file(
         # not the hidden global default (#254).
         resolved = resolve_translation_target(mkv_path, arr_context)
         tgt_lang, tgt_name = resolved.code, resolved.name
-        source_language = source_language or resolved.source
-    # Preferred source language (translation direction). Falls back to the
-    # configured global source; callers (e.g. wanted_search) may pass the
-    # profile's source_language. When the actual available source is in a
-    # different language, that real language is used instead of this preference.
-    pref_source = source_language or settings.source_language
-    # Multi-language source configuration (all UI/API-configurable).
-    any_source = getattr(settings, "auto_translate_any_source", True)
-    provider_multilang = getattr(settings, "auto_translate_provider_multilang", True)
-    candidate_langs = list(
-        getattr(settings, "auto_translate_source_languages", _FALLBACK_SOURCE_LANGUAGES)
-    )
-    # Ordered source preference: profile/global source first, then the configured
-    # candidates, minus the target, de-duplicated.
-    source_pref: list[str] = []
-    for _lang in [pref_source, *candidate_langs]:
-        if _lang and _lang != tgt_lang and _lang not in source_pref:
-            source_pref.append(_lang)
+        source_pref = list(resolved.sources)
+    if source_language:
+        # Caller override (local-sidecar handoff, ARR fallback): an explicit
+        # source ranks first; the profile order stays behind it.
+        _explicit = normalize_language_code(source_language)
+        if _explicit and _explicit != tgt_lang:
+            source_pref = [_explicit, *[c for c in source_pref if c != _explicit]]
+    if not source_pref and normalize_language_code(settings.source_language) != tgt_lang:
+        source_pref = [normalize_language_code(settings.source_language)]
+    # Ordered source priority (translation direction): the item's language
+    # profile's ``source_languages``, first entry most preferred, last least.
+    # A language outside this list is never a source — sidecar discovery and
+    # the provider search both consult it. With no profile backing the item,
+    # ``resolved.sources`` already falls back to the global source; the
+    # target is excluded throughout (same-language guard).
+    # ``pref_source`` is the most preferred source, used when an embedded
+    # track carries no language tag.
+    pref_source = source_pref[0] if source_pref else settings.source_language
 
     if not os.path.exists(mkv_path):
         raise FileNotFoundError(f"File not found: {mkv_path}")
@@ -216,9 +215,11 @@ def translate_file(
         best_ass = _select_best_subtitle_stream(probe_data, format_filter="ass")
         _b2_lang = normalize_language_code(best_ass.get("language") or "") if best_ass else ""
         _b2_src = _b2_lang or pref_source
-        _b2_ok = best_ass is not None and normalize_language_code(
-            _b2_src
-        ) != normalize_language_code(tgt_lang)
+        _b2_ok = (
+            best_ass is not None
+            and (not _b2_lang or _b2_lang in source_pref)
+            and normalize_language_code(_b2_src) != normalize_language_code(tgt_lang)
+        )
         if best_ass and not _b2_ok:
             logger.info(
                 "Case B2: embedded ASS is already the target language (%s), not translating it",
@@ -251,16 +252,16 @@ def translate_file(
     best_stream = _select_best_subtitle_stream(probe_data)
     emb_lang = normalize_language_code(best_stream.get("language") or "") if best_stream else ""
     emb_src = emb_lang or pref_source  # translation direction
-    # In strict single-source mode, only use an embedded stream that IS the
-    # preferred source (or has no language tag); in any-source mode accept it
-    # in whatever language it is. Never accept a stream whose (assumed)
-    # language IS the target: "translating" it would push a same-language
-    # file through the LLM — extraction is the right operation for that
-    # stream, and C2b/C3 below still get their chance at a real source.
+    # Accept an embedded track only when its language is one of the profile's
+    # source priorities; an untagged track is assumed the most preferred
+    # source. Never accept a stream whose (assumed) language IS the target:
+    # "translating" it would push a same-language file through the LLM —
+    # extraction is the right operation for that stream, and C2b/C3 below
+    # still get their chance at a real source.
     refused = None  # first source refused for its content, the answer if nothing works
     emb_ok = (
         best_stream is not None
-        and (any_source or not emb_lang or emb_lang == pref_source)
+        and (not emb_lang or emb_lang in source_pref)
         and normalize_language_code(emb_src) != normalize_language_code(tgt_lang)
     )
     if best_stream and best_stream["format"] == "ass" and emb_ok:
@@ -300,13 +301,12 @@ def translate_file(
                 _notify_integrations(arr_context, file_path=mkv_path)
             return result
 
-    # C2b: External source sidecar → translate. Prefer the configured order; in
-    # strict mode only the preferred source language is accepted.
+    # C2b: External source sidecar → translate, strictly from the profile's
+    # ordered priority; nothing outside it qualifies.
     ext_src, ext_lang = find_any_source_sub(
         mkv_path,
         target_language=tgt_lang,
         preferred_languages=source_pref,
-        allow_other=any_source,
     )
     if ext_src:
         if ext_src.lower().endswith(".ass"):
@@ -353,10 +353,10 @@ def translate_file(
                 _notify_integrations(arr_context, file_path=mkv_path)
             return result
 
-    # C3: Provider search for a source subtitle → translate. When multi-language
-    # provider search is enabled, try the full configured preference order;
-    # otherwise only the preferred source language.
-    src_lang_candidates = source_pref if (any_source and provider_multilang) else [pref_source]
+    # C3: Provider search for a source subtitle → translate. The provider
+    # search walks the profile's full ordered priority: the first source is
+    # tried first, the last is the least preferable fallback.
+    src_lang_candidates = source_pref or [pref_source]
     src_path, src_fmt, src_score, src_lang = _search_providers_for_source_sub(
         mkv_path, arr_context, source_languages=src_lang_candidates
     )

@@ -37,6 +37,22 @@ VALID_MT_ON_ORIGINAL_FOUND = ("notify", "auto_replace")
 _COMBINE_LANG_RE = _re.compile(r"^[a-z]{2,3}\Z")
 
 
+def _clean_source_list(value) -> list[str]:
+    """Validate the API's ``source_languages`` list (ordered priority).
+
+    Absent/``None`` → ``["en"]`` default; a bare string is accepted as a
+    single-entry list (legacy archives); anything else is a validation error.
+    Normalisation/dedup happens in the repository's cleaner.
+    """
+    if value is None:
+        return ["en"]
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list) or not all(isinstance(v, str) and v.strip() for v in value):
+        raise ProfileValidationError("source_languages must be a list of language codes")
+    return value
+
+
 def _clean_combine_languages(value) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -50,8 +66,7 @@ def _clean_combine_languages(value) -> list[str]:
 
 UPDATABLE_PROFILE_KEYS = (
     "name",
-    "source_language",
-    "source_language_name",
+    "source_languages",
     "target_languages",
     "target_language_names",
     "translation_backend",
@@ -190,8 +205,7 @@ def validate_create_profile_data(data: dict) -> dict:
 
     return {
         "name": name,
-        "source_lang": data.get("source_language", "en"),
-        "source_name": data.get("source_language_name", "English"),
+        "source_langs": _clean_source_list(data.get("source_languages")),
         "target_langs": target_langs,
         "target_names": data.get("target_language_names", ["German"]),
         "translation_backend": data.get("translation_backend", "ollama"),
@@ -287,6 +301,9 @@ def validate_update_profile_fields(data: dict) -> dict:
 
     if "combine_languages" in fields:
         fields["combine_languages"] = _clean_combine_languages(fields["combine_languages"])
+
+    if "source_languages" in fields:
+        fields["source_languages"] = _clean_source_list(fields["source_languages"])
 
     if "enabled_providers" in fields:
         fields["enabled_providers"] = _clean_enabled_providers(fields["enabled_providers"])

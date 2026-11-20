@@ -24,15 +24,18 @@ from standalone.scanner import StandaloneScanner, _is_extra_file
 
 
 @pytest.fixture(autouse=True)
-def _no_pending_kind_rows():
+def _no_pending_kind_rows(tmp_path):
     """These scans mock the database; dropping unwanted kinds would query it."""
     with (
         patch("db.wanted.get_wanted_ids_of_kind", return_value=[]),
         # A profile lookup that fails now skips the title; these tests run
         # without a database, so they answer "no profile" instead.
         patch("db.profiles.get_profile_for_item", return_value=None),
-        # Every path here lives under one enabled watched root.
-        patch.object(StandaloneScanner, "_enabled_roots", return_value=("/",)),
+        # Every path here lives under one enabled watched root. "/" matches
+        # POSIX paths only; on Windows the folders sit under a drive root, so
+        # the tmp dir itself is the root (with a trailing separator, like the
+        # real _enabled_roots returns).
+        patch.object(StandaloneScanner, "_enabled_roots", return_value=(os.path.join(str(tmp_path), ""),)),
     ):
         yield
 
@@ -1199,7 +1202,7 @@ class TestCleanupStaleMovies:
         ]
         with (
             patch.object(StandaloneScanner, "_watched_roots_reachable", return_value=True),
-            patch.object(StandaloneScanner, "_enabled_roots", return_value=(str(tmp_path) + "/",)),
+            patch.object(StandaloneScanner, "_enabled_roots", return_value=(os.path.join(str(tmp_path), ""),)),
             patch("db.standalone.get_standalone_movies", return_value=movies),
             patch("services.standalone_manager.delete_movie_cascade") as cascade,
         ):

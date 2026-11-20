@@ -35,6 +35,7 @@ type CombineVertical = 'top' | 'middle' | 'bottom'
 
 const EMPTY_FORM = {
   name: '',
+  source_languages: [] as string[],
   target_languages: [] as string[],
   forced_preference: 'disabled' as 'disabled' | 'separate' | 'auto',
   forced_scoring: 'include' as 'include' | 'prefer' | 'exclude' | 'only',
@@ -84,6 +85,7 @@ export function LanguageProfilesTab() {
     setForm({
       ...EMPTY_FORM,
       name: p.name,
+      source_languages: p.source_languages ?? [],
       target_languages: p.target_languages,
       forced_preference: p.forced_preference || 'disabled',
       forced_scoring: p.forced_scoring || 'include',
@@ -131,6 +133,9 @@ export function LanguageProfilesTab() {
 
     const payload = {
       name: form.name,
+      // Ordered priority: first = most preferred source, last = least.
+      // Empty keeps the backend default (["en"]).
+      source_languages: form.source_languages,
       target_languages: targetLangs,
       target_language_names: targetNames,
       forced_preference: form.forced_preference,
@@ -221,6 +226,27 @@ export function LanguageProfilesTab() {
                 className="w-full px-2.5 py-1.5 rounded text-xs"
                 style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
               />
+            </div>
+
+            {/* Source languages — ordered priority */}
+            <div className="space-y-1 md:col-span-2">
+              <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                {t('language_profiles.source_languages')}
+                <span className="ml-1.5 text-[10px] font-normal" style={{ color: 'var(--text-muted)' }}>
+                  {t('language_profiles.source_languages_order')}
+                </span>
+              </label>
+              <LanguagePillSelector
+                value={form.source_languages}
+                options={LANGUAGE_OPTIONS}
+                onChange={(langs) => setForm((f) => ({ ...f, source_languages: langs }))}
+                placeholder={t('language_profiles.add_language')}
+                ordered
+                testId="source-lang-select"
+              />
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                {t('language_profiles.source_languages_help')}
+              </p>
             </div>
 
             {/* Target languages */}
@@ -352,110 +378,6 @@ export function LanguageProfilesTab() {
               </p>
             </div>
 
-            {/* Translation Backend override */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-secondary">{t('language_profiles.translation_backend_label')}</label>
-              <BackendSelect
-                data-testid="profile-backend"
-                value={form.translation_backend}
-                backends={backends}
-                inheritLabel={t('language_profiles.translation_backend_inherit')}
-                unconfiguredLabel={t('language_profiles.translation_backend_unconfigured')}
-                onChange={(name) => setForm((f) => ({ ...f, translation_backend: name, fallback_backend: name ? f.fallback_backend : '' }))}
-              />
-              <p className="text-[11px] text-muted">{t('language_profiles.translation_backend_help')}</p>
-              {form.translation_backend &&
-                form.translation_backend !== 'ollama' &&
-                !backends.find((b) => b.name === form.translation_backend)?.configured && (
-                  <p className="text-[11px]" style={{ color: 'var(--warning)' }}>
-                    {t('language_profiles.translation_backend_unconfigured_warn')}
-                  </p>
-              )}
-            </div>
-            {form.translation_backend && (
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-secondary">{t('language_profiles.translation_backend_fallback')}</label>
-                <BackendSelect
-                  data-testid="profile-fallback"
-                  value={form.fallback_backend}
-                  backends={backends}
-                  noneLabel={t('language_profiles.translation_backend_none')}
-                  unconfiguredLabel={t('language_profiles.translation_backend_unconfigured')}
-                  onChange={(name) => setForm((f) => ({ ...f, fallback_backend: name }))}
-                />
-              </div>
-            )}
-
-            {/* Provisional machine-translation (V1.6 #8) — keep the wanted item
-                alive after an MT so a later pass can seek the human original. */}
-            {form.translation_backend && (
-              <div className="space-y-1 md:col-span-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    data-testid="profile-mt-keep-seeking"
-                    checked={form.mt_keep_seeking_original}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, mt_keep_seeking_original: e.target.checked }))
-                    }
-                    style={{ accentColor: 'var(--accent)' }}
-                  />
-                  <span className="text-xs font-medium text-secondary">
-                    {t('language_profiles.mt_keep_seeking_label')}
-                  </span>
-                </label>
-                <p className="text-[11px] text-muted">
-                  {t('language_profiles.mt_keep_seeking_help')}
-                </p>
-
-                {form.mt_keep_seeking_original && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-1 pt-2">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-secondary">
-                        {t('language_profiles.mt_on_original_found_label')}
-                      </label>
-                      <select
-                        data-testid="profile-mt-on-original-found"
-                        value={form.mt_on_original_found}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            mt_on_original_found: e.target.value as 'notify' | 'auto_replace',
-                          }))
-                        }
-                        className="w-full px-2.5 py-1.5 rounded text-xs bg-page border border-border text-foreground"
-                      >
-                        <option value="notify">{t('language_profiles.mt_on_original_found_notify')}</option>
-                        <option value="auto_replace">{t('language_profiles.mt_on_original_found_auto_replace')}</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-secondary">
-                        {t('language_profiles.mt_min_original_score_label')}
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        data-testid="profile-mt-min-original-score"
-                        value={form.mt_min_original_score}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            mt_min_original_score: Math.max(0, parseInt(e.target.value, 10) || 0),
-                          }))
-                        }
-                        className="w-full px-2.5 py-1.5 rounded text-xs bg-page border border-border text-foreground"
-                      />
-                      <p className="text-[11px] text-muted">
-                        {t('language_profiles.mt_min_original_score_help')}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Provider profile: per-profile provider selection + scoring preset */}
             <div className="space-y-2 md:col-span-2 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
               <div className="text-xs font-medium pt-2" style={{ color: 'var(--text-secondary)' }}>
@@ -504,6 +426,119 @@ export function LanguageProfilesTab() {
                   </p>
                 </div>
               </div>
+            </div>
+
+            {/* Translation settings — bottom of the profile editor */}
+            <div className="space-y-3 md:col-span-2 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
+              <div className="text-xs font-medium pt-2" style={{ color: 'var(--text-secondary)' }}>
+                {t('language_profiles.translation_title')}
+              </div>
+
+              {/* Translation Backend override */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-secondary">{t('language_profiles.translation_backend_label')}</label>
+                  <BackendSelect
+                    data-testid="profile-backend"
+                    value={form.translation_backend}
+                    backends={backends}
+                    inheritLabel={t('language_profiles.translation_backend_inherit')}
+                    unconfiguredLabel={t('language_profiles.translation_backend_unconfigured')}
+                    onChange={(name) => setForm((f) => ({ ...f, translation_backend: name, fallback_backend: name ? f.fallback_backend : '' }))}
+                  />
+                  <p className="text-[11px] text-muted">{t('language_profiles.translation_backend_help')}</p>
+                  {form.translation_backend &&
+                    form.translation_backend !== 'ollama' &&
+                    !backends.find((b) => b.name === form.translation_backend)?.configured && (
+                      <p className="text-[11px]" style={{ color: 'var(--warning)' }}>
+                        {t('language_profiles.translation_backend_unconfigured_warn')}
+                      </p>
+                  )}
+                </div>
+                {form.translation_backend && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-secondary">{t('language_profiles.translation_backend_fallback')}</label>
+                    <BackendSelect
+                      data-testid="profile-fallback"
+                      value={form.fallback_backend}
+                      backends={backends}
+                      noneLabel={t('language_profiles.translation_backend_none')}
+                      unconfiguredLabel={t('language_profiles.translation_backend_unconfigured')}
+                      onChange={(name) => setForm((f) => ({ ...f, fallback_backend: name }))}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Provisional machine-translation (V1.6 #8) — keep the wanted item
+                  alive after an MT so a later pass can seek the human original. */}
+              {form.translation_backend && (
+                <div className="space-y-1 md:col-span-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      data-testid="profile-mt-keep-seeking"
+                      checked={form.mt_keep_seeking_original}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, mt_keep_seeking_original: e.target.checked }))
+                      }
+                      style={{ accentColor: 'var(--accent)' }}
+                    />
+                    <span className="text-xs font-medium text-secondary">
+                      {t('language_profiles.mt_keep_seeking_label')}
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-muted">
+                    {t('language_profiles.mt_keep_seeking_help')}
+                  </p>
+
+                  {form.mt_keep_seeking_original && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-1 pt-2">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-secondary">
+                          {t('language_profiles.mt_on_original_found_label')}
+                        </label>
+                        <select
+                          data-testid="profile-mt-on-original-found"
+                          value={form.mt_on_original_found}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              mt_on_original_found: e.target.value as 'notify' | 'auto_replace',
+                            }))
+                          }
+                          className="w-full px-2.5 py-1.5 rounded text-xs bg-page border border-border text-foreground"
+                        >
+                          <option value="notify">{t('language_profiles.mt_on_original_found_notify')}</option>
+                          <option value="auto_replace">{t('language_profiles.mt_on_original_found_auto_replace')}</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-secondary">
+                          {t('language_profiles.mt_min_original_score_label')}
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          data-testid="profile-mt-min-original-score"
+                          value={form.mt_min_original_score}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              mt_min_original_score: Math.max(0, parseInt(e.target.value, 10) || 0),
+                            }))
+                          }
+                          className="w-full px-2.5 py-1.5 rounded text-xs bg-page border border-border text-foreground"
+                        />
+                        <p className="text-[11px] text-muted">
+                          {t('language_profiles.mt_min_original_score_help')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Combined / bilingual subtitles (V1.6 #1) */}
@@ -660,6 +695,22 @@ export function LanguageProfilesTab() {
               )}
             </div>
           </div>
+
+          {/* Source priority */}
+          {(p.source_languages ?? []).length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('language_profiles.source_languages')}</span>
+              {(p.source_languages ?? []).map((lang, i) => (
+                <span
+                  key={lang}
+                  className="px-2 py-0.5 rounded text-xs font-medium"
+                  style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+                >
+                  {i + 1}. {lang.toUpperCase()}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Target languages */}
           <div className="flex items-center gap-2 flex-wrap">

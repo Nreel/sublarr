@@ -85,8 +85,7 @@ def _create_profile(client, name):
 
         return ProfileRepository().create_profile(
             name=name,
-            source_lang="en",
-            source_name="English",
+            source_langs=["en"],
             target_langs=["de"],
             target_names=["German"],
         )

@@ -28,10 +28,16 @@ describe('Onboarding step structure', () => {
     expect(ids.indexOf('language')).toBeLessThan(ids.indexOf('providers'))
   })
 
-  it('automation step is between providers and ollama in arr mode', () => {
+  it('automation step is between providers and mediaservers in arr mode', () => {
     const ids = getVisibleSteps('arr').map(s => s.id)
     expect(ids.indexOf('automation')).toBeGreaterThan(ids.indexOf('providers'))
-    expect(ids.indexOf('automation')).toBeLessThan(ids.indexOf('ollama'))
+    expect(ids.indexOf('automation')).toBeLessThan(ids.indexOf('mediaservers'))
+  })
+
+  it('no ollama step — translation backend is set up in Settings', () => {
+    expect(ALL_STEPS.map(s => s.id)).not.toContain('ollama')
+    expect(getVisibleSteps('arr').map(s => s.id)).not.toContain('ollama')
+    expect(getVisibleSteps('standalone').map(s => s.id)).not.toContain('ollama')
   })
 
   it('library step directly follows mode in both modes', () => {

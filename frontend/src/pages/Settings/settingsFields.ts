@@ -80,10 +80,6 @@ export const FIELDS: FieldConfig[] = [
     advanced: true },
   { key: 'hi_removal_enabled', label: 'Remove Hearing Impaired Tags', type: 'toggle', tab: 'Translation',
     descriptionKey: 'settings_fields.hi_removal_enabled' },
-  { key: 'auto_translate_any_source', label: 'Translate From Any Source Language', type: 'toggle', tab: 'Translation',
-    descriptionKey: 'settings_fields.auto_translate_any_source' },
-  { key: 'auto_translate_provider_multilang', label: 'Provider Multi-Language Source Search', type: 'toggle', tab: 'Translation',
-    descriptionKey: 'settings_fields.auto_translate_provider_multilang' },
   { key: 'hi_preference', label: 'Hearing Impaired Preference', type: 'select', tab: 'Translation',
     descriptionKey: 'settings_fields.hi_preference',
     options: [

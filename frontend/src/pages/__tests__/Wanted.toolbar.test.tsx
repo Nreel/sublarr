@@ -30,6 +30,7 @@ vi.mock('@/hooks/useApi', () => ({
   useAddToBlacklist: () => ({ mutate: vi.fn() }),
   useCleanupSidecars: () => ({ mutate: mockCleanupMutate, isPending: false }),
   useTranslationEnabled: () => true,
+  useLanguageProfiles: () => ({ data: undefined }),
   useInfiniteWantedItems: () => ({ data: undefined, fetchNextPage: vi.fn(), hasNextPage: false, isFetchingNextPage: false }),
   useMtPendingItems: () => ({ data: { data: [], total: mockMtPendingTotal }, isLoading: false, isError: false }),
   useApproveMtPending: () => ({ mutate: vi.fn(), isPending: false }),

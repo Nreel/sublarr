@@ -13,12 +13,6 @@ const VALUES = {
   opensubtitles_api_key: '',
   jimaku_api_key: '',
   subdl_api_key: '',
-  ollama_url: 'http://localhost:11434',
-  ollama_model: 'qwen2.5:14b-instruct',
-  target_language: 'de',
-  target_language_name: 'German',
-  source_language: 'en',
-  source_language_name: 'English',
   interface_language: 'en',
   tmdb_api_key: 'tmdb',
   tvdb_api_key: '',
@@ -45,13 +39,6 @@ describe('buildOnboardingPayload', () => {
     ).toBe('0')
   })
 
-  it('leaves the untouched loopback Ollama default out', () => {
-    expect(buildOnboardingPayload(VALUES, 'arr')).not.toHaveProperty('ollama_url')
-    expect(
-      buildOnboardingPayload({ ...VALUES, ollama_url: 'http://ollama:11434' }, 'arr').ollama_url,
-    ).toBe('http://ollama:11434')
-  })
-
   it('keeps the path mapping and drops the other mode and empty values', () => {
     const arr = buildOnboardingPayload(VALUES, 'arr')
     expect(arr.path_mapping).toBe('/data/media=/media')
@@ -71,7 +58,7 @@ describe('buildOnboardingPayload', () => {
 describe('onboarding payload contract', () => {
   it('matches the file the backend test sends', () => {
     const contract = {
-      arr: buildOnboardingPayload({ ...VALUES, radarr_url: 'http://192.168.10.40:7878', radarr_api_key: 'abc', opensubtitles_api_key: 'k', jimaku_api_key: 'k', subdl_api_key: 'k', ollama_url: 'http://ollama:11434' }, 'arr'),
+      arr: buildOnboardingPayload({ ...VALUES, radarr_url: 'http://192.168.10.40:7878', radarr_api_key: 'abc', opensubtitles_api_key: 'k', jimaku_api_key: 'k', subdl_api_key: 'k' }, 'arr'),
       standalone: buildOnboardingPayload({ ...VALUES, tvdb_api_key: 'k' }, 'standalone'),
       automation_off: buildOnboardingPayload({ ...VALUES, automation_enabled: 'false' }, 'arr'),
     }

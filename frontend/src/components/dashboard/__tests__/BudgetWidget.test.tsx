@@ -338,7 +338,7 @@ describe('BudgetWidget live updates', () => {
 
     // Initial render: 820 / 1000 (thousand-separator varies by locale)
     expect(await screen.findByTestId('budget-usage-opensubtitles')).toHaveTextContent(
-      /^\s*820\s*\/\s*1[.,]000\s*$/,
+      /^\s*820\s*\/\s*1[\s.,\u00A0\u202F]000\s*$/,
     )
 
     // Simulate the SocketIO event → same cache mutation the widget performs.
@@ -350,7 +350,7 @@ describe('BudgetWidget live updates', () => {
     )
 
     expect(await screen.findByTestId('budget-usage-opensubtitles')).toHaveTextContent(
-      /^\s*900\s*\/\s*1[.,]000\s*$/,
+      /^\s*900\s*\/\s*1[\s.,\u00A0\u202F]000\s*$/,
     )
   })
 })

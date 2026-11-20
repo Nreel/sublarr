@@ -183,8 +183,11 @@ class LanguageProfile(db.Model):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    source_language: Mapped[str] = mapped_column(Text, nullable=False, default="en")
-    source_language_name: Mapped[str] = mapped_column(Text, nullable=False, default="English")
+    # Ordered source-language priority: first entry is the strongest preferred
+    # translation source, last the least. The profile's list is the whole
+    # source policy — there is no global source setting (translation direction
+    # is a per-profile decision; see translator/core.py).
+    source_languages_json: Mapped[str] = mapped_column(Text, nullable=False, default='["en"]')
     target_languages_json: Mapped[str] = mapped_column(Text, nullable=False, default='["de"]')
     target_language_names_json: Mapped[str] = mapped_column(
         Text, nullable=False, default='["German"]'

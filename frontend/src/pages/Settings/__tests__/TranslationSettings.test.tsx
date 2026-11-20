@@ -65,10 +65,14 @@ const mockUpdateConfig = vi.fn()
 const mockConfigHolder: { data: Record<string, unknown> } = {
   data: { translation_enabled: true, translation_max_workers: 2 },
 }
+const mockProfilesHolder: { data: unknown[] } = {
+  data: [{ id: 0, name: 'Default', source_languages: ['en'], target_languages: ['de'], is_default: true }],
+}
 vi.mock('@/hooks/useApi', () => ({
   useConfig: () => ({ data: mockConfigHolder.data, isLoading: false }),
   useUpdateConfig: () => ({ mutate: mockUpdateConfig, isPending: false }),
   useDisableTranslation: () => ({ mutate: mockDisableMutate, isPending: false }),
+  useLanguageProfiles: () => ({ data: mockProfilesHolder.data }),
 }))
 
 vi.mock('../WhisperTab', () => ({

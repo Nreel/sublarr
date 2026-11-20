@@ -289,8 +289,19 @@ def _split_local_translate_items(items: list[dict], settings) -> tuple[list[dict
             remaining.append(item)
             continue
         try:
+            from config_language_data import normalize_language_code
+            from db.profiles import get_profile_for_item
+
+            profile = get_profile_for_item(item) or {}
+            priority = [
+                normalize_language_code(c)
+                for c in (profile.get("source_languages") or [])
+                if c
+            ] or None
             src_path, src_lang = find_any_source_sub(
-                item["file_path"], target_language=item.get("target_language")
+                item["file_path"],
+                target_language=item.get("target_language"),
+                preferred_languages=priority,
             )
         except Exception as exc:  # noqa: BLE001 — a probe failure must not block the item
             logger.debug("[search_all] local-sidecar probe failed for item %d: %s", item["id"], exc)

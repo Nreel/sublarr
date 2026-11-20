@@ -439,55 +439,55 @@ def find_external_source_sub(mkv_path):
 # Filename modifiers of sidecars that hold only part of the dialogue.
 _PARTIAL_MODIFIERS = frozenset({"forced", "signs", "sign", "foreign"})
 
-# Bounded fallback source languages when the install has no candidate list.
-# Common subtitle source languages, ordered by how often they carry a
+# Bounded fallback source languages when no language profile backs the call
+# site. Common subtitle source languages, ordered by how often they carry a
 # translatable original. The target language is always excluded at the call
-# site. ``translator.core`` re-exports this for the provider search.
+# site.
 _FALLBACK_SOURCE_LANGUAGES = ("en", "ja", "zh", "ko", "es", "fr", "de", "pt", "it", "ru")
 
 
-def source_language_candidates(settings, target_language=None):
+def source_language_candidates(settings, target_language=None, profile_sources=None):
     """The ordered list of languages a translation may start from.
 
-    Profile/global source first, then ``auto_translate_source_languages``
-    (or the built-in fallback when the setting is unusable), minus the
-    target, de-duplicated. This is the one list every "which source?"
-    decision consults — sidecars on disk, tracks in the container, provider
-    searches — so a language outside it is never a translation source.
+    ``profile_sources`` is the language profile's ordered priority — first
+    entry most preferred, last least. It is the whole policy when present.
+    Callers without a profile fall back to the global ``source_language``
+    followed by the built-in common-subtitle list. Minus the target,
+    de-duplicated. This is the one list every "which source?" decision
+    consults — sidecars on disk, tracks in the container, provider searches —
+    so a language outside it is never a translation source.
     """
     from config_language_data import normalize_language_code
 
     target = normalize_language_code(target_language or settings.target_language or "")
-    configured = getattr(settings, "auto_translate_source_languages", None)
-    if not isinstance(configured, list | tuple):
-        configured = _FALLBACK_SOURCE_LANGUAGES
+    raw = (
+        list(profile_sources)
+        if profile_sources
+        else [settings.source_language or "", *_FALLBACK_SOURCE_LANGUAGES]
+    )
     ordered: list[str] = []
-    for raw in [settings.source_language or "", *configured]:
-        code = normalize_language_code(raw or "")
+    for code in raw:
+        code = normalize_language_code(code or "")
         if code and code != target and code not in ordered:
             ordered.append(code)
     return ordered
 
 
-def find_any_source_sub(mkv_path, target_language=None, preferred_languages=None, allow_other=True):
+def find_any_source_sub(mkv_path, target_language=None, preferred_languages=None):
     """Find an external subtitle to translate FROM.
 
     Unlike ``find_external_source_sub`` (which only matches the configured source
     language), this enables translating the missing target FROM a source sub
-    that actually exists — as long as its language is one the install has
-    listed as a candidate. ``preferred_languages`` is an ordered preference
-    list — a sidecar in one of those languages wins (earliest preference
-    first); when omitted it is ``source_language_candidates(settings)``. An
-    explicit list may reorder the configured candidates but not extend them;
-    only its first entry (the caller's own source language) is always allowed.
-    Modifier-only sidecars (``.forced.srt``, ``.sdh.srt``) without a language
-    token are ignored.
+    that actually exists. ``preferred_languages`` is the language profile's
+    ordered priority — a sidecar in one of those languages wins (earliest
+    preference first) and a language outside the list is never used. When
+    omitted, the global source language leads and the common subtitle
+    languages follow. Modifier-only sidecars (``.forced.srt``, ``.sdh.srt``)
+    without a language token are ignored.
 
-    A language outside the list is never used, whatever ``allow_other`` says.
     Prod 2026-09-05: with no English sidecar present the old "any recognised
     language" fallback took ``sorted(found)[0]`` — Arabic, then Vietnamese —
-    and 24 episodes were translated vi → de. ``allow_other`` is kept for the
-    callers that pass it; it no longer widens the search.
+    and 24 episodes were translated vi → de. The strict list is the fix.
 
     Returns ``(path, source_language)`` or ``(None, None)``.
     """
@@ -497,15 +497,10 @@ def find_any_source_sub(mkv_path, target_language=None, preferred_languages=None
 
     settings = get_settings()
     target = normalize_language_code(target_language or settings.target_language)
-    candidates = source_language_candidates(settings, target_language=target)
     prefs = [normalize_language_code(lang) for lang in (preferred_languages or []) if lang]
-    if prefs:
-        # The caller's first preference is its own (profile) source language
-        # and always counts; the rest may only reorder the configured list,
-        # never extend it.
-        prefs = [lang for i, lang in enumerate(prefs) if i == 0 or lang in candidates]
-    else:
-        prefs = candidates
+    prefs = [lang for lang in prefs if lang and lang != target]
+    if not prefs:
+        prefs = source_language_candidates(settings, target_language=target)
     base = os.path.splitext(mkv_path)[0]
     # A machine translation is never a source: translating it again stacks a
     # second model's errors on the first, and prod's German MTs were being fed

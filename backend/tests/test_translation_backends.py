@@ -496,8 +496,7 @@ def test_resolve_series_profile_backend():
     """Series-specific profile returns its own backend setting."""
     pid = create_language_profile(
         "DeepL Profile",
-        "en",
-        "English",
+        ["en"],
         ["de"],
         ["German"],
         translation_backend="deepl",
@@ -513,8 +512,7 @@ def test_fallback_chain_from_profile():
     """Profile's fallback_chain is a list of backend names."""
     pid = create_language_profile(
         "Chain Test",
-        "en",
-        "English",
+        ["en"],
         ["fr"],
         ["French"],
         translation_backend="openai_compat",
@@ -528,8 +526,7 @@ def test_primary_backend_prepended_to_chain():
     """When fallback_chain is default, primary backend is the first entry."""
     pid = create_language_profile(
         "Primary First",
-        "en",
-        "English",
+        ["en"],
         ["de"],
         ["German"],
         translation_backend="libretranslate",

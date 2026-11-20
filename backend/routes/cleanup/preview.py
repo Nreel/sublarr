@@ -145,12 +145,12 @@ def cleanup_non_target_subs():
                 nc = normalize_language_code(code)
                 if nc:
                     keep_langs.add(nc)
-            # Source language is needed when any profile has translation on —
-            # conservatively include it so translation inputs aren't deleted.
-            # Each profile's own source counts (#254 class): keeping only the
+            # Source languages are needed when any profile has translation on —
+            # conservatively include them so translation inputs aren't deleted.
+            # Each profile's own priority counts (#254 class): keeping only the
             # global one trashed the .ja sidecars of a ja→ru profile.
             if getattr(settings, "wanted_auto_translate", False):
-                for raw in (p.get("source_language"), settings.source_language):
+                for raw in (*(p.get("source_languages") or []), settings.source_language):
                     src = normalize_language_code(raw or "")
                     if src:
                         keep_langs.add(src)

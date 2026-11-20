@@ -39,7 +39,7 @@ const SECTIONS: readonly FormSectionDef[] = [
   { id: 'context-quality', titleKey: 'translation_page.context_quality_section' },
   { id: 'sync',            titleKey: 'translation_page.sync_section' },
 ]
-import { useConfig, useUpdateConfig, useDisableTranslation } from '@/hooks/useApi'
+import { useConfig, useUpdateConfig, useDisableTranslation, useLanguageProfiles } from '@/hooks/useApi'
 import { strVal } from '@/lib/configUtils'
 import { settingsInputStyle } from '@/styles/settingsShared'
 
@@ -95,6 +95,10 @@ export function TranslationSettings() {
   const disableTranslation = useDisableTranslation()
   const { data: config } = useConfig()
   const { mutate: updateConfig } = useUpdateConfig()
+  // Translation direction lives on the language profiles, not on this page:
+  // enabling only makes sense once a profile has target languages.
+  const { data: profiles } = useLanguageProfiles()
+  const languagesConfigured = (profiles ?? []).some((p) => (p.target_languages ?? []).length > 0)
   // config_entries stores this as the string 'true'/'false', so Boolean() is
   // wrong (Boolean('false') === true). Match the codebase string-bool pattern.
   const translationEnabled =
@@ -134,14 +138,52 @@ export function TranslationSettings() {
           </span>
         </div>
         {!translationEnabled && (
-          <button
-            onClick={handleEnable}
-            data-testid="enable-translation-btn"
-            className="shrink-0 self-center ml-auto px-3 py-1.5 rounded-md text-sm font-semibold bg-accent text-white border-none"
-          >
-            {t('translation_page.enable_button', 'Enable translation')}
-          </button>
+          languagesConfigured ? (
+            <button
+              onClick={handleEnable}
+              data-testid="enable-translation-btn"
+              className="shrink-0 self-center ml-auto px-3 py-1.5 rounded-md text-sm font-semibold bg-accent text-white border-none"
+            >
+              {t('translation_page.enable_button', 'Enable translation')}
+            </button>
+          ) : (
+            <span className="shrink-0 self-center ml-auto text-xs" style={{ color: 'var(--text-muted)' }}>
+              {t('translation_page.languages_needed', 'Set the target languages in Languages & Profiles first')}
+            </span>
+          )
         )}
+      </div>
+
+      {/* Languages & Profiles — navigation cross-link: translation direction
+          (source priority + targets) is configured there, not on this page. */}
+      <div
+        data-testid="languages-profiles-link"
+        style={{
+          marginBottom: 12,
+          padding: '14px 18px',
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div>
+          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+            {t('settings.nav.languages', 'Sprachen & Profile')}
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>
+            {t('translation_page.languages_link_body', 'Translation source languages (priority) and target languages live in the language profiles.')}
+          </div>
+        </div>
+        <Link
+          to="/settings/subtitles/languages"
+          data-testid="languages-profiles-link-anchor"
+          style={{ fontSize: '12px', color: 'var(--accent)' }}
+        >
+          {t('translation_page.configure_link', 'Configure →')}
+        </Link>
       </div>
 
       {!translationEnabled && (

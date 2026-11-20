@@ -3,8 +3,8 @@
 export interface LanguageProfile {
   id: number
   name: string
-  source_language: string
-  source_language_name: string
+  /** Ordered source-language priority: first = most preferred, last = least. */
+  source_languages: string[]
   target_languages: string[]
   target_language_names: string[]
   is_default: boolean

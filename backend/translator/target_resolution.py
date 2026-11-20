@@ -25,12 +25,27 @@ TRANSLATE_TO_KEY = "translate_to"
 class TranslationTarget(NamedTuple):
     code: str
     name: str
-    source: str
+    # Ordered source-language priority (first = most preferred). The profile's
+    # ``source_languages`` list is the whole source policy; the global
+    # ``settings.source_language`` is only the fallback when no profile row
+    # backs the item. Target language never appears: translating into a
+    # language from itself is not a translation.
+    sources: list[str]
 
 
 def _settings_target() -> TranslationTarget:
     s = get_settings()
-    return TranslationTarget(s.target_language, s.target_language_name, s.source_language)
+    return TranslationTarget(s.target_language, s.target_language_name, [s.source_language])
+
+
+def _ordered_sources(profile: dict, target: str, fallback: list[str]) -> list[str]:
+    """The profile's source priority minus the target, de-duplicated."""
+    ordered: list[str] = []
+    for raw in list(profile.get("source_languages") or []):
+        code = normalize_language_code(raw or "")
+        if code and code != target and code not in ordered:
+            ordered.append(code)
+    return ordered or [c for c in fallback if c and c != target]
 
 
 def _pick_code(profile_targets: list[str], wanted_items: list[dict]) -> str | None:
@@ -54,7 +69,7 @@ def _pick_code(profile_targets: list[str], wanted_items: list[dict]) -> str | No
 def resolve_translation_target(
     file_path: str, arr_context: dict | None = None
 ) -> TranslationTarget:
-    """Target code, target name and preferred source language for ``file_path``.
+    """Target code, target name and ordered source-language priority for ``file_path``.
 
     The profile is looked up through the file's wanted row (series, movie or
     standalone owner), else through ``arr_context``, else the default profile.
@@ -84,7 +99,7 @@ def resolve_translation_target(
     return TranslationTarget(
         code,
         name or language_name(code),
-        profile.get("source_language") or fallback.source,
+        _ordered_sources(profile, normalize_language_code(code), fallback.sources),
     )
 
 

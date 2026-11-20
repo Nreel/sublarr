@@ -84,6 +84,20 @@ def _patch_pre_alembic_columns(engine, inspect_fn) -> None:
             patches.append("ALTER TABLE language_profiles ADD COLUMN enabled_providers_json TEXT")
         if "scoring_preset" not in existing:
             patches.append("ALTER TABLE language_profiles ADD COLUMN scoring_preset TEXT")
+        # Ordered source-language priority (migration slp1_source_language_priority).
+        # Backfill from the old single source_language where it still exists;
+        # the migration drops those columns, this path leaves them (unused).
+        if "source_languages_json" not in existing:
+            patches.append(
+                "ALTER TABLE language_profiles ADD COLUMN source_languages_json "
+                "TEXT NOT NULL DEFAULT '[\"en\"]'"
+            )
+            if "source_language" in existing:
+                patches.append(
+                    "UPDATE language_profiles SET source_languages_json = "
+                    "CASE WHEN source_language = '' THEN '[\"en\"]' "
+                    "ELSE '[\"' || source_language || '\"]' END"
+                )
 
     # Quality-pass verdict on a memory row (migration tm5_quality_score).
     if insp.has_table("translation_memory"):

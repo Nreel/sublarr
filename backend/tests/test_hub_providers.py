@@ -145,7 +145,8 @@ def bundle(tmp_path):
     root = tmp_path / "bundles"
     bundle_dir = root / "fakehub"
     bundle_dir.mkdir(parents=True)
-    (bundle_dir / "provider.py").write_text(_BUNDLE_CODE)
+    # Digest hashes LF bytes; write_text would emit CRLF on Windows.
+    (bundle_dir / "provider.py").write_text(_BUNDLE_CODE, newline="\n")
     digest = hashlib.sha256(_BUNDLE_CODE.encode()).hexdigest()
     manifest = _manifest({"provider.py": digest})
     (bundle_dir / "provider.json").write_text(json.dumps(manifest))

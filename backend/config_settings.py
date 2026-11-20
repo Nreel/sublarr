@@ -172,61 +172,14 @@ class UISettings(BaseModel):
 
     # Translation
     translation_enabled: bool = False  # Off by default; the user enables it explicitly
+    # Last-resort fallback direction only. Translation direction is decided by
+    # the item's language profile (ordered ``source_languages`` priority +
+    # ``target_languages``); these globals are consulted solely when no
+    # profile exists (synthetic default) or as the LLM-prompt name fallback.
     source_language: str = "en"
     target_language: str = "de"
     source_language_name: str = "English"
     target_language_name: str = "German"
-    # Multi-language auto-translate source. When on, the missing target is
-    # translated FROM whatever source subtitle actually exists (any language),
-    # preferring the profile/global source; otherwise only the preferred source
-    # language is used. ``auto_translate_provider_multilang`` additionally lets
-    # the provider search try several source languages, and
-    # ``auto_translate_source_languages`` is the ordered candidate/preference
-    # list used for that search and for choosing among available local sources.
-    auto_translate_any_source: bool = True
-    auto_translate_provider_multilang: bool = True
-    auto_translate_source_languages: list[str] = [
-        "en",
-        "ja",
-        "zh",
-        "ko",
-        "es",
-        "fr",
-        "de",
-        "pt",
-        "it",
-        "ru",
-    ]
-
-    @field_validator("auto_translate_source_languages", mode="before")
-    @classmethod
-    def _parse_source_language_list(cls, v):
-        """Coerce a persisted config value into a list of language codes.
-
-        The generic /config writer stores non-string values via ``str()``, so a
-        list round-trips as its Python repr (``"['ja', 'en']"``). Accept a real
-        list, a JSON array, that Python-repr string, or a comma-separated string
-        so the setting survives an API/DB round-trip regardless of how it was
-        stored.
-        """
-        if isinstance(v, list):
-            return [str(x).strip() for x in v if str(x).strip()]
-        if isinstance(v, str):
-            s = v.strip()
-            if not s:
-                return []
-            import ast as _ast
-            import json as _json
-
-            for _parse in (_json.loads, _ast.literal_eval):
-                try:
-                    parsed = _parse(s)
-                    if isinstance(parsed, list):
-                        return [str(x).strip() for x in parsed if str(x).strip()]
-                except (ValueError, SyntaxError):
-                    pass
-            return [p.strip() for p in s.split(",") if p.strip()]
-        return v
 
     prompt_template: str = ""  # Empty = auto-generated from languages
     # Global default translation backend + optional single fallback. A language

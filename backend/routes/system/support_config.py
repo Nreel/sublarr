@@ -39,7 +39,6 @@ SAFE_STRING_FIELDS: frozenset[str] = frozenset(
         "target_language",
         "source_language_name",
         "target_language_name",
-        "auto_translate_source_languages",
         "translation_default_backend",
         "translation_default_fallback",
         "provider_priorities",

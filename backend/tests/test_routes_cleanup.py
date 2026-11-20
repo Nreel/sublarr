@@ -893,7 +893,7 @@ class TestNonTargetSubs:
         from config import reload_settings
 
         reload_settings()
-        profile = {"source_language": "ja", "target_languages": ["ru"]}
+        profile = {"source_languages": ["ja"], "target_languages": ["ru"]}
         try:
             with (
                 patch(

@@ -17,8 +17,7 @@ def _get_repo():
 
 def create_language_profile(
     name: str,
-    source_lang: str,
-    source_name: str,
+    source_langs: list,
     target_langs: list,
     target_names: list,
     translation_backend: str = "ollama",
@@ -45,8 +44,7 @@ def create_language_profile(
     """Create a new language profile. Returns the profile ID."""
     return _get_repo().create_profile(
         name,
-        source_lang,
-        source_name,
+        source_langs,
         target_langs,
         target_names,
         translation_backend,

@@ -71,7 +71,10 @@ def _validate_watched_folder_path(path: str) -> str | None:
             return f"Refusing forbidden system path: {path}"
 
     media_path = _media_path()
-    if media_path and _outside_media_path(canonical, media_path):
+    # Containment must compare native separators: os.path.commonpath does not
+    # understand mixed forms, so the slashified ``canonical`` above would read
+    # every Windows path as outside the media folder.
+    if media_path and _outside_media_path(os.path.realpath(path), media_path):
         return (
             f"{path} is outside the media folder {media_path}. Sublarr can only "
             f"work on files inside it: mount the folder in the container under "

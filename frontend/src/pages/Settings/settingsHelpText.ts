@@ -11,8 +11,8 @@ export const HELP_TEXT: Record<string, string> = {
   db_path: 'Path to the SQLite database file.',
 
   // Translation
-  source_language: 'BCP-47 language code of the original subtitles (e.g. "en").',
-  target_language: 'BCP-47 language code to translate into (e.g. "de").',
+  source_language: 'BCP-47 fallback source language when no profile defines sources (e.g. "en").',
+  target_language: 'BCP-47 fallback target language when no profile applies (e.g. "de").',
   source_language_name: 'Human-readable name for the source language (e.g. "English").',
   target_language_name: 'Human-readable name for the target language (e.g. "German").',
   hi_removal_enabled: 'Strip hearing-impaired tags like [applause] or (music) from subtitles.',

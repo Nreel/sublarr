@@ -3,3 +3,8 @@
 # (the Dockerfile also strips \r defensively, this is belt-and-suspenders).
 *.sh text eol=lf
 docker-entrypoint.sh text eol=lf
+
+# Vendored hub bundles are integrity-checked against committed SHA-256
+# manifests (verify_bundle hashes raw bytes). A Windows checkout with
+# autocrlf would store them CRLF and refuse every bundle; keep them LF.
+backend/providers/hub/bundles/** text eol=lf

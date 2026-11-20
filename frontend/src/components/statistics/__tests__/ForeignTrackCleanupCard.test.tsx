@@ -43,8 +43,11 @@ describe('ForeignTrackCleanupCard', () => {
     query = { isLoading: false, data: base }
     render(<ForeignTrackCleanupCard />)
     expect(screen.getByText('track_cleanup.files')).toBeInTheDocument()
-    expect(screen.getByText((1234).toLocaleString())).toBeInTheDocument()
-    expect(screen.getByText((5678).toLocaleString())).toBeInTheDocument()
+    // Intl grouping differs per locale (1,234 / 1.234 / 1\u00A0234), and the
+    // value can be split across elements — match digits, not separators.
+    const grouped = (n: number) => new RegExp(`^${String(n).split('').join('[\\s.,\\u00A0\\u202F]*')}$`)
+    expect(screen.getByText(grouped(1234))).toBeInTheDocument()
+    expect(screen.getByText(grouped(5678))).toBeInTheDocument()
     expect(screen.getByText('3.0 GB')).toBeInTheDocument()
     expect(screen.getByText(/512\.0 MB/)).toBeInTheDocument()
     expect(screen.getByText('track_cleanup.phase.strip')).toBeInTheDocument()

@@ -569,6 +569,8 @@
     "loading_ellipsis": "Lade…",
     "show_hint": "Hinweis anzeigen",
     "remove": "Entfernen",
+    "move_priority_up": "Nach oben (bevorzugt)",
+    "move_priority_down": "Nach unten (weniger bevorzugt)",
     "search_ellipsis": "Suchen…",
     "search_settings": "Einstellungen durchsuchen",
     "search_settings_placeholder": "Einstellung suchen…",

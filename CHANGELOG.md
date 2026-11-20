@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Translation languages live on the language profiles** — Each profile now
+  carries an ordered *source* language priority (first = what Sublarr
+  translates from, last = least preferred fallback) next to its target
+  languages, in Settings → Languages & Profiles. The pills show their rank and
+  can be moved up/down; the profile list shows the order too. The wizard's
+  Languages step keeps only the interface language, Backends & Glossary links
+  to the profiles page and its enable switch waits until a profile has target
+  languages. Translation-related profile fields (backend, fallback, MT
+  re-seek, combined subtitles) moved to the bottom of the profile editor. The
+  global `source_language`/`target_language` config keys remain as fallbacks
+  for items without a profile.
+- **"Translate from any source" and provider multi-language source search
+  removed** — the profile's source priority list replaces both switches:
+  wanted search, provider lookups and translation consult it directly.
+- **Setup no longer asks for the LLM backend** — the wizard's Ollama step
+  (URL, model, connection test) is gone; translation backends are configured
+  in Settings → Backends & Glossary.
 - **Interface language moved from the sidebar to Settings** — The DE/EN toggle
   at the bottom of the sidebar is gone; the interface language is set under
   Settings → General → Interface preferences, where the stored setting and the

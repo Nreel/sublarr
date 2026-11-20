@@ -10,7 +10,6 @@
     "standalone": "Standalone Folders",
     "pathmapping": "Path Mapping",
     "providers": "Providers",
-    "ollama": "Ollama",
     "mediaservers": "Media Servers (Optional)",
     "scan": "First Scan",
     "library": "Library type",
@@ -60,10 +59,8 @@
   "language_step": {
     "interface_language": "Interface language",
     "interface_language_hint": "The language the UI is shown in — the wizard switches as soon as you pick one. Changeable later under Settings → General.",
-    "target_language": "Target language",
-    "source_language": "Source language",
-    "help": "Subtitles are searched in the target language. Source language is used when Sublarr needs to translate or transcribe.",
-    "description": "Choose the interface language and which language to search subtitles in."
+    "help": "Which languages Sublarr searches subtitles in, and translates between, is set up in Settings → Languages & Profiles (language profiles).",
+    "description": "Choose the interface language. Search and translation languages are configured in Settings → Languages & Profiles."
   },
   "automation_step": {
     "auto_search_label": "Search for missing subtitles automatically",
@@ -78,16 +75,6 @@
     "interval_12h": "12 hours",
     "interval_24h": "24 hours",
     "description": "Decide how Sublarr searches for missing subtitles."
-  },
-  "ollama_step": {
-    "description": "Set up the LLM translation backend.",
-    "url": "Ollama URL",
-    "model": "Ollama Model",
-    "languages_hint": "Translation: {{source}} → {{target}} (change in the Language step).",
-    "test_connection": "Test Ollama Connection",
-    "connection_successful": "Ollama connection successful!",
-    "connection_failed": "Ollama not reachable",
-    "test_failed": "Connection test failed"
   },
   "mediaservers_step": {
     "description": "Configure media servers for automatic library refresh after subtitle downloads.",

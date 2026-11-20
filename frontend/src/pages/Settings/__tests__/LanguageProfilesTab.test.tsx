@@ -30,8 +30,7 @@ vi.mock('@/components/shared/Toast', () => ({
 const profile: LanguageProfile = {
   id: 1,
   name: 'Anime DE',
-  source_language: 'ja',
-  source_language_name: 'Japanese',
+  source_languages: ['ja'],
   target_languages: ['de', 'en'],
   target_language_names: ['German', 'English'],
   is_default: true,
@@ -262,6 +261,34 @@ describe('LanguageProfilesTab — combined subtitles', () => {
       expect.objectContaining({
         id: 1,
         data: expect.objectContaining({ prefer_signs: true, download_full: false }),
+      }),
+      expect.anything(),
+    )
+  })
+})
+
+describe('LanguageProfilesTab — source language priority', () => {
+  it('round-trips the ordered source languages through edit + save', () => {
+    openEditor()
+    fireEvent.click(screen.getByText('language_profiles.save'))
+    expect(updateMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 1,
+        data: expect.objectContaining({ source_languages: ['ja'] }),
+      }),
+      expect.anything(),
+    )
+  })
+
+  it('appends a newly picked source as the lowest priority', () => {
+    openEditor()
+    const select = screen.getByTestId('source-lang-select')
+    fireEvent.change(select, { target: { value: 'en' } })
+    fireEvent.click(screen.getByText('language_profiles.save'))
+    expect(updateMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 1,
+        data: expect.objectContaining({ source_languages: ['ja', 'en'] }),
       }),
       expect.anything(),
     )

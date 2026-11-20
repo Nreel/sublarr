@@ -6,7 +6,7 @@ import {
   useProcessWantedItem, useStartWantedBatch, useWantedBatchStatus,
   useWantedBatchExtractStatus, useWantedBatchProbeStatus, useStartBatchProbe,
   useRetranslateSingle, useAddToBlacklist, useExtractEmbeddedSub,
-  useCleanupSidecars, useTranslationEnabled, useMtPendingItems,
+  useCleanupSidecars, useTranslationEnabled, useMtPendingItems, useLanguageProfiles,
 } from '@/hooks/useApi'
 import { useBatchTranslate } from '@/hooks/useTranslationApi'
 import { toast } from '@/components/shared/Toast'
@@ -112,7 +112,13 @@ export function WantedPage() {
   const clearSelection = useSelectionStore((s) => s.clearSelection)
   const isSelected = useCallback((id: number) => (scopeSelections ?? new Set()).has(id), [scopeSelections])
   const { data: config } = useQuery({ queryKey: ['config'], queryFn: getConfig })
-  const sourceLanguage = (config?.source_language as string | undefined) ?? 'en'
+  // Presence pills highlight the source language: the default profile's
+  // first (most preferred) source wins; global config is the unset fallback.
+  const { data: profiles } = useLanguageProfiles()
+  const sourceLanguage =
+    profiles?.find((p) => p.is_default)?.source_languages?.[0] ??
+    (config?.source_language as string | undefined) ??
+    'en'
   const { data: summary } = useWantedSummary()
   const {
     data: wanted,

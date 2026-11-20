@@ -75,12 +75,11 @@ def create_language_profile_endpoint():
               properties:
                 name:
                   type: string
-                source_language:
-                  type: string
-                  default: en
-                source_language_name:
-                  type: string
-                  default: English
+                source_languages:
+                  type: array
+                  items:
+                    type: string
+                  description: Ordered source-language priority (first = most preferred). Default ["en"].
                 target_languages:
                   type: array
                   items:
@@ -162,10 +161,11 @@ def update_language_profile_endpoint(profile_id):
               properties:
                 name:
                   type: string
-                source_language:
-                  type: string
-                source_language_name:
-                  type: string
+                source_languages:
+                  type: array
+                  items:
+                    type: string
+                  description: Ordered source-language priority (first = most preferred).
                 target_languages:
                   type: array
                   items:

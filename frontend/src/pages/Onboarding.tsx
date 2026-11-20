@@ -6,7 +6,7 @@ import type { SetupBenchmark, SetupProfile } from '@/api/health'
 import { testSonarrInstance, testRadarrInstance, testApiKey } from '@/api/settings'
 import { toast } from '@/components/shared/Toast'
 import { apiErrorMessage } from '@/lib/apiError'
-import { Loader2, CheckCircle, ArrowRight, ArrowLeft, Server, Globe, Cpu, Search, Play, Monitor, Plus, TestTube, Trash2, Eye, EyeOff, FolderOpen, Languages, Zap, AlertCircle, Clapperboard, Sparkles, Library, Gauge } from 'lucide-react'
+import { Loader2, CheckCircle, ArrowRight, ArrowLeft, Server, Globe, Search, Play, Monitor, Plus, TestTube, Trash2, Eye, EyeOff, FolderOpen, Languages, Zap, AlertCircle, Clapperboard, Sparkles, Library, Gauge } from 'lucide-react'
 import { INTERFACE_LANGUAGE_OPTIONS } from '@/styles/settingsShared'
 import type { MediaServerType, MediaServerInstance, MediaServerTestResult } from '@/lib/types'
 
@@ -19,7 +19,6 @@ export const ALL_STEPS = [
   { id: 'language', titleKey: 'steps.language', icon: Languages, descKey: 'language_step.description' },
   { id: 'providers', titleKey: 'steps.providers', icon: Search, descKey: 'providers_step.description' },
   { id: 'automation', titleKey: 'steps.automation', icon: Zap, descKey: 'automation_step.description' },
-  { id: 'ollama', titleKey: 'steps.ollama', icon: Cpu, descKey: 'ollama_step.description' },
   { id: 'mediaservers', titleKey: 'steps.mediaservers', icon: Monitor, descKey: 'mediaservers_step.description' },
   { id: 'performance', titleKey: 'steps.performance', icon: Gauge, descKey: 'performance_step.description' },
   { id: 'scan', titleKey: 'steps.scan', icon: Play, descKey: 'scan_step.description' },
@@ -29,12 +28,12 @@ export function getVisibleSteps(setupMode: 'arr' | 'standalone' | null) {
   if (!setupMode) return [ALL_STEPS[0]] // only setup mode step
   if (setupMode === 'arr') {
     return ALL_STEPS.filter(s =>
-      ['mode', 'library', 'arr', 'pathmapping', 'language', 'providers', 'automation', 'ollama', 'mediaservers', 'performance', 'scan'].includes(s.id)
+      ['mode', 'library', 'arr', 'pathmapping', 'language', 'providers', 'automation', 'mediaservers', 'performance', 'scan'].includes(s.id)
     )
   }
   // standalone: skip arr and pathmapping
   return ALL_STEPS.filter(s =>
-    ['mode', 'library', 'standalone', 'language', 'providers', 'automation', 'ollama', 'mediaservers', 'performance', 'scan'].includes(s.id)
+    ['mode', 'library', 'standalone', 'language', 'providers', 'automation', 'mediaservers', 'performance', 'scan'].includes(s.id)
   )
 }
 
@@ -56,10 +55,6 @@ export type OnboardingValues = Record<string, string>
 const UI_ONLY_KEYS = ['automation_enabled', 'search_interval_hours'] as const
 export const ARR_ONLY_KEYS = ['sonarr_url', 'sonarr_api_key', 'radarr_url', 'radarr_api_key', 'path_mapping'] as const
 export const STANDALONE_ONLY_KEYS = ['tmdb_api_key', 'tvdb_api_key'] as const
-// The backend default; a loopback URL is refused on save, so the untouched
-// default is left out instead of failing the step.
-export const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
-
 /** The config the wizard saves: non-empty values of the chosen setup mode,
  *  with the automation toggle and interval as the wanted-search interval. */
 export function buildOnboardingPayload(
@@ -72,7 +67,6 @@ export function buildOnboardingPayload(
   }
   const otherMode = setupMode === 'arr' ? STANDALONE_ONLY_KEYS : setupMode === 'standalone' ? ARR_ONLY_KEYS : []
   for (const k of [...otherMode, ...UI_ONLY_KEYS]) delete payload[k]
-  if (payload.ollama_url === DEFAULT_OLLAMA_URL) delete payload.ollama_url
   if (values.automation_enabled) {
     payload.wanted_search_interval_hours =
       values.automation_enabled === 'true' ? values.search_interval_hours || '24' : '0'
@@ -87,11 +81,6 @@ const inputStyle = {
   fontFamily: 'var(--font-mono)',
   fontSize: '13px',
 }
-
-// Single source of truth for the onboarding language dropdowns (N4).
-// Order matters — the first entry is the default offered to new users.
-const TARGET_LANG_CODES = ['de','en','fr','es','it','pt','nl','pl','zh','ja','ko','hr','sr','cs','hu','ro','tr','ru','ar','he','el'] as const
-const SOURCE_LANG_CODES = ['en','ja','ko','zh','de','fr','es'] as const
 
 // Module-level Field input (B1). Defining inputs inside the parent component
 // remounts the underlying <input> on every render, which drops keyboard focus
@@ -135,7 +124,7 @@ export default function Onboarding() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
-  // Tracks which connection test is in-flight ('sonarr' | 'radarr' | 'ollama' | null)
+  // Tracks which connection test is in-flight ('sonarr' | 'radarr' | null)
   // so concurrent click on a different button doesn't show the wrong spinner.
   const [testing, setTesting] = useState<string | null>(null)
   const [scanStarted, setScanStarted] = useState(false)
@@ -162,12 +151,6 @@ export default function Onboarding() {
     opensubtitles_api_key: '',
     jimaku_api_key: '',
     subdl_api_key: '',
-    ollama_url: DEFAULT_OLLAMA_URL,
-    ollama_model: 'qwen2.5:14b-instruct',
-    target_language: 'de',
-    target_language_name: 'German',
-    source_language: 'en',
-    source_language_name: 'English',
     // Starts at the language the wizard itself is rendered in, so the
     // dropdown matches what the user sees before touching it.
     interface_language: i18n.language?.startsWith('en') ? 'en' : 'de',
@@ -296,25 +279,6 @@ export default function Onboarding() {
       toast(apiErrorMessage(err, t('errors.save_failed')), 'error')
     } finally {
       setSaving(false)
-    }
-  }
-
-  const testOllama = async () => {
-    setTesting('ollama')
-    try {
-      // Test what the form holds, and trust the server's verdict: the health
-      // text was read as "fine unless it says error", so "Cannot connect" or a
-      // missing model showed green (#61 A10).
-      const result = await testBackend('ollama', { url: values.ollama_url, model: values.ollama_model })
-      if (result.healthy) {
-        toast(t('ollama_step.connection_successful'))
-      } else {
-        toast(`${t('ollama_step.connection_failed')}: ${result.message}`, 'error')
-      }
-    } catch {
-      toast(t('ollama_step.test_failed'), 'error')
-    } finally {
-      setTesting(null)
     }
   }
 
@@ -834,53 +798,6 @@ export default function Onboarding() {
                   {t('language_step.interface_language_hint')}
                 </p>
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                  {t('language_step.target_language')}
-                </label>
-                <select
-                  value={values.target_language}
-                  // Sync the display-name alongside the code (B3). The two were
-                  // independent state keys; if only the code changed the cached
-                  // name would drift (target_language='fr', name='German').
-                  onChange={(e) => {
-                    const code = e.target.value
-                    setValues((v) => ({
-                      ...v,
-                      target_language: code,
-                      target_language_name: tc(`language_names.${code}`).replace(/\s*\([a-z]+\)\s*$/, ''),
-                    }))
-                  }}
-                  className="w-full px-3 py-2 rounded-md text-sm focus:outline-none"
-                  style={inputStyle}
-                >
-                  {TARGET_LANG_CODES.map((code) => (
-                    <option key={code} value={code}>{tc(`language_names.${code}`)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                  {t('language_step.source_language')}
-                </label>
-                <select
-                  value={values.source_language}
-                  onChange={(e) => {
-                    const code = e.target.value
-                    setValues((v) => ({
-                      ...v,
-                      source_language: code,
-                      source_language_name: tc(`language_names.${code}`).replace(/\s*\([a-z]+\)\s*$/, ''),
-                    }))
-                  }}
-                  className="w-full px-3 py-2 rounded-md text-sm focus:outline-none"
-                  style={inputStyle}
-                >
-                  {SOURCE_LANG_CODES.map((code) => (
-                    <option key={code} value={code}>{tc(`language_names.${code}`)}</option>
-                  ))}
-                </select>
-              </div>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 {t('language_step.help')}
               </p>
@@ -975,29 +892,6 @@ export default function Onboarding() {
                 <Zap size={12} className="mt-0.5 shrink-0" style={{ color: 'var(--accent)' }} />
                 <span>{t('automation_step.settings_hint')}</span>
               </div>
-            </div>
-          )}
-
-          {currentStepDef.id === 'ollama' && (
-            <div className="space-y-4">
-              <Field label={t('ollama_step.url')} placeholder="http://localhost:11434" {...fieldFor('ollama_url')} />
-              <Field label={t('ollama_step.model')} placeholder="qwen2.5:14b-instruct" {...fieldFor('ollama_model')} />
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                {t('ollama_step.languages_hint', { source: values.source_language_name, target: values.target_language_name })}
-              </p>
-              <button
-                onClick={testOllama}
-                disabled={testing === 'ollama'}
-                className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150"
-                style={{
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-secondary)',
-                  backgroundColor: 'var(--bg-primary)',
-                }}
-              >
-                {testing === 'ollama' ? <Loader2 size={14} className="animate-spin" /> : <Cpu size={14} />}
-                {t('ollama_step.test_connection')}
-              </button>
             </div>
           )}
 

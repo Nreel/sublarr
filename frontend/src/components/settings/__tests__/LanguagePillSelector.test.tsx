@@ -38,4 +38,18 @@ describe('LanguagePillSelector', () => {
     expect(optionValues).not.toContain('en')
     expect(optionValues).toContain('ja')
   })
+
+  it('shows priority ranks and swap controls when ordered', () => {
+    render(<LanguagePillSelector ordered value={['ja', 'de']} options={LANGUAGES} onChange={vi.fn()} />)
+    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getAllByLabelText(/Move up|Move down/).length).toBe(4)
+  })
+
+  it('swaps adjacent sources on move-down', () => {
+    const onChange = vi.fn()
+    render(<LanguagePillSelector ordered value={['ja', 'de']} options={LANGUAGES} onChange={onChange} />)
+    fireEvent.click(screen.getAllByLabelText(/Move down/)[0])
+    expect(onChange).toHaveBeenCalledWith(['de', 'ja'])
+  })
 })

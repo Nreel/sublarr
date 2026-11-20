@@ -220,8 +220,7 @@ def apply_migration(config_data: dict, db_data: dict) -> dict:
 
                 create_language_profile(
                     name=p.get("name", "Imported from Bazarr"),
-                    source_lang="en",
-                    source_name="English",
+                    source_langs=["en"],
                     target_langs=target_langs,
                     target_names=target_names,
                 )

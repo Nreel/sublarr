@@ -34,6 +34,25 @@ def _validate_combine_format(fmt: str) -> None:
         raise ValueError(f"Invalid combine_format '{fmt}'. Must be one of: {VALID_COMBINE_FORMATS}")
 
 
+def _clean_source_languages(value) -> list[str]:
+    """Normalise a profile's ordered source-language priority list.
+
+    Order is the priority (first = strongest), so de-duplicate while keeping
+    it. Empty/invalid input falls back to ["en"] — every profile must have a
+    source policy, there is no global source setting to fall back to.
+    """
+    from config_language_data import normalize_language_code
+
+    if isinstance(value, str):
+        value = [value]
+    ordered: list[str] = []
+    for raw in value if isinstance(value, list) else []:
+        code = normalize_language_code(str(raw or ""))
+        if code and code not in ordered:
+            ordered.append(code)
+    return ordered or ["en"]
+
+
 class ProfileRepository(BaseRepository):
     """Repository for language_profiles and assignment table operations."""
 
@@ -42,8 +61,7 @@ class ProfileRepository(BaseRepository):
     def create_profile(
         self,
         name: str,
-        source_lang: str,
-        source_name: str,
+        source_langs: list,
         target_langs: list,
         target_names: list,
         translation_backend: str = "ollama",
@@ -93,8 +111,7 @@ class ProfileRepository(BaseRepository):
 
         profile = LanguageProfile(
             name=name,
-            source_language=source_lang,
-            source_language_name=source_name,
+            source_languages_json=json.dumps(_clean_source_languages(source_langs)),
             target_languages_json=json.dumps(target_langs),
             target_language_names_json=json.dumps(target_names),
             translation_backend=translation_backend,
@@ -165,8 +182,7 @@ class ProfileRepository(BaseRepository):
             return {
                 "id": 0,
                 "name": "Default",
-                "source_language": s.source_language,
-                "source_language_name": s.source_language_name,
+                "source_languages": _clean_source_languages([s.source_language]),
                 "target_languages": [s.target_language],
                 "target_language_names": [s.target_language_name],
                 "is_default": True,
@@ -183,8 +199,7 @@ class ProfileRepository(BaseRepository):
 
         allowed = {
             "name",
-            "source_language",
-            "source_language_name",
+            "source_languages",
             "target_languages",
             "target_language_names",
             "translation_backend",
@@ -249,7 +264,9 @@ class ProfileRepository(BaseRepository):
         for key, value in fields.items():
             if key not in allowed:
                 continue
-            if key == "target_languages":
+            if key == "source_languages":
+                profile.source_languages_json = json.dumps(_clean_source_languages(value))
+            elif key == "target_languages":
                 profile.target_languages_json = json.dumps(value)
             elif key == "target_language_names":
                 profile.target_language_names_json = json.dumps(value)
@@ -478,6 +495,14 @@ class ProfileRepository(BaseRepository):
         """Convert a LanguageProfile model to a dict. Parse JSON columns."""
         d = self._to_dict(profile)
         d["is_default"] = bool(d.get("is_default", 0))
+
+        try:
+            raw_sources = json.loads(d.get("source_languages_json", "[]"))
+        except json.JSONDecodeError:
+            raw_sources = []
+        d["source_languages"] = _clean_source_languages(raw_sources)
+        if "source_languages_json" in d:
+            del d["source_languages_json"]
 
         try:
             d["target_languages"] = json.loads(d.get("target_languages_json", "[]"))
