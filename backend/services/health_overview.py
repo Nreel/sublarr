@@ -10,6 +10,11 @@ Aggregates three "where does it hurt" views from data that already exists:
                    satisfy or match.
   * ``providers``— per-provider health: circuit-breaker state merged with
                    the hit/failure counters from provider_stats.
+  * ``translation``— translation-pipeline health: per-backend failure counters
+                     from translation_backend_stats plus the most recent failed
+                     translate_batch calls from translation_events. Until this,
+                     a translation error was only visible behind one episode's
+                     History button; a dead backend showed nowhere.
 
 Everything is read-only and bounded (top-N lists) so the endpoint stays
 cheap enough for a dashboard poll.
@@ -18,6 +23,7 @@ cheap enough for a dashboard poll.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import case, func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -29,9 +35,14 @@ logger = logging.getLogger(__name__)
 # Bounded list sizes — a dashboard needs the worst offenders, not everything.
 MAX_SERIES_ROWS = 50
 MAX_PROBLEM_ROWS = 100
+MAX_TRANSLATION_ERROR_ROWS = 50
 
 # Wanted statuses that mean "the user does not want this tracked".
 _EXCLUDED_STATUSES = ("ignored",)
+
+# translation_events statuses that mean the translation itself broke.
+# "cancelled" is an operator action, not a failure.
+_FAILED_TRANSLATION_STATUSES = ("error", "timeout")
 
 
 def _is_problem_clause(wanted_model):
@@ -43,6 +54,7 @@ def get_library_health() -> dict:
     from db.models.circuit_breaker import CircuitBreakerState
     from db.models.core import WantedItem
     from db.models.providers import ProviderStats
+    from db.models.translation import TranslationBackendStats, TranslationEvent
     from extensions import db
 
     session = db.session
@@ -174,6 +186,80 @@ def get_library_health() -> dict:
         )
     providers.sort(key=lambda p: (not p["degraded"], p["provider"]))
 
+    # ── translation health ──────────────────────────────────────────────────
+    # Same defensive contract as the breaker join above: an install whose
+    # schema drifted from its alembic_version may lack the translation tables,
+    # and a health overview must never be the thing that 500s.
+    translation: dict = {"failures_7d": 0, "stuck_items": 0, "backends": [], "recent_errors": []}
+    try:
+        window_start = datetime.now(UTC) - timedelta(days=7)
+        translation["failures_7d"] = int(
+            session.execute(
+                select(func.count(TranslationEvent.id))
+                .where(TranslationEvent.status.in_(_FAILED_TRANSLATION_STATUSES))
+                .where(TranslationEvent.started_at >= window_start)
+            ).scalar_one()
+            or 0
+        )
+        error_rows = (
+            session.execute(
+                select(TranslationEvent)
+                .where(TranslationEvent.status.in_(_FAILED_TRANSLATION_STATUSES))
+                .order_by(TranslationEvent.started_at.desc())
+                .limit(MAX_TRANSLATION_ERROR_ROWS)
+            )
+            .scalars()
+            .all()
+        )
+        translation["recent_errors"] = [
+            {
+                "backend": e.backend,
+                "source_lang": e.source_lang,
+                "target_lang": e.target_lang,
+                "lines_count": int(e.lines_count or 0),
+                "status": e.status,
+                "error_type": e.error_type or "",
+                "error_msg": e.error_msg or "",
+                "started_at": e.started_at.isoformat() if e.started_at else None,
+            }
+            for e in error_rows
+        ]
+        backend_rows = session.execute(select(TranslationBackendStats)).scalars().all()
+        # Failing backends first — the page exists to show where it hurts.
+        translation["backends"] = sorted(
+            [
+                {
+                    "backend": r.backend_name,
+                    "requests": int(r.total_requests or 0),
+                    "failed": int(r.failed_translations or 0),
+                    "consecutive_failures": int(r.consecutive_failures or 0),
+                    "last_error": r.last_error or "",
+                    "last_failure_at": r.last_failure_at.isoformat() if r.last_failure_at else None,
+                    "last_success_at": r.last_success_at.isoformat() if r.last_success_at else None,
+                }
+                for r in backend_rows
+            ],
+            key=lambda b: (b["failed"] == 0 and b["consecutive_failures"] == 0, b["backend"]),
+        )
+    except SQLAlchemyError:
+        session.rollback()
+        logger.warning(
+            "translation tables unavailable — reporting health without translation state",
+            exc_info=True,
+        )
+
+    # Wanted items whose recorded failure was a translation error. They return
+    # to the wanted pool with escalating retry delay; separating them from
+    # provider-side problems answers "found it but could not translate it".
+    translation["stuck_items"] = int(
+        session.execute(
+            select(func.count(WantedItem.id))
+            .where(WantedItem.failure_kind == "translation_error")
+            .where(WantedItem.status.notin_(_EXCLUDED_STATUSES))
+        ).scalar_one()
+        or 0
+    )
+
     # ── totals ──────────────────────────────────────────────────────────────
     wanted_total = (
         session.execute(
@@ -212,4 +298,5 @@ def get_library_health() -> dict:
         "series": series,
         "problems": problems,
         "providers": providers,
+        "translation": translation,
     }

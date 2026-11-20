@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the page.
 
 ### Added
+- **Translation health on the Health page** — A translation error was visible
+  only behind one episode's History button, so a dead backend showed nowhere.
+  Health now carries a Translation health block: per-backend request/failure
+  counters with consecutive failures and the last error, the most recent
+  failed translation calls (backend, language pair, error, message, lines),
+  and a summary line with the failures of the last 7 days plus the items
+  waiting to re-translate.
 - **Setup asks for the interface language** — The onboarding wizard's
   Languages step now leads with an interface-language dropdown. Picking
   Deutsch or English switches the whole UI — the wizard included — instantly

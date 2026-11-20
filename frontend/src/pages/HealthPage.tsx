@@ -1,9 +1,12 @@
 /**
  * Health page — "where does it hurt" overview of the library.
  *
- * Three bounded views from GET /api/v1/health/library: series with missing
- * subtitles, wanted items stuck in a failure state (unmatched episodes), and
- * per-provider health (circuit breaker ⋈ provider stats).
+ * Four bounded views from GET /api/v1/health/library: series with missing
+ * subtitles, wanted items stuck in a failure state (unmatched episodes),
+ * per-provider health (circuit breaker ⋈ provider stats), and translation
+ * health (backend failure counters + recent failed translation calls — before
+ * this block those errors were only visible behind one episode's History
+ * button).
  */
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -12,7 +15,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { StatTile } from '@/components/statistics/primitives'
-import { getLibraryHealth, type HealthProblemRow, type HealthProviderRow } from '@/api/system/healthLibrary'
+import { getLibraryHealth, type HealthProblemRow, type HealthProviderRow, type HealthTranslationBackend, type HealthTranslationError } from '@/api/system/healthLibrary'
 import { formatRelativeTime, formatProviderName } from '@/lib/utils'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -122,6 +125,71 @@ function ProviderRow({ p, t }: { p: HealthProviderRow; t: (key: string) => strin
       </td>
       <td className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
         {p.breaker_failures}
+      </td>
+    </tr>
+  )
+}
+
+function TranslationBackendRow({ b }: { b: HealthTranslationBackend }) {
+  const broken = b.failed > 0 || b.consecutive_failures > 0
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+      <td className="px-3 py-2">
+        <div className="flex items-center gap-2">
+          {broken && <AlertTriangle size={13} style={{ color: 'var(--warning)' }} />}
+          <span className="text-sm font-medium" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+            {b.backend}
+          </span>
+        </div>
+      </td>
+      <td className="px-3 py-2 text-xs tabular-nums hidden sm:table-cell" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        {b.requests}
+      </td>
+      <td className="px-3 py-2 text-xs tabular-nums" style={{ color: b.failed > 0 ? 'var(--error)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        {b.failed}
+      </td>
+      <td className="px-3 py-2 text-xs tabular-nums" style={{ color: b.consecutive_failures > 0 ? 'var(--error)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        {b.consecutive_failures}
+      </td>
+      <td className="px-3 py-2 text-xs truncate max-w-[240px] hidden md:table-cell" title={b.last_error} style={{ color: broken ? 'var(--error)' : 'var(--text-secondary)' }}>
+        {b.last_error || '—'}
+      </td>
+      <td className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        {b.last_failure_at ? formatRelativeTime(b.last_failure_at) : '—'}
+      </td>
+    </tr>
+  )
+}
+
+function TranslationErrorRow({ e }: { e: HealthTranslationError }) {
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+      <td className="px-3 py-2 text-sm font-medium" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+        {e.backend}
+      </td>
+      <td className="px-3 py-2 text-xs uppercase" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+        {e.source_lang} → {e.target_lang}
+      </td>
+      <td className="px-3 py-2">
+        <span
+          className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase"
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--error) 12%, transparent)',
+            color: 'var(--error)',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          {e.error_type || e.status}
+        </span>
+      </td>
+      <td className="px-3 py-2 text-xs truncate max-w-[240px] hidden md:table-cell" title={e.error_msg} style={{ color: 'var(--text-secondary)' }}>
+        {e.error_msg || '—'}
+      </td>
+      <td className="px-3 py-2 text-xs tabular-nums hidden sm:table-cell" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+        {e.lines_count}
+      </td>
+      <td className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        {e.started_at ? formatRelativeTime(e.started_at) : ''}
       </td>
     </tr>
   )
@@ -257,6 +325,71 @@ export function HealthPage() {
             <EmptyState label={t('providers.empty')} />
           )}
         </div>
+      </Section>
+
+      {/* Translation health */}
+      <Section title={t('translation.title')}>
+        <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          {data?.translation?.backends.length ? (
+            <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+              <table className="w-full min-w-[520px]">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <Th>{t('translation.col_backend')}</Th>
+                    <Th className="hidden sm:table-cell">{t('translation.col_requests')}</Th>
+                    <Th>{t('translation.col_failed')}</Th>
+                    <Th>{t('translation.col_consecutive')}</Th>
+                    <Th className="hidden md:table-cell">{t('translation.col_last_error')}</Th>
+                    <Th className="hidden lg:table-cell">{t('translation.col_last_failure')}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.translation.backends.map((b) => (
+                    <TranslationBackendRow key={b.backend} b={b} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState label={t('translation.empty_backends')} />
+          )}
+        </div>
+
+        <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          {data?.translation?.recent_errors.length ? (
+            <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
+              <table className="w-full min-w-[520px]">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <Th>{t('translation.col_backend')}</Th>
+                    <Th>{t('translation.col_langs')}</Th>
+                    <Th>{t('translation.col_error')}</Th>
+                    <Th className="hidden md:table-cell">{t('translation.col_message')}</Th>
+                    <Th className="hidden sm:table-cell">{t('translation.col_lines')}</Th>
+                    <Th className="hidden lg:table-cell">{t('translation.col_when')}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.translation.recent_errors.map((e, i) => (
+                    <TranslationErrorRow key={`${e.backend}:${e.started_at}:${i}`} e={e} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState label={t('translation.empty_errors')} />
+          )}
+        </div>
+
+        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+          {t('translation.summary', {
+            failures7d: data?.translation?.failures_7d ?? 0,
+            stuck: data?.translation?.stuck_items ?? 0,
+          })}
+        </p>
+        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+          {t('translation.hint')}
+        </p>
       </Section>
 
       <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>

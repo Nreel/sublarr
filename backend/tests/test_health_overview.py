@@ -1,7 +1,7 @@
 """Tests for services.health_overview + GET /api/v1/health/library
 and the sync-rate fields added to /api/v1/statistics/subtitles."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 
 def _add_wanted(app, title, status="wanted", failure_kind=None, item_type="episode", **kw):
@@ -60,6 +60,49 @@ def _add_breaker(app, name, state="open", failures=5):
         db.session.commit()
 
 
+def _add_translation_event(app, backend, status, started, error_type=None, error_msg=None, lines=5):
+    from db.models.translation import TranslationEvent
+    from extensions import db
+
+    with app.app_context():
+        db.session.add(
+            TranslationEvent(
+                backend=backend,
+                source_lang="en",
+                target_lang="de",
+                lines_count=lines,
+                chars_in=100,
+                status=status,
+                error_type=error_type,
+                error_msg=error_msg,
+                started_at=started,
+            )
+        )
+        db.session.commit()
+
+
+def _add_backend_stats(app, name, requests=0, failed=0, consecutive_failures=0, last_error=""):
+    from db.models.translation import TranslationBackendStats
+    from extensions import db
+
+    with app.app_context():
+        now = datetime.now(UTC)
+        db.session.add(
+            TranslationBackendStats(
+                backend_name=name,
+                total_requests=requests,
+                successful_translations=requests - failed,
+                failed_translations=failed,
+                consecutive_failures=consecutive_failures,
+                last_error=last_error,
+                last_failure_at=now - timedelta(hours=2) if failed else None,
+                last_success_at=now if requests - failed else None,
+                updated_at=now,
+            )
+        )
+        db.session.commit()
+
+
 class TestLibraryHealthService:
     def test_empty_library(self, app_ctx):
         from services.health_overview import get_library_health
@@ -69,6 +112,12 @@ class TestLibraryHealthService:
         assert result["totals"]["problems"] == 0
         assert result["series"] == []
         assert result["problems"] == []
+        assert result["translation"] == {
+            "failures_7d": 0,
+            "stuck_items": 0,
+            "backends": [],
+            "recent_errors": [],
+        }
 
     def test_series_aggregation_and_problem_items(self, client):
         app = client.application
@@ -114,6 +163,42 @@ class TestLibraryHealthService:
         # Degraded providers sort first.
         listed = [p["provider"] for p in resp.get_json()["providers"]]
         assert listed.index("goodprov") > max(listed.index("deadprov"), listed.index("brokenprov"))
+
+    def test_translation_section(self, client):
+        app = client.application
+        now = datetime.now(UTC)
+        _add_backend_stats(app, "ollama", requests=10, failed=3, consecutive_failures=2, last_error="Connection refused")
+        _add_backend_stats(app, "azure", requests=5, failed=0, consecutive_failures=0)
+        _add_translation_event(app, "ollama", "error", now - timedelta(hours=2), error_type="LineCountMismatchError", error_msg="expected 4 lines, got 3")
+        _add_translation_event(app, "ollama", "timeout", now - timedelta(hours=1))
+        _add_translation_event(app, "ollama", "ok", now - timedelta(minutes=30))
+        _add_translation_event(app, "ollama", "cancelled", now - timedelta(minutes=10))
+        _add_translation_event(app, "azure", "error", now - timedelta(days=8))
+        _add_wanted(app, "Show T", status="failed", failure_kind="translation_error", error="translation failed")
+
+        resp = client.get("/api/v1/health/library")
+        assert resp.status_code == 200
+        tr = resp.get_json()["translation"]
+
+        # error + timeout inside the window; ok, cancelled, and an 8-day-old
+        # error are all excluded.
+        assert tr["failures_7d"] == 2
+        assert tr["stuck_items"] == 1
+
+        # Failing backend sorts first.
+        assert [b["backend"] for b in tr["backends"]] == ["ollama", "azure"]
+        assert tr["backends"][0]["failed"] == 3
+        assert tr["backends"][0]["consecutive_failures"] == 2
+        assert tr["backends"][0]["last_error"] == "Connection refused"
+
+        # Recent errors: newest first, failed statuses only — the list is not
+        # windowed, so the 8-day-old azure failure is listed too.
+        assert len(tr["recent_errors"]) == 3
+        assert tr["recent_errors"][0]["status"] == "timeout"
+        assert tr["recent_errors"][1]["error_type"] == "LineCountMismatchError"
+        assert tr["recent_errors"][1]["error_msg"] == "expected 4 lines, got 3"
+        assert tr["recent_errors"][2]["backend"] == "azure"
+        assert tr["recent_errors"][0]["started_at"] > tr["recent_errors"][1]["started_at"]
 
 
 class TestSyncRateInSubtitlesStats:

@@ -54,5 +54,23 @@
     "state_half_open": "Halb offen",
     "auto_disabled": "Auto-deaktiviert",
     "empty": "Noch keine Provider-Aktivität aufgezeichnet."
+  },
+  "translation": {
+    "title": "Übersetzungs-Gesundheit",
+    "col_backend": "Backend",
+    "col_requests": "Anfragen",
+    "col_failed": "Fehlgeschlagen",
+    "col_consecutive": "In Folge",
+    "col_last_error": "Letzter Fehler",
+    "col_last_failure": "Letzte Fehlversuche",
+    "empty_backends": "Noch keine Übersetzungs-Aktivität aufgezeichnet.",
+    "col_langs": "Sprachen",
+    "col_error": "Fehler",
+    "col_message": "Meldung",
+    "col_lines": "Zeilen",
+    "col_when": "Wann",
+    "empty_errors": "Keine Übersetzungsfehler.",
+    "summary": "{{failures7d}} fehlgeschlagene Übersetzungen in den letzten 7 Tagen · {{stuck}} Einträge warten auf erneute Übersetzung",
+    "hint": "Versuche und Fehler pro Episode stehen hinter dem History-Button der Episode."
   }
 }

@@ -54,5 +54,23 @@
     "state_half_open": "Half-open",
     "auto_disabled": "Auto-disabled",
     "empty": "No provider activity recorded yet."
+  },
+  "translation": {
+    "title": "Translation health",
+    "col_backend": "Backend",
+    "col_requests": "Requests",
+    "col_failed": "Failed",
+    "col_consecutive": "Consecutive",
+    "col_last_error": "Last error",
+    "col_last_failure": "Last failure",
+    "empty_backends": "No translation activity recorded yet.",
+    "col_langs": "Languages",
+    "col_error": "Error",
+    "col_message": "Message",
+    "col_lines": "Lines",
+    "col_when": "When",
+    "empty_errors": "No translation errors.",
+    "summary": "{{failures7d}} failed translations in the last 7 days · {{stuck}} items waiting to re-translate",
+    "hint": "Per-episode attempts and errors live behind the History button on each episode."
   }
 }

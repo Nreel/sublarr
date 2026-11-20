@@ -21,6 +21,36 @@ export interface HealthProblemRow {
   updated_at: string | null
 }
 
+export interface HealthTranslationBackend {
+  backend: string
+  requests: number
+  failed: number
+  consecutive_failures: number
+  last_error: string
+  last_failure_at: string | null
+  last_success_at: string | null
+}
+
+export interface HealthTranslationError {
+  backend: string
+  source_lang: string
+  target_lang: string
+  lines_count: number
+  status: string
+  error_type: string
+  error_msg: string
+  started_at: string | null
+}
+
+export interface HealthTranslation {
+  /** Failed translate_batch calls (status error/timeout) in the last 7 days. */
+  failures_7d: number
+  /** Wanted items whose recorded failure_kind is translation_error. */
+  stuck_items: number
+  backends: HealthTranslationBackend[]
+  recent_errors: HealthTranslationError[]
+}
+
 export interface HealthProviderRow {
   provider: string
   breaker_state: string
@@ -46,6 +76,7 @@ export interface LibraryHealth {
   series: HealthSeriesRow[]
   problems: HealthProblemRow[]
   providers: HealthProviderRow[]
+  translation: HealthTranslation
 }
 
 export async function getLibraryHealth(): Promise<LibraryHealth> {
