@@ -75,7 +75,7 @@ class TestSplitLocalTranslateItems:
         has_sidecar = _item(1)
         no_sidecar = _item(2)
 
-        def _fake_find(file_path, target_language=None):
+        def _fake_find(file_path, target_language=None, preferred_languages=None):
             if "item-1" in file_path:
                 return "/media/item-1.eng.ass", "en"
             return None, None

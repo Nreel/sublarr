@@ -153,7 +153,7 @@ class TestLocalSidecarPhaseIsBounded:
         sidecar_items = [_item(i) for i in range(1, 6)]
         provider_item = _item(99)
 
-        def _selective_find(file_path, target_language=None):
+        def _selective_find(file_path, target_language=None, preferred_languages=None):
             if "item-99" in file_path:
                 return None, None
             return "/media/source.eng.ass", "en"

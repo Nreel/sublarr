@@ -474,8 +474,7 @@ class TestAutoReplaceIntegration:
 
         profile_id = ProfileRepository().create_profile(
             name="auto-replace-profile",
-            source_lang="en",
-            source_name="English",
+            source_langs=["en"],
             target_langs=["de"],
             target_names=["German"],
         )

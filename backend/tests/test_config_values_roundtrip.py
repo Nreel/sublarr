@@ -28,13 +28,6 @@ def test_a_list_is_saved_as_json():
     assert serialize_config_value(True) == "true"
 
 
-def test_the_source_language_validator_runs_on_load():
-    ui = apply_overrides(UISettings(), {"auto_translate_source_languages": '["EN", "ja"]'})
-
-    assert isinstance(ui.auto_translate_source_languages, list)
-    assert all(isinstance(code, str) for code in ui.auto_translate_source_languages)
-
-
 def test_scalars_still_decode():
     ui = apply_overrides(
         UISettings(),

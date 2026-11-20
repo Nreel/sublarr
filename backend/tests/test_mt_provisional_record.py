@@ -115,8 +115,7 @@ def test_resolve_keep_seeking_reads_flag_from_real_series_profile(app_ctx, tmp_p
     repo = ProfileRepository()
     profile_id = repo.create_profile(
         name="MT Keep Seeking Profile",
-        source_lang="en",
-        source_name="English",
+        source_langs=["en"],
         target_langs=["de"],
         target_names=["German"],
     )

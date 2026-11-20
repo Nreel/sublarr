@@ -77,8 +77,8 @@ def test_find_any_source_sub_none_when_only_target_or_modifier(tmp_path):
 
 
 def test_find_any_source_sub_strict_rejects_other_languages(tmp_path):
-    """allow_other=False (strict single-source): a non-preferred language is not
-    accepted even when it's the only source present."""
+    """The profile priority is the acceptance set: a language outside it is
+    not accepted even when it's the only source present."""
     from translator._helpers import find_any_source_sub
 
     base = str(tmp_path / "M [imdb-tt2]")
@@ -88,7 +88,7 @@ def test_find_any_source_sub_strict_rejects_other_languages(tmp_path):
 
     settings = MagicMock(target_language="de", source_language="en")
     with patch("translator._helpers.get_settings", return_value=settings):
-        path, lang = find_any_source_sub(mkv, preferred_languages=["en"], allow_other=False)
+        path, lang = find_any_source_sub(mkv, preferred_languages=["en"])
 
     assert path is None
     assert lang is None
@@ -190,31 +190,3 @@ def test_translate_ass_threads_explicit_source_language(tmp_path):
     _, kwargs = pkg._translate_with_manager.call_args
     assert kwargs["source_lang"] == "ja"
 
-
-# --- source-languages config-setting round-trip ------------------------------
-
-
-def test_source_languages_setting_parses_various_forms():
-    """The generic /config writer str()'s lists, so the setting must survive a
-    Python-repr string, a JSON array, a CSV string, or a real list."""
-    from config_settings import UISettings
-
-    assert UISettings(
-        auto_translate_source_languages="['ja', 'en']"
-    ).auto_translate_source_languages == [
-        "ja",
-        "en",
-    ]
-    assert UISettings(
-        auto_translate_source_languages='["zh", "ko"]'
-    ).auto_translate_source_languages == [
-        "zh",
-        "ko",
-    ]
-    assert UISettings(auto_translate_source_languages="fr, de").auto_translate_source_languages == [
-        "fr",
-        "de",
-    ]
-    assert UISettings(auto_translate_source_languages=["en"]).auto_translate_source_languages == [
-        "en"
-    ]
