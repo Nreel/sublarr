@@ -1,43 +1,134 @@
-import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import { updateConfig, completeOnboarding, testBackend, getMediaServerTypes, saveMediaServerInstances, testMediaServer, saveWatchedFolder, triggerStandaloneScan, getScoringPreset, importScoringPreset, getSetupStatus, completeSetup } from '@/api/client'
-import type { SetupBenchmark, SetupProfile } from '@/api/health'
-import { testSonarrInstance, testRadarrInstance, testApiKey } from '@/api/settings'
-import { toast } from '@/components/shared/Toast'
-import { apiErrorMessage } from '@/lib/apiError'
-import { Loader2, CheckCircle, ArrowRight, ArrowLeft, Server, Globe, Search, Play, Monitor, Plus, TestTube, Trash2, Eye, EyeOff, FolderOpen, Languages, Zap, AlertCircle, Clapperboard, Sparkles, Library, Gauge } from 'lucide-react'
-import { INTERFACE_LANGUAGE_OPTIONS } from '@/styles/settingsShared'
-import type { MediaServerType, MediaServerInstance, MediaServerTestResult } from '@/lib/types'
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import {
+  updateConfig,
+  completeOnboarding,
+  getMediaServerTypes,
+  saveMediaServerInstances,
+  testMediaServer,
+  saveWatchedFolder,
+  triggerStandaloneScan,
+  getScoringPreset,
+  importScoringPreset,
+  getSetupStatus,
+  completeSetup,
+} from '@/api/client';
+import type { SetupBenchmark, SetupProfile } from '@/api/health';
+import { testSonarrInstance, testRadarrInstance, testApiKey } from '@/api/settings';
+import { toast } from '@/components/shared/Toast';
+import { apiErrorMessage } from '@/lib/apiError';
+import {
+  Loader2,
+  CheckCircle,
+  ArrowRight,
+  ArrowLeft,
+  Server,
+  Globe,
+  Search,
+  Play,
+  Monitor,
+  Plus,
+  TestTube,
+  Trash2,
+  Eye,
+  EyeOff,
+  FolderOpen,
+  Languages,
+  Zap,
+  AlertCircle,
+  Clapperboard,
+  Sparkles,
+  Library,
+  Gauge,
+} from 'lucide-react';
+import { INTERFACE_LANGUAGE_OPTIONS } from '@/styles/settingsShared';
+import type { MediaServerType, MediaServerInstance, MediaServerTestResult } from '@/lib/types';
 
 export const ALL_STEPS = [
   { id: 'mode', titleKey: 'steps.mode', icon: Server, descKey: 'mode_step.description' },
   { id: 'library', titleKey: 'steps.library', icon: Library, descKey: 'library_step.description' },
   { id: 'arr', titleKey: 'steps.arr', icon: Server, descKey: 'arr_step.description' },
-  { id: 'standalone', titleKey: 'steps.standalone', icon: FolderOpen, descKey: 'standalone_step.description' },
-  { id: 'pathmapping', titleKey: 'steps.pathmapping', icon: Globe, descKey: 'pathmapping_step.description' },
-  { id: 'language', titleKey: 'steps.language', icon: Languages, descKey: 'language_step.description' },
-  { id: 'providers', titleKey: 'steps.providers', icon: Search, descKey: 'providers_step.description' },
-  { id: 'automation', titleKey: 'steps.automation', icon: Zap, descKey: 'automation_step.description' },
-  { id: 'mediaservers', titleKey: 'steps.mediaservers', icon: Monitor, descKey: 'mediaservers_step.description' },
-  { id: 'performance', titleKey: 'steps.performance', icon: Gauge, descKey: 'performance_step.description' },
+  {
+    id: 'standalone',
+    titleKey: 'steps.standalone',
+    icon: FolderOpen,
+    descKey: 'standalone_step.description',
+  },
+  {
+    id: 'pathmapping',
+    titleKey: 'steps.pathmapping',
+    icon: Globe,
+    descKey: 'pathmapping_step.description',
+  },
+  {
+    id: 'language',
+    titleKey: 'steps.language',
+    icon: Languages,
+    descKey: 'language_step.description',
+  },
+  {
+    id: 'providers',
+    titleKey: 'steps.providers',
+    icon: Search,
+    descKey: 'providers_step.description',
+  },
+  {
+    id: 'automation',
+    titleKey: 'steps.automation',
+    icon: Zap,
+    descKey: 'automation_step.description',
+  },
+  {
+    id: 'mediaservers',
+    titleKey: 'steps.mediaservers',
+    icon: Monitor,
+    descKey: 'mediaservers_step.description',
+  },
+  {
+    id: 'performance',
+    titleKey: 'steps.performance',
+    icon: Gauge,
+    descKey: 'performance_step.description',
+  },
   { id: 'scan', titleKey: 'steps.scan', icon: Play, descKey: 'scan_step.description' },
-]
+];
 
 export function getVisibleSteps(setupMode: 'arr' | 'standalone' | null) {
-  if (!setupMode) return [ALL_STEPS[0]] // only setup mode step
+  if (!setupMode) return [ALL_STEPS[0]]; // only setup mode step
   if (setupMode === 'arr') {
     return ALL_STEPS.filter(s =>
-      ['mode', 'library', 'arr', 'pathmapping', 'language', 'providers', 'automation', 'mediaservers', 'performance', 'scan'].includes(s.id)
-    )
+      [
+        'mode',
+        'library',
+        'arr',
+        'pathmapping',
+        'language',
+        'providers',
+        'automation',
+        'mediaservers',
+        'performance',
+        'scan',
+      ].includes(s.id)
+    );
   }
   // standalone: skip arr and pathmapping
   return ALL_STEPS.filter(s =>
-    ['mode', 'library', 'standalone', 'language', 'providers', 'automation', 'mediaservers', 'performance', 'scan'].includes(s.id)
-  )
+    [
+      'mode',
+      'library',
+      'standalone',
+      'language',
+      'providers',
+      'automation',
+      'mediaservers',
+      'performance',
+      'scan',
+    ].includes(s.id)
+  );
 }
 
-export type LibraryType = 'anime' | 'movies' | 'mixed'
+export type LibraryType = 'anime' | 'movies' | 'mixed';
 
 // Which bundled scoring preset each library type applies. `mixed` keeps the
 // (already anime-first, balanced) defaults untouched.
@@ -45,33 +136,40 @@ export const LIBRARY_TYPE_PRESET: Record<LibraryType, string | null> = {
   anime: 'Anime',
   movies: 'Movies',
   mixed: null,
-}
+};
 
-export type OnboardingValues = Record<string, string>
+export type OnboardingValues = Record<string, string>;
 
 // Keys of `values` that only drive the wizard's own controls. The backend
 // knows no such settings and refuses the whole save on an unknown key, which
 // left every wizard step at "Failed to save settings" from 1.14.0 to 1.18.3.
-const UI_ONLY_KEYS = ['automation_enabled', 'search_interval_hours'] as const
-export const ARR_ONLY_KEYS = ['sonarr_url', 'sonarr_api_key', 'radarr_url', 'radarr_api_key', 'path_mapping'] as const
-export const STANDALONE_ONLY_KEYS = ['tmdb_api_key', 'tvdb_api_key'] as const
+const UI_ONLY_KEYS = ['automation_enabled', 'search_interval_hours'] as const;
+export const ARR_ONLY_KEYS = [
+  'sonarr_url',
+  'sonarr_api_key',
+  'radarr_url',
+  'radarr_api_key',
+  'path_mapping',
+] as const;
+export const STANDALONE_ONLY_KEYS = ['tmdb_api_key', 'tvdb_api_key'] as const;
 /** The config the wizard saves: non-empty values of the chosen setup mode,
  *  with the automation toggle and interval as the wanted-search interval. */
 export function buildOnboardingPayload(
   values: OnboardingValues,
-  setupMode: 'arr' | 'standalone' | null,
+  setupMode: 'arr' | 'standalone' | null
 ): Record<string, string> {
-  const payload: Record<string, string> = {}
+  const payload: Record<string, string> = {};
   for (const [k, v] of Object.entries(values)) {
-    if (v) payload[k] = v
+    if (v) payload[k] = v;
   }
-  const otherMode = setupMode === 'arr' ? STANDALONE_ONLY_KEYS : setupMode === 'standalone' ? ARR_ONLY_KEYS : []
-  for (const k of [...otherMode, ...UI_ONLY_KEYS]) delete payload[k]
+  const otherMode =
+    setupMode === 'arr' ? STANDALONE_ONLY_KEYS : setupMode === 'standalone' ? ARR_ONLY_KEYS : [];
+  for (const k of [...otherMode, ...UI_ONLY_KEYS]) delete payload[k];
   if (values.automation_enabled) {
     payload.wanted_search_interval_hours =
-      values.automation_enabled === 'true' ? values.search_interval_hours || '24' : '0'
+      values.automation_enabled === 'true' ? values.search_interval_hours || '24' : '0';
   }
-  return payload
+  return payload;
 }
 
 const inputStyle = {
@@ -80,22 +178,29 @@ const inputStyle = {
   color: 'var(--text-primary)',
   fontFamily: 'var(--font-mono)',
   fontSize: '13px',
-}
+};
 
 // Module-level Field input (B1). Defining inputs inside the parent component
 // remounts the underlying <input> on every render, which drops keyboard focus
 // after every keystroke. Caller resolves value + onChange explicitly so this
 // component carries no closure over parent state.
 type FieldProps = {
-  label: string
-  type?: string
-  placeholder?: string
-  value: string
-  onChange: (next: string) => void
-  autoComplete?: string
-}
+  label: string;
+  type?: string;
+  placeholder?: string;
+  value: string;
+  onChange: (next: string) => void;
+  autoComplete?: string;
+};
 
-function Field({ label, type = 'text', placeholder = '', value, onChange, autoComplete }: FieldProps) {
+function Field({
+  label,
+  type = 'text',
+  placeholder = '',
+  value,
+  onChange,
+  autoComplete,
+}: FieldProps) {
   return (
     <div className="space-y-1.5">
       <label className="block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
@@ -104,7 +209,7 @@ function Field({ label, type = 'text', placeholder = '', value, onChange, autoCo
       <input
         type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         autoComplete={autoComplete ?? (type === 'password' ? 'new-password' : 'off')}
         spellCheck={false}
@@ -112,35 +217,35 @@ function Field({ label, type = 'text', placeholder = '', value, onChange, autoCo
         style={inputStyle}
       />
     </div>
-  )
+  );
 }
 
-let _uid = 0
-const nextUid = () => `ms-${++_uid}-${Date.now().toString(36)}`
+let _uid = 0;
+const nextUid = () => `ms-${++_uid}-${Date.now().toString(36)}`;
 
 export default function Onboarding() {
-  const { t, i18n } = useTranslation('onboarding')
-  const { t: tc } = useTranslation('common')
-  const navigate = useNavigate()
-  const [step, setStep] = useState(0)
-  const [saving, setSaving] = useState(false)
+  const { t, i18n } = useTranslation('onboarding');
+  const { t: tc } = useTranslation('common');
+  const navigate = useNavigate();
+  const [step, setStep] = useState(0);
+  const [saving, setSaving] = useState(false);
   // Tracks which connection test is in-flight ('sonarr' | 'radarr' | null)
   // so concurrent click on a different button doesn't show the wrong spinner.
-  const [testing, setTesting] = useState<string | null>(null)
-  const [scanStarted, setScanStarted] = useState(false)
-  const [setupMode, setSetupMode] = useState<'arr' | 'standalone' | null>(null)
-  const [libraryType, setLibraryType] = useState<LibraryType | null>(null)
+  const [testing, setTesting] = useState<string | null>(null);
+  const [scanStarted, setScanStarted] = useState(false);
+  const [setupMode, setSetupMode] = useState<'arr' | 'standalone' | null>(null);
+  const [libraryType, setLibraryType] = useState<LibraryType | null>(null);
 
   // Performance profile step (consolidates the former FirstRunWizard modal)
-  const [benchmark, setBenchmark] = useState<SetupBenchmark | null>(null)
-  const [perfProfile, setPerfProfile] = useState<SetupProfile | null>(null)
+  const [benchmark, setBenchmark] = useState<SetupBenchmark | null>(null);
+  const [perfProfile, setPerfProfile] = useState<SetupProfile | null>(null);
 
-  const visibleSteps = getVisibleSteps(setupMode)
-  const currentStepDef = visibleSteps[step] || visibleSteps[0]
+  const visibleSteps = getVisibleSteps(setupMode);
+  const currentStepDef = visibleSteps[step] || visibleSteps[0];
 
   // Standalone folder state
-  const [standaloneFolders, setStandaloneFolders] = useState<{ path: string; label: string }[]>([])
-  const [newFolderPath, setNewFolderPath] = useState('')
+  const [standaloneFolders, setStandaloneFolders] = useState<{ path: string; label: string }[]>([]);
+  const [newFolderPath, setNewFolderPath] = useState('');
 
   const [values, setValues] = useState({
     sonarr_url: '',
@@ -159,53 +264,54 @@ export default function Onboarding() {
     automation_enabled: 'true',
     search_interval_hours: '6',
     upgrade_enabled: 'true',
-  })
+  });
 
   // Media server state.
   // Stable per-instance ids decouple show-password / test-result state from the
   // array index, so removing instance #1 doesn't shift visibility flags from #2
   // onto the wrong row (N1). Two parallel arrays kept in sync via add/remove.
-  const [msTypes, setMsTypes] = useState<MediaServerType[]>([])
-  const [msInstances, setMsInstances] = useState<MediaServerInstance[]>([])
-  const msInstanceIds = useRef<string[]>([])
-  const [msTestResults, setMsTestResults] = useState<Record<string, MediaServerTestResult | 'testing'>>({})
-  const [msShowPasswords, setMsShowPasswords] = useState<Record<string, boolean>>({})
-  const [msTypesError, setMsTypesError] = useState(false)
+  const [msTypes, setMsTypes] = useState<MediaServerType[]>([]);
+  const [msInstances, setMsInstances] = useState<MediaServerInstance[]>([]);
+  const msInstanceIds = useRef<string[]>([]);
+  const [msTestResults, setMsTestResults] = useState<
+    Record<string, MediaServerTestResult | 'testing'>
+  >({});
+  const [msShowPasswords, setMsShowPasswords] = useState<Record<string, boolean>>({});
+  const [msTypesError, setMsTypesError] = useState(false);
 
   // Load media server types when reaching that step. On failure we surface a
   // retry button (N3); the previous catch block ignored the error so users sat
   // in front of an indefinite loading spinner.
   const loadMsTypes = () => {
-    setMsTypesError(false)
+    setMsTypesError(false);
     getMediaServerTypes()
-      .then((ts) => setMsTypes(ts))
-      .catch(() => setMsTypesError(true))
-  }
+      .then(ts => setMsTypes(ts))
+      .catch(() => setMsTypesError(true));
+  };
 
   useEffect(() => {
     if (currentStepDef.id === 'mediaservers' && msTypes.length === 0 && !msTypesError) {
-      loadMsTypes()
+      loadMsTypes();
     }
-  }, [currentStepDef.id, msTypes.length, msTypesError])
+  }, [currentStepDef.id, msTypes.length, msTypesError]);
 
   // Fetch the hardware benchmark when the performance step becomes visible so
   // the recommended profile card is pre-selected.
   useEffect(() => {
     if (currentStepDef.id === 'performance' && !benchmark) {
       getSetupStatus()
-        .then((s) => {
-          setBenchmark(s.benchmark)
-          setPerfProfile((prev) => prev ?? s.benchmark.recommended_profile)
+        .then(s => {
+          setBenchmark(s.benchmark);
+          setPerfProfile(prev => prev ?? s.benchmark.recommended_profile);
         })
         .catch(() => {
           // Benchmark unavailable — fall back to 'balanced' as selectable default.
-          setPerfProfile((prev) => prev ?? 'balanced')
-        })
+          setPerfProfile(prev => prev ?? 'balanced');
+        });
     }
-  }, [currentStepDef.id, benchmark])
+  }, [currentStepDef.id, benchmark]);
 
-  const set = (key: string, val: string) =>
-    setValues((v) => ({ ...v, [key]: val }))
+  const set = (key: string, val: string) => setValues(v => ({ ...v, [key]: val }));
 
   // Keys that only apply to one setup mode (ARR_ONLY_KEYS /
   // STANDALONE_ONLY_KEYS): buildOnboardingPayload filters by setupMode so a
@@ -213,23 +319,23 @@ export default function Onboarding() {
   // doesn't POST the stale Sonarr keys (B16).
 
   const saveAndNext = async () => {
-    setSaving(true)
+    setSaving(true);
     try {
       // Library-type step: apply the matching bundled scoring preset (if any)
       // and advance. Nothing from `values` needs persisting here.
       if (currentStepDef.id === 'library') {
-        const presetName = libraryType ? LIBRARY_TYPE_PRESET[libraryType] : null
+        const presetName = libraryType ? LIBRARY_TYPE_PRESET[libraryType] : null;
         if (presetName) {
           try {
-            const preset = await getScoringPreset(presetName)
-            await importScoringPreset(preset)
-            toast(t('library_step.preset_applied', { preset: presetName }))
+            const preset = await getScoringPreset(presetName);
+            await importScoringPreset(preset);
+            toast(t('library_step.preset_applied', { preset: presetName }));
           } catch {
-            toast(t('library_step.preset_failed'), 'error')
+            toast(t('library_step.preset_failed'), 'error');
           }
         }
-        setStep((s) => s + 1)
-        return
+        setStep(s => s + 1);
+        return;
       }
 
       // Performance step: apply the chosen scheduler profile via the same
@@ -237,141 +343,154 @@ export default function Onboarding() {
       // setup_wizard_completed=true so the modal never shows afterwards.
       if (currentStepDef.id === 'performance') {
         try {
-          await completeSetup(perfProfile ?? 'balanced')
+          await completeSetup(perfProfile ?? 'balanced');
         } catch {
-          toast(t('performance_step.apply_failed'), 'error')
+          toast(t('performance_step.apply_failed'), 'error');
         }
-        setStep((s) => s + 1)
-        return
+        setStep(s => s + 1);
+        return;
       }
 
-      const toSave = buildOnboardingPayload(values, setupMode)
+      const toSave = buildOnboardingPayload(values, setupMode);
 
       if (currentStepDef.id === 'standalone') {
-        toSave.standalone_enabled = 'true'
-        await updateConfig(toSave)
+        toSave.standalone_enabled = 'true';
+        await updateConfig(toSave);
         // Save folders concurrently so one bad path doesn't block the rest (B11).
         const folderPayloads = standaloneFolders
-          .filter((f) => f.path.trim())
-          .map((folder) => saveWatchedFolder({
-            path: folder.path.trim(),
-            label: folder.label.trim(),
-            media_type: 'auto',
-            enabled: true,
-          }))
-        const folderResults = await Promise.allSettled(folderPayloads)
-        const rejected = folderResults.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+          .filter(f => f.path.trim())
+          .map(folder =>
+            saveWatchedFolder({
+              path: folder.path.trim(),
+              label: folder.label.trim(),
+              media_type: 'auto',
+              enabled: true,
+            })
+          );
+        const folderResults = await Promise.allSettled(folderPayloads);
+        const rejected = folderResults.filter(
+          (r): r is PromiseRejectedResult => r.status === 'rejected'
+        );
         if (rejected.length > 0) {
           // Show why (e.g. a folder outside the media folder), not just how many.
-          toast(apiErrorMessage(rejected[0].reason, t('errors.folder_save', { count: rejected.length })), 'error')
+          toast(
+            apiErrorMessage(
+              rejected[0].reason,
+              t('errors.folder_save', { count: rejected.length })
+            ),
+            'error'
+          );
         }
       } else {
-        await updateConfig(toSave)
+        await updateConfig(toSave);
       }
 
       if (currentStepDef.id === 'mediaservers' && msInstances.length > 0) {
-        await saveMediaServerInstances(msInstances)
+        await saveMediaServerInstances(msInstances);
       }
 
-      setStep((s) => s + 1)
+      setStep(s => s + 1);
     } catch (err) {
       // Say why (e.g. "Invalid URL for ollama_url: …"), not just that it failed.
-      toast(apiErrorMessage(err, t('errors.save_failed')), 'error')
+      toast(apiErrorMessage(err, t('errors.save_failed')), 'error');
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   // Inline connection test for arr-step credentials. Sonarr/Radarr have a
   // dedicated `/instances/test` endpoint that accepts {url, api_key} so we can
   // validate without persisting the value first.
   const runConnectionTest = async (which: 'sonarr' | 'radarr') => {
-    const url = which === 'sonarr' ? values.sonarr_url : values.radarr_url
-    const api_key = which === 'sonarr' ? values.sonarr_api_key : values.radarr_api_key
-    if (!url || !api_key) return
-    setTesting(which)
+    const url = which === 'sonarr' ? values.sonarr_url : values.radarr_url;
+    const api_key = which === 'sonarr' ? values.sonarr_api_key : values.radarr_api_key;
+    if (!url || !api_key) return;
+    setTesting(which);
     try {
-      const fn = which === 'sonarr' ? testSonarrInstance : testRadarrInstance
-      const result = await fn({ url, api_key })
-      toast(`${which}: ${result.message || (result.healthy ? 'OK' : 'Error')}`, result.healthy ? 'success' : 'error')
+      const fn = which === 'sonarr' ? testSonarrInstance : testRadarrInstance;
+      const result = await fn({ url, api_key });
+      toast(
+        `${which}: ${result.message || (result.healthy ? 'OK' : 'Error')}`,
+        result.healthy ? 'success' : 'error'
+      );
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      toast(`${which}: ${msg}`, 'error')
+      const msg = err instanceof Error ? err.message : String(err);
+      toast(`${which}: ${msg}`, 'error');
     } finally {
-      setTesting(null)
+      setTesting(null);
     }
-  }
+  };
 
   // TMDB/TVDB tests require the key to be persisted first (the backend test_fn
   // looks up the client from saved config). Persist then test.
   const runApiKeyTest = async (service: 'tmdb' | 'tvdb') => {
-    const key = service === 'tmdb' ? values.tmdb_api_key : values.tvdb_api_key
-    if (!key) return
-    setTesting(service)
+    const key = service === 'tmdb' ? values.tmdb_api_key : values.tvdb_api_key;
+    if (!key) return;
+    setTesting(service);
     try {
-      await updateConfig({ [`${service}_api_key`]: key })
-      const result = await testApiKey(service)
-      toast(`${service}: ${result.message}`, result.success ? 'success' : 'error')
+      await updateConfig({ [`${service}_api_key`]: key });
+      const result = await testApiKey(service);
+      toast(`${service}: ${result.message}`, result.success ? 'success' : 'error');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      toast(`${service}: ${msg}`, 'error')
+      const msg = err instanceof Error ? err.message : String(err);
+      toast(`${service}: ${msg}`, 'error');
     } finally {
-      setTesting(null)
+      setTesting(null);
     }
-  }
+  };
 
   const startScan = async () => {
     try {
       if (setupMode === 'standalone') {
-        await triggerStandaloneScan()
-        setScanStarted(true)
-        toast(t('scan_step.standalone_scan_started'))
+        await triggerStandaloneScan();
+        setScanStarted(true);
+        toast(t('scan_step.standalone_scan_started'));
       } else {
-        const { refreshWanted } = await import('@/api/client')
-        await refreshWanted()
-        setScanStarted(true)
-        toast(t('scan_step.wanted_scan_started'))
+        const { refreshWanted } = await import('@/api/client');
+        await refreshWanted();
+        setScanStarted(true);
+        toast(t('scan_step.wanted_scan_started'));
       }
     } catch {
-      toast(t('scan_step.scan_failed'), 'error')
+      toast(t('scan_step.scan_failed'), 'error');
     }
-  }
+  };
 
   const finish = async () => {
     try {
-      await completeOnboarding()
-      navigate('/')
+      await completeOnboarding();
+      navigate('/');
     } catch {
       // Don't swallow — user needs to know finalisation failed so they can retry (B6).
-      toast(t('errors.complete_failed'), 'error')
+      toast(t('errors.complete_failed'), 'error');
     }
-  }
+  };
 
   // "Skip Setup" should still mark onboarding complete on the backend; otherwise
   // the wizard is shown again on the next visit and any partially-saved config
   // is left in limbo (N2).
   const skipSetup = async () => {
     try {
-      await completeOnboarding()
+      await completeOnboarding();
     } catch {
       // best-effort: navigation still happens so the user is unblocked.
     }
-    navigate('/')
-  }
+    navigate('/');
+  };
 
   // Switching setup mode mid-flow used to leave stale credentials in `values`
   // that would later be POSTed by saveAndNext (B16). Clear keys that no longer
   // apply when the user picks a different mode card.
   const chooseSetupMode = (mode: 'arr' | 'standalone') => {
-    setSetupMode(mode)
-    setStep(1)
-    setValues((v) => {
-      const next = { ...v }
-      const clearKeys = mode === 'arr' ? STANDALONE_ONLY_KEYS : ARR_ONLY_KEYS
-      for (const k of clearKeys) next[k as keyof typeof next] = ''
-      return next
-    })
-  }
+    setSetupMode(mode);
+    setStep(1);
+    setValues(v => {
+      const next = { ...v };
+      const clearKeys = mode === 'arr' ? STANDALONE_ONLY_KEYS : ARR_ONLY_KEYS;
+      for (const k of clearKeys) next[k as keyof typeof next] = '';
+      return next;
+    });
+  };
 
   // Media server helpers
   const addMediaServer = (serverType: MediaServerType) => {
@@ -379,72 +498,78 @@ export default function Onboarding() {
       type: serverType.name,
       name: serverType.display_name,
       enabled: true,
-    }
+    };
     for (const field of serverType.config_fields) {
-      newInst[field.key] = field.default ?? ''
+      newInst[field.key] = field.default ?? '';
     }
-    msInstanceIds.current = [...msInstanceIds.current, nextUid()]
-    setMsInstances((prev) => [...prev, newInst])
-  }
+    msInstanceIds.current = [...msInstanceIds.current, nextUid()];
+    setMsInstances(prev => [...prev, newInst]);
+  };
 
   const updateMsField = (idx: number, key: string, value: unknown) => {
-    setMsInstances((prev) => {
-      const updated = [...prev]
-      updated[idx] = { ...updated[idx], [key]: value }
-      return updated
-    })
-  }
+    setMsInstances(prev => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], [key]: value };
+      return updated;
+    });
+  };
 
   const removeMsInstance = (idx: number) => {
-    const removedId = msInstanceIds.current[idx]
-    msInstanceIds.current = msInstanceIds.current.filter((_, i) => i !== idx)
-    setMsInstances((prev) => prev.filter((_, i) => i !== idx))
+    const removedId = msInstanceIds.current[idx];
+    msInstanceIds.current = msInstanceIds.current.filter((_, i) => i !== idx);
+    setMsInstances(prev => prev.filter((_, i) => i !== idx));
     // Clean up companion state keyed by the removed uid so leftover entries
     // don't bleed onto a future row with the same array index (N1).
     if (removedId) {
-      setMsTestResults((prev) => {
-        const next = { ...prev }
-        delete next[removedId]
-        return next
-      })
-      setMsShowPasswords((prev) => {
-        const next: Record<string, boolean> = {}
+      setMsTestResults(prev => {
+        const next = { ...prev };
+        delete next[removedId];
+        return next;
+      });
+      setMsShowPasswords(prev => {
+        const next: Record<string, boolean> = {};
         for (const [k, v] of Object.entries(prev)) {
-          if (!k.startsWith(`${removedId}-`)) next[k] = v
+          if (!k.startsWith(`${removedId}-`)) next[k] = v;
         }
-        return next
-      })
+        return next;
+      });
     }
-  }
+  };
 
   const testMsInstance = async (idx: number) => {
-    const inst = msInstances[idx]
-    const uid = msInstanceIds.current[idx]
-    if (!uid) return
-    setMsTestResults((prev) => ({ ...prev, [uid]: 'testing' }))
+    const inst = msInstances[idx];
+    const uid = msInstanceIds.current[idx];
+    if (!uid) return;
+    setMsTestResults(prev => ({ ...prev, [uid]: 'testing' }));
     try {
-      const result = await testMediaServer(inst as Record<string, unknown>)
-      setMsTestResults((prev) => ({ ...prev, [uid]: result }))
+      const result = await testMediaServer(inst as Record<string, unknown>);
+      setMsTestResults(prev => ({ ...prev, [uid]: result }));
       if (result.healthy) {
-        toast(`${inst.name}: ${t('mediaservers_step.connection_successful')}`)
+        toast(`${inst.name}: ${t('mediaservers_step.connection_successful')}`);
       } else {
-        toast(`${inst.name}: ${result.message}`, 'error')
+        toast(`${inst.name}: ${result.message}`, 'error');
       }
     } catch {
-      setMsTestResults((prev) => ({ ...prev, [uid]: { healthy: false, message: t('mediaservers_step.test_failed') } }))
-      toast(`${inst.name}: ${t('mediaservers_step.test_failed')}`, 'error')
+      setMsTestResults(prev => ({
+        ...prev,
+        [uid]: { healthy: false, message: t('mediaservers_step.test_failed') },
+      }));
+      toast(`${inst.name}: ${t('mediaservers_step.test_failed')}`, 'error');
     }
-  }
+  };
 
   // Helper that resolves a `values` key to a controlled-input prop pair, so
   // each <Field /> only needs to know its target key once.
   const fieldFor = (keyName: keyof typeof values) => ({
     value: values[keyName] ?? '',
     onChange: (v: string) => set(keyName, v),
-  })
+  });
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
+    <div
+      className="min-h-screen flex items-center justify-center p-6"
+      style={{ backgroundColor: 'var(--bg-primary)' }}
+    >
       {/* Shared "form" width tier, not a bespoke max-w-xl: the wizard carries
           real content (library type, scheduler profile) that was cramped into
           576px on any desktop screen. */}
@@ -487,15 +612,16 @@ export default function Onboarding() {
         >
           <div className="flex items-center gap-3">
             {(() => {
-              const Icon = currentStepDef.icon
-              return <Icon size={20} style={{ color: 'var(--accent)' }} />
+              const Icon = currentStepDef.icon;
+              return <Icon size={20} style={{ color: 'var(--accent)' }} />;
             })()}
             <div>
               <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
                 {t(currentStepDef.titleKey)}
               </h2>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                {t('step_info', { step: step + 1, total: visibleSteps.length })} &mdash; {t(currentStepDef.descKey)}
+                {t('step_info', { step: step + 1, total: visibleSteps.length })} &mdash;{' '}
+                {t(currentStepDef.descKey)}
               </p>
             </div>
           </div>
@@ -509,14 +635,22 @@ export default function Onboarding() {
                   className="rounded-lg p-4 text-left space-y-2 transition-all duration-200"
                   style={{
                     backgroundColor: 'var(--bg-primary)',
-                    border: setupMode === 'arr' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                    border:
+                      setupMode === 'arr' ? '2px solid var(--accent)' : '1px solid var(--border)',
                   }}
-                  onMouseEnter={(e) => { if (setupMode !== 'arr') e.currentTarget.style.borderColor = 'var(--accent-dim)' }}
-                  onMouseLeave={(e) => { if (setupMode !== 'arr') e.currentTarget.style.borderColor = 'var(--border)' }}
+                  onMouseEnter={e => {
+                    if (setupMode !== 'arr')
+                      e.currentTarget.style.borderColor = 'var(--accent-dim)';
+                  }}
+                  onMouseLeave={e => {
+                    if (setupMode !== 'arr') e.currentTarget.style.borderColor = 'var(--border)';
+                  }}
                 >
                   <div className="flex items-center justify-between">
                     <Server size={20} style={{ color: 'var(--accent)' }} />
-                    {setupMode === 'arr' && <CheckCircle size={16} style={{ color: 'var(--accent)' }} />}
+                    {setupMode === 'arr' && (
+                      <CheckCircle size={16} style={{ color: 'var(--accent)' }} />
+                    )}
                   </div>
                   <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
                     {t('mode_step.arr_title')}
@@ -532,14 +666,25 @@ export default function Onboarding() {
                   className="rounded-lg p-4 text-left space-y-2 transition-all duration-200"
                   style={{
                     backgroundColor: 'var(--bg-primary)',
-                    border: setupMode === 'standalone' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                    border:
+                      setupMode === 'standalone'
+                        ? '2px solid var(--accent)'
+                        : '1px solid var(--border)',
                   }}
-                  onMouseEnter={(e) => { if (setupMode !== 'standalone') e.currentTarget.style.borderColor = 'var(--accent-dim)' }}
-                  onMouseLeave={(e) => { if (setupMode !== 'standalone') e.currentTarget.style.borderColor = 'var(--border)' }}
+                  onMouseEnter={e => {
+                    if (setupMode !== 'standalone')
+                      e.currentTarget.style.borderColor = 'var(--accent-dim)';
+                  }}
+                  onMouseLeave={e => {
+                    if (setupMode !== 'standalone')
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                  }}
                 >
                   <div className="flex items-center justify-between">
                     <FolderOpen size={20} style={{ color: 'var(--accent)' }} />
-                    {setupMode === 'standalone' && <CheckCircle size={16} style={{ color: 'var(--accent)' }} />}
+                    {setupMode === 'standalone' && (
+                      <CheckCircle size={16} style={{ color: 'var(--accent)' }} />
+                    )}
                   </div>
                   <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
                     {t('mode_step.standalone_title')}
@@ -558,11 +703,11 @@ export default function Onboarding() {
                 {t('library_step.question')}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {([
+                {[
                   { type: 'anime' as const, icon: Sparkles },
                   { type: 'movies' as const, icon: Clapperboard },
                   { type: 'mixed' as const, icon: Library },
-                ]).map(({ type, icon: TypeIcon }) => (
+                ].map(({ type, icon: TypeIcon }) => (
                   <button
                     key={type}
                     data-testid={`library-type-${type}`}
@@ -570,12 +715,17 @@ export default function Onboarding() {
                     className="rounded-lg p-4 text-left space-y-2 transition-all duration-200"
                     style={{
                       backgroundColor: 'var(--bg-primary)',
-                      border: libraryType === type ? '2px solid var(--accent)' : '1px solid var(--border)',
+                      border:
+                        libraryType === type
+                          ? '2px solid var(--accent)'
+                          : '1px solid var(--border)',
                     }}
                   >
                     <div className="flex items-center justify-between">
                       <TypeIcon size={20} style={{ color: 'var(--accent)' }} />
-                      {libraryType === type && <CheckCircle size={16} style={{ color: 'var(--accent)' }} />}
+                      {libraryType === type && (
+                        <CheckCircle size={16} style={{ color: 'var(--accent)' }} />
+                      )}
                     </div>
                     <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
                       {t(`library_step.${type}_title`)}
@@ -595,9 +745,9 @@ export default function Onboarding() {
           {currentStepDef.id === 'performance' && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {(['light', 'balanced', 'aggressive'] as const).map((profile) => {
-                  const recommended = benchmark?.recommended_profile === profile
-                  const selected = perfProfile === profile
+                {(['light', 'balanced', 'aggressive'] as const).map(profile => {
+                  const recommended = benchmark?.recommended_profile === profile;
+                  const selected = perfProfile === profile;
                   return (
                     <button
                       key={profile}
@@ -610,7 +760,10 @@ export default function Onboarding() {
                       }}
                     >
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        <span
+                          className="text-sm font-semibold"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
                           {t(`performance_step.${profile}_title`)}
                         </span>
                         {recommended && (
@@ -626,12 +779,15 @@ export default function Onboarding() {
                         {t(`performance_step.${profile}_description`)}
                       </div>
                     </button>
-                  )
+                  );
                 })}
               </div>
               {benchmark && (
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {t('performance_step.detected', { cpu: benchmark.cpu_count, ram: benchmark.ram_gb })}
+                  {t('performance_step.detected', {
+                    cpu: benchmark.cpu_count,
+                    ram: benchmark.ram_gb,
+                  })}
                 </p>
               )}
             </div>
@@ -639,28 +795,60 @@ export default function Onboarding() {
 
           {currentStepDef.id === 'arr' && (
             <div className="space-y-4">
-              <Field label={t('arr_step.sonarr_url')} placeholder="http://localhost:8989" {...fieldFor('sonarr_url')} />
-              <Field label={t('arr_step.sonarr_api_key')} type="password" {...fieldFor('sonarr_api_key')} />
+              <Field
+                label={t('arr_step.sonarr_url')}
+                placeholder="http://localhost:8989"
+                {...fieldFor('sonarr_url')}
+              />
+              <Field
+                label={t('arr_step.sonarr_api_key')}
+                type="password"
+                {...fieldFor('sonarr_api_key')}
+              />
               <button
                 type="button"
                 onClick={() => runConnectionTest('sonarr')}
                 disabled={!values.sonarr_url || !values.sonarr_api_key || testing === 'sonarr'}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all duration-150 disabled:opacity-50"
-                style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-primary)' }}
+                style={{
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'var(--bg-primary)',
+                }}
               >
-                {testing === 'sonarr' ? <Loader2 size={12} className="animate-spin" /> : <TestTube size={12} />}
+                {testing === 'sonarr' ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <TestTube size={12} />
+                )}
                 {t('arr_step.test_sonarr')}
               </button>
-              <Field label={t('arr_step.radarr_url')} placeholder="http://localhost:7878" {...fieldFor('radarr_url')} />
-              <Field label={t('arr_step.radarr_api_key')} type="password" {...fieldFor('radarr_api_key')} />
+              <Field
+                label={t('arr_step.radarr_url')}
+                placeholder="http://localhost:7878"
+                {...fieldFor('radarr_url')}
+              />
+              <Field
+                label={t('arr_step.radarr_api_key')}
+                type="password"
+                {...fieldFor('radarr_api_key')}
+              />
               <button
                 type="button"
                 onClick={() => runConnectionTest('radarr')}
                 disabled={!values.radarr_url || !values.radarr_api_key || testing === 'radarr'}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all duration-150 disabled:opacity-50"
-                style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-primary)' }}
+                style={{
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'var(--bg-primary)',
+                }}
               >
-                {testing === 'radarr' ? <Loader2 size={12} className="animate-spin" /> : <TestTube size={12} />}
+                {testing === 'radarr' ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <TestTube size={12} />
+                )}
                 {t('arr_step.test_radarr')}
               </button>
             </div>
@@ -668,30 +856,57 @@ export default function Onboarding() {
 
           {currentStepDef.id === 'standalone' && (
             <div className="space-y-4">
-              <Field label={t('standalone_step.tmdb_api_key')} type="password" {...fieldFor('tmdb_api_key')} />
+              <Field
+                label={t('standalone_step.tmdb_api_key')}
+                type="password"
+                {...fieldFor('tmdb_api_key')}
+              />
               <button
                 type="button"
                 onClick={() => runApiKeyTest('tmdb')}
                 disabled={!values.tmdb_api_key || testing === 'tmdb'}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all duration-150 disabled:opacity-50"
-                style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-primary)' }}
+                style={{
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'var(--bg-primary)',
+                }}
               >
-                {testing === 'tmdb' ? <Loader2 size={12} className="animate-spin" /> : <TestTube size={12} />}
+                {testing === 'tmdb' ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <TestTube size={12} />
+                )}
                 {t('standalone_step.test_tmdb')}
               </button>
-              <Field label={t('standalone_step.tvdb_api_key')} type="password" {...fieldFor('tvdb_api_key')} />
+              <Field
+                label={t('standalone_step.tvdb_api_key')}
+                type="password"
+                {...fieldFor('tvdb_api_key')}
+              />
               <button
                 type="button"
                 onClick={() => runApiKeyTest('tvdb')}
                 disabled={!values.tvdb_api_key || testing === 'tvdb'}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all duration-150 disabled:opacity-50"
-                style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-primary)' }}
+                style={{
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'var(--bg-primary)',
+                }}
               >
-                {testing === 'tvdb' ? <Loader2 size={12} className="animate-spin" /> : <TestTube size={12} />}
+                {testing === 'tvdb' ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <TestTube size={12} />
+                )}
                 {t('standalone_step.test_tvdb')}
               </button>
               <div className="space-y-2">
-                <label className="block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                <label
+                  className="block text-sm font-medium"
+                  style={{ color: 'var(--text-primary)' }}
+                >
                   {t('standalone_step.media_folders')}
                 </label>
                 {standaloneFolders.map((folder, idx) => (
@@ -699,17 +914,17 @@ export default function Onboarding() {
                     <input
                       type="text"
                       value={folder.path}
-                      onChange={(e) => {
-                        const updated = [...standaloneFolders]
-                        updated[idx] = { ...updated[idx], path: e.target.value }
-                        setStandaloneFolders(updated)
+                      onChange={e => {
+                        const updated = [...standaloneFolders];
+                        updated[idx] = { ...updated[idx], path: e.target.value };
+                        setStandaloneFolders(updated);
                       }}
                       placeholder="/path/to/media"
                       className="flex-1 px-3 py-2 rounded-md text-sm focus:outline-none"
                       style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
                     />
                     <button
-                      onClick={() => setStandaloneFolders((prev) => prev.filter((_, i) => i !== idx))}
+                      onClick={() => setStandaloneFolders(prev => prev.filter((_, i) => i !== idx))}
                       className="p-1.5 rounded transition-colors"
                       style={{ color: 'var(--text-muted)' }}
                     >
@@ -721,22 +936,28 @@ export default function Onboarding() {
                   <input
                     type="text"
                     value={newFolderPath}
-                    onChange={(e) => setNewFolderPath(e.target.value)}
+                    onChange={e => setNewFolderPath(e.target.value)}
                     placeholder="/path/to/media"
                     className="flex-1 px-3 py-2 rounded-md text-sm focus:outline-none"
                     style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
-                    onKeyDown={(e) => {
+                    onKeyDown={e => {
                       if (e.key === 'Enter' && newFolderPath.trim()) {
-                        setStandaloneFolders((prev) => [...prev, { path: newFolderPath.trim(), label: '' }])
-                        setNewFolderPath('')
+                        setStandaloneFolders(prev => [
+                          ...prev,
+                          { path: newFolderPath.trim(), label: '' },
+                        ]);
+                        setNewFolderPath('');
                       }
                     }}
                   />
                   <button
                     onClick={() => {
                       if (newFolderPath.trim()) {
-                        setStandaloneFolders((prev) => [...prev, { path: newFolderPath.trim(), label: '' }])
-                        setNewFolderPath('')
+                        setStandaloneFolders(prev => [
+                          ...prev,
+                          { path: newFolderPath.trim(), label: '' },
+                        ]);
+                        setNewFolderPath('');
                       }
                     }}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150"
@@ -769,29 +990,34 @@ export default function Onboarding() {
           {currentStepDef.id === 'language' && (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                <label
+                  className="block text-sm font-medium"
+                  style={{ color: 'var(--text-primary)' }}
+                >
                   {t('language_step.interface_language')}
                 </label>
                 <select
                   data-testid="select-interface-language"
                   value={values.interface_language}
-                  onChange={(e) => {
-                    const code = e.target.value
-                    set('interface_language', code)
+                  onChange={e => {
+                    const code = e.target.value;
+                    set('interface_language', code);
                     // Switch the wizard itself immediately — the choice is
                     // what the user should read for the rest of setup. Persist
                     // it right away like Settings → General does: the global
                     // config sync re-applies the stored interface_language on
                     // every refresh, so an unsaved choice would snap the UI
                     // back before the step save. The Next save re-sends it.
-                    i18n.changeLanguage(code)
-                    void updateConfig({ interface_language: code }).catch(() => {})
+                    i18n.changeLanguage(code);
+                    void updateConfig({ interface_language: code }).catch(() => {});
                   }}
                   className="w-full px-3 py-2 rounded-md text-sm focus:outline-none"
                   style={inputStyle}
                 >
-                  {INTERFACE_LANGUAGE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
+                  {INTERFACE_LANGUAGE_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
                   ))}
                 </select>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -809,9 +1035,21 @@ export default function Onboarding() {
               <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                 {t('providers_step.info')}
               </p>
-              <Field label={t('providers_step.opensubtitles_api_key')} type="password" {...fieldFor('opensubtitles_api_key')} />
-              <Field label={t('providers_step.jimaku_api_key')} type="password" {...fieldFor('jimaku_api_key')} />
-              <Field label={t('providers_step.subdl_api_key')} type="password" {...fieldFor('subdl_api_key')} />
+              <Field
+                label={t('providers_step.opensubtitles_api_key')}
+                type="password"
+                {...fieldFor('opensubtitles_api_key')}
+              />
+              <Field
+                label={t('providers_step.jimaku_api_key')}
+                type="password"
+                {...fieldFor('jimaku_api_key')}
+              />
+              <Field
+                label={t('providers_step.subdl_api_key')}
+                type="password"
+                {...fieldFor('subdl_api_key')}
+              />
             </div>
           )}
 
@@ -826,12 +1064,16 @@ export default function Onboarding() {
                   type="checkbox"
                   id="automation_enabled"
                   checked={values.automation_enabled === 'true'}
-                  onChange={(e) => set('automation_enabled', e.target.checked ? 'true' : 'false')}
+                  onChange={e => set('automation_enabled', e.target.checked ? 'true' : 'false')}
                   className="mt-0.5 h-4 w-4 rounded"
                   style={{ accentColor: 'var(--accent)' }}
                 />
                 <div className="flex-1 space-y-1">
-                  <label htmlFor="automation_enabled" className="block text-sm font-medium cursor-pointer" style={{ color: 'var(--text-primary)' }}>
+                  <label
+                    htmlFor="automation_enabled"
+                    className="block text-sm font-medium cursor-pointer"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
                     {t('automation_step.auto_search_label')}
                   </label>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -843,12 +1085,15 @@ export default function Onboarding() {
               {/* Interval select — only shown when automation enabled */}
               {values.automation_enabled === 'true' && (
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                  <label
+                    className="block text-sm font-medium"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
                     {t('automation_step.interval_label')}
                   </label>
                   <select
                     value={values.search_interval_hours}
-                    onChange={(e) => set('search_interval_hours', e.target.value)}
+                    onChange={e => set('search_interval_hours', e.target.value)}
                     className="w-full px-3 py-2 rounded-md text-sm focus:outline-none"
                     style={inputStyle}
                   >
@@ -870,12 +1115,16 @@ export default function Onboarding() {
                   type="checkbox"
                   id="upgrade_enabled"
                   checked={values.upgrade_enabled === 'true'}
-                  onChange={(e) => set('upgrade_enabled', e.target.checked ? 'true' : 'false')}
+                  onChange={e => set('upgrade_enabled', e.target.checked ? 'true' : 'false')}
                   className="mt-0.5 h-4 w-4 rounded"
                   style={{ accentColor: 'var(--accent)' }}
                 />
                 <div className="flex-1 space-y-1">
-                  <label htmlFor="upgrade_enabled" className="block text-sm font-medium cursor-pointer" style={{ color: 'var(--text-primary)' }}>
+                  <label
+                    htmlFor="upgrade_enabled"
+                    className="block text-sm font-medium cursor-pointer"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
                     {t('automation_step.upgrade_label')}
                   </label>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -887,7 +1136,11 @@ export default function Onboarding() {
               {/* Info box */}
               <div
                 className="flex items-start gap-2 p-3 rounded-lg text-xs"
-                style={{ backgroundColor: 'var(--accent-bg)', border: '1px solid var(--accent-dim)', color: 'var(--text-secondary)' }}
+                style={{
+                  backgroundColor: 'var(--accent-bg)',
+                  border: '1px solid var(--accent-dim)',
+                  color: 'var(--text-secondary)',
+                }}
               >
                 <Zap size={12} className="mt-0.5 shrink-0" style={{ color: 'var(--accent)' }} />
                 <span>{t('automation_step.settings_hint')}</span>
@@ -903,7 +1156,7 @@ export default function Onboarding() {
 
               {/* Type selection buttons */}
               <div className="flex flex-wrap gap-2">
-                {msTypes.map((t) => (
+                {msTypes.map(t => (
                   <button
                     key={t.name}
                     onClick={() => addMediaServer(t)}
@@ -922,19 +1175,25 @@ export default function Onboarding() {
 
               {/* Configured instances */}
               {msInstances.map((inst, idx) => {
-                const typeInfo = msTypes.find((t) => t.name === inst.type)
-                const uid = msInstanceIds.current[idx] ?? `idx-${idx}`
-                const testResult = msTestResults[uid]
+                const typeInfo = msTypes.find(t => t.name === inst.type);
+                const uid = msInstanceIds.current[idx] ?? `idx-${idx}`;
+                const testResult = msTestResults[uid];
 
                 return (
                   <div
                     key={uid}
                     className="rounded-lg p-4 space-y-3"
-                    style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border)' }}
+                    style={{
+                      backgroundColor: 'var(--bg-primary)',
+                      border: '1px solid var(--border)',
+                    }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        <span
+                          className="text-sm font-semibold"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
                           {inst.name}
                         </span>
                         <span
@@ -957,26 +1216,39 @@ export default function Onboarding() {
                     <input
                       type="text"
                       value={String(inst.name ?? '')}
-                      onChange={(e) => updateMsField(idx, 'name', e.target.value)}
+                      onChange={e => updateMsField(idx, 'name', e.target.value)}
                       placeholder={t('mediaservers_step.server_name')}
                       className="w-full px-2.5 py-1.5 rounded text-sm focus:outline-none"
                       style={inputStyle}
                     />
 
                     {/* Dynamic config fields */}
-                    {typeInfo?.config_fields.map((field) => {
-                      const pwKey = `${uid}-${field.key}`
+                    {typeInfo?.config_fields.map(field => {
+                      const pwKey = `${uid}-${field.key}`;
                       return (
                         <div key={field.key} className="space-y-1">
-                          <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                            {field.label} {field.required && <span style={{ color: 'var(--error)' }}>*</span>}
+                          <label
+                            className="text-xs font-medium"
+                            style={{ color: 'var(--text-secondary)' }}
+                          >
+                            {field.label}{' '}
+                            {field.required && <span style={{ color: 'var(--error)' }}>*</span>}
                           </label>
                           <div className="flex items-center gap-1.5">
                             <input
-                              type={field.type === 'password' && !msShowPasswords[pwKey] ? 'password' : 'text'}
+                              type={
+                                field.type === 'password' && !msShowPasswords[pwKey]
+                                  ? 'password'
+                                  : 'text'
+                              }
                               value={String(inst[field.key] ?? '')}
-                              onChange={(e) => updateMsField(idx, field.key, e.target.value)}
-                              placeholder={field.default || (field.required ? t('mediaservers_step.required') : t('mediaservers_step.optional'))}
+                              onChange={e => updateMsField(idx, field.key, e.target.value)}
+                              placeholder={
+                                field.default ||
+                                (field.required
+                                  ? t('mediaservers_step.required')
+                                  : t('mediaservers_step.optional'))
+                              }
                               autoComplete={field.type === 'password' ? 'new-password' : 'off'}
                               spellCheck={false}
                               className="flex-1 px-2.5 py-1.5 rounded text-sm focus:outline-none"
@@ -984,16 +1256,22 @@ export default function Onboarding() {
                             />
                             {field.type === 'password' && (
                               <button
-                                onClick={() => setMsShowPasswords((p) => ({ ...p, [pwKey]: !p[pwKey] }))}
+                                onClick={() =>
+                                  setMsShowPasswords(p => ({ ...p, [pwKey]: !p[pwKey] }))
+                                }
                                 className="p-1.5 rounded"
-                                style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', backgroundColor: 'var(--bg-primary)' }}
+                                style={{
+                                  border: '1px solid var(--border)',
+                                  color: 'var(--text-muted)',
+                                  backgroundColor: 'var(--bg-primary)',
+                                }}
                               >
                                 {msShowPasswords[pwKey] ? <EyeOff size={12} /> : <Eye size={12} />}
                               </button>
                             )}
                           </div>
                         </div>
-                      )
+                      );
                     })}
 
                     {/* Test button and result */}
@@ -1015,24 +1293,34 @@ export default function Onboarding() {
                         {t('common:actions.test')}
                       </button>
                       {testResult && testResult !== 'testing' && (
-                        <span className="text-xs" style={{ color: testResult.healthy ? 'var(--success)' : 'var(--error)' }}>
+                        <span
+                          className="text-xs"
+                          style={{ color: testResult.healthy ? 'var(--success)' : 'var(--error)' }}
+                        >
                           {testResult.healthy ? 'OK' : 'Error'}: {testResult.message}
                         </span>
                       )}
                     </div>
                   </div>
-                )
+                );
               })}
 
               {msInstances.length === 0 && msTypes.length === 0 && !msTypesError && (
                 <div className="text-center py-4">
-                  <Loader2 size={16} className="animate-spin mx-auto" style={{ color: 'var(--accent)' }} />
+                  <Loader2
+                    size={16}
+                    className="animate-spin mx-auto"
+                    style={{ color: 'var(--accent)' }}
+                  />
                 </div>
               )}
               {msTypesError && (
                 <div
                   className="flex items-center gap-2 p-3 rounded-lg text-xs"
-                  style={{ backgroundColor: 'var(--error-bg, var(--bg-primary))', border: '1px solid var(--error)' }}
+                  style={{
+                    backgroundColor: 'var(--error-bg, var(--bg-primary))',
+                    border: '1px solid var(--error)',
+                  }}
                 >
                   <AlertCircle size={14} style={{ color: 'var(--error)' }} />
                   <span className="flex-1" style={{ color: 'var(--text-primary)' }}>
@@ -1042,7 +1330,11 @@ export default function Onboarding() {
                     type="button"
                     onClick={loadMsTypes}
                     className="px-2 py-1 rounded text-xs"
-                    style={{ border: '1px solid var(--border)', color: 'var(--text-primary)', backgroundColor: 'var(--bg-primary)' }}
+                    style={{
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-primary)',
+                    }}
                   >
                     {tc('actions.retry')}
                   </button>
@@ -1066,7 +1358,10 @@ export default function Onboarding() {
                   {t('scan_step.start_scan')}
                 </button>
               ) : (
-                <div className="flex items-center justify-center gap-2" style={{ color: 'var(--success)' }}>
+                <div
+                  className="flex items-center justify-center gap-2"
+                  style={{ color: 'var(--success)' }}
+                >
                   <CheckCircle size={18} />
                   <span className="text-sm font-medium">{t('scan_step.scan_started')}</span>
                 </div>
@@ -1078,7 +1373,7 @@ export default function Onboarding() {
         {/* Navigation */}
         <div className="flex items-center justify-between">
           <button
-            onClick={() => step > 0 ? setStep((s) => s - 1) : skipSetup()}
+            onClick={() => (step > 0 ? setStep(s => s - 1) : skipSetup())}
             className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm"
             style={{ color: 'var(--text-muted)' }}
           >
@@ -1089,12 +1384,25 @@ export default function Onboarding() {
           {step < visibleSteps.length - 1 ? (
             <button
               onClick={saveAndNext}
-              disabled={saving || currentStepDef.id === 'mode' || (currentStepDef.id === 'library' && !libraryType)}
+              disabled={
+                saving ||
+                currentStepDef.id === 'mode' ||
+                (currentStepDef.id === 'library' && !libraryType)
+              }
               className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium text-white"
-              style={{ backgroundColor: currentStepDef.id === 'mode' || (currentStepDef.id === 'library' && !libraryType) ? 'var(--text-muted)' : 'var(--accent)' }}
+              style={{
+                backgroundColor:
+                  currentStepDef.id === 'mode' || (currentStepDef.id === 'library' && !libraryType)
+                    ? 'var(--text-muted)'
+                    : 'var(--accent)',
+              }}
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-              {currentStepDef.id === 'mediaservers' ? (msInstances.length > 0 ? t('navigation.save_next') : t('navigation.skip')) : t('navigation.next')}
+              {currentStepDef.id === 'mediaservers'
+                ? msInstances.length > 0
+                  ? t('navigation.save_next')
+                  : t('navigation.skip')
+                : t('navigation.next')}
               <ArrowRight size={14} />
             </button>
           ) : (
@@ -1110,5 +1418,5 @@ export default function Onboarding() {
         </div>
       </div>
     </div>
-  )
+  );
 }
