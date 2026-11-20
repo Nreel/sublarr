@@ -167,14 +167,34 @@ class TestLibraryHealthService:
     def test_translation_section(self, client):
         app = client.application
         now = datetime.now(UTC)
-        _add_backend_stats(app, "ollama", requests=10, failed=3, consecutive_failures=2, last_error="Connection refused")
+        _add_backend_stats(
+            app,
+            "ollama",
+            requests=10,
+            failed=3,
+            consecutive_failures=2,
+            last_error="Connection refused",
+        )
         _add_backend_stats(app, "azure", requests=5, failed=0, consecutive_failures=0)
-        _add_translation_event(app, "ollama", "error", now - timedelta(hours=2), error_type="LineCountMismatchError", error_msg="expected 4 lines, got 3")
+        _add_translation_event(
+            app,
+            "ollama",
+            "error",
+            now - timedelta(hours=2),
+            error_type="LineCountMismatchError",
+            error_msg="expected 4 lines, got 3",
+        )
         _add_translation_event(app, "ollama", "timeout", now - timedelta(hours=1))
         _add_translation_event(app, "ollama", "ok", now - timedelta(minutes=30))
         _add_translation_event(app, "ollama", "cancelled", now - timedelta(minutes=10))
         _add_translation_event(app, "azure", "error", now - timedelta(days=8))
-        _add_wanted(app, "Show T", status="failed", failure_kind="translation_error", error="translation failed")
+        _add_wanted(
+            app,
+            "Show T",
+            status="failed",
+            failure_kind="translation_error",
+            error="translation failed",
+        )
 
         resp = client.get("/api/v1/health/library")
         assert resp.status_code == 200

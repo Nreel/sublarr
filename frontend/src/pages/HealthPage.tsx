@@ -8,15 +8,21 @@
  * this block those errors were only visible behind one episode's History
  * button).
  */
-import { useQuery } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
-import { HeartPulse, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
-import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { StatTile } from '@/components/statistics/primitives'
-import { getLibraryHealth, type HealthProblemRow, type HealthProviderRow, type HealthTranslationBackend, type HealthTranslationError } from '@/api/system/healthLibrary'
-import { formatRelativeTime, formatProviderName } from '@/lib/utils'
+import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { HeartPulse, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { StatTile } from '@/components/statistics/primitives';
+import {
+  getLibraryHealth,
+  type HealthProblemRow,
+  type HealthProviderRow,
+  type HealthTranslationBackend,
+  type HealthTranslationError,
+} from '@/api/system/healthLibrary';
+import { formatRelativeTime, formatProviderName } from '@/lib/utils';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -24,7 +30,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h2 className="text-sm font-semibold text-secondary">{title}</h2>
       {children}
     </section>
-  )
+  );
 }
 
 function Th({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -36,72 +42,116 @@ function Th({ children, className = '' }: { children: ReactNode; className?: str
     >
       {children}
     </th>
-  )
+  );
 }
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-2 px-3 py-6 text-sm" style={{ color: 'var(--text-secondary)' }}>
+    <div
+      className="flex items-center gap-2 px-3 py-6 text-sm"
+      style={{ color: 'var(--text-secondary)' }}
+    >
       <CheckCircle2 size={15} style={{ color: 'var(--success)' }} />
       {label}
     </div>
-  )
+  );
 }
 
-function FailureKindBadge({ kind, status, t }: { kind: string | null; status: string; t: (key: string) => string }) {
-  const key = kind ?? status
-  const label = t(`failure.${key}`) === `failure.${key}` ? key : t(`failure.${key}`)
-  const isHard = kind === 'unsourceable' || status === 'failed'
+function FailureKindBadge({
+  kind,
+  status,
+  t,
+}: {
+  kind: string | null;
+  status: string;
+  t: (key: string) => string;
+}) {
+  const key = kind ?? status;
+  const label = t(`failure.${key}`) === `failure.${key}` ? key : t(`failure.${key}`);
+  const isHard = kind === 'unsourceable' || status === 'failed';
   return (
     <span
       className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase"
       style={{
-        backgroundColor: isHard ? 'color-mix(in srgb, var(--error) 12%, transparent)' : 'color-mix(in srgb, var(--warning) 12%, transparent)',
+        backgroundColor: isHard
+          ? 'color-mix(in srgb, var(--error) 12%, transparent)'
+          : 'color-mix(in srgb, var(--warning) 12%, transparent)',
         color: isHard ? 'var(--error)' : 'var(--warning)',
         fontFamily: 'var(--font-mono)',
       }}
     >
       {label}
     </span>
-  )
+  );
 }
 
 function ProblemRow({ item, t }: { item: HealthProblemRow; t: (key: string) => string }) {
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
       <td className="px-3 py-2">
-        <div className="text-sm font-medium truncate max-w-xs" style={{ color: 'var(--text-primary)' }}>{item.title}</div>
+        <div
+          className="text-sm font-medium truncate max-w-xs"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {item.title}
+        </div>
         {item.season_episode && (
-          <div className="text-[11px]" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{item.season_episode}</div>
+          <div
+            className="text-[11px]"
+            style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+          >
+            {item.season_episode}
+          </div>
         )}
       </td>
-      <td className="px-3 py-2 text-xs uppercase" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs uppercase"
+        style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+      >
         {item.target_language}
       </td>
       <td className="px-3 py-2">
         <FailureKindBadge kind={item.failure_kind} status={item.status} t={t} />
       </td>
-      <td className="px-3 py-2 text-xs truncate max-w-[240px] hidden md:table-cell" title={item.error} style={{ color: 'var(--text-secondary)' }}>
+      <td
+        className="px-3 py-2 text-xs truncate max-w-[240px] hidden md:table-cell"
+        title={item.error}
+        style={{ color: 'var(--text-secondary)' }}
+      >
         {item.error || '—'}
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums hidden sm:table-cell" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden sm:table-cell"
+        style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+      >
         {item.search_count}
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
         {item.updated_at ? formatRelativeTime(item.updated_at) : ''}
       </td>
     </tr>
-  )
+  );
 }
 
 function ProviderRow({ p, t }: { p: HealthProviderRow; t: (key: string) => string }) {
-  const stateColor = p.breaker_state === 'closed' && !p.auto_disabled ? 'var(--success)' : p.breaker_state === 'half_open' ? 'var(--warning)' : 'var(--error)'
+  const stateColor =
+    p.breaker_state === 'closed' && !p.auto_disabled
+      ? 'var(--success)'
+      : p.breaker_state === 'half_open'
+        ? 'var(--warning)'
+        : 'var(--error)';
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
       <td className="px-3 py-2">
         <div className="flex items-center gap-2">
           {p.degraded && <AlertTriangle size={13} style={{ color: 'var(--warning)' }} />}
-          <span className="text-sm font-medium capitalize" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+          <span
+            className="text-sm font-medium capitalize"
+            style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}
+          >
             {formatProviderName(p.provider)}
           </span>
         </div>
@@ -109,65 +159,115 @@ function ProviderRow({ p, t }: { p: HealthProviderRow; t: (key: string) => strin
       <td className="px-3 py-2">
         <span
           className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase"
-          style={{ backgroundColor: `color-mix(in srgb, ${stateColor} 12%, transparent)`, color: stateColor, fontFamily: 'var(--font-mono)' }}
+          style={{
+            backgroundColor: `color-mix(in srgb, ${stateColor} 12%, transparent)`,
+            color: stateColor,
+            fontFamily: 'var(--font-mono)',
+          }}
         >
           {p.auto_disabled ? t('providers.auto_disabled') : t(`providers.state_${p.breaker_state}`)}
         </span>
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums hidden sm:table-cell" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden sm:table-cell"
+        style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+      >
         {p.searches}
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums"
+        style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+      >
         {p.hit_rate != null ? `${Math.round(p.hit_rate * 100)}%` : '—'}
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums hidden md:table-cell" style={{ color: p.failed_downloads > 0 ? 'var(--warning)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden md:table-cell"
+        style={{
+          color: p.failed_downloads > 0 ? 'var(--warning)' : 'var(--text-muted)',
+          fontFamily: 'var(--font-mono)',
+        }}
+      >
         {p.failed_downloads}
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
         {p.breaker_failures}
       </td>
     </tr>
-  )
+  );
 }
 
 function TranslationBackendRow({ b }: { b: HealthTranslationBackend }) {
-  const broken = b.failed > 0 || b.consecutive_failures > 0
+  const broken = b.failed > 0 || b.consecutive_failures > 0;
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
       <td className="px-3 py-2">
         <div className="flex items-center gap-2">
           {broken && <AlertTriangle size={13} style={{ color: 'var(--warning)' }} />}
-          <span className="text-sm font-medium" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+          <span
+            className="text-sm font-medium"
+            style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}
+          >
             {b.backend}
           </span>
         </div>
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums hidden sm:table-cell" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden sm:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
         {b.requests}
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums" style={{ color: b.failed > 0 ? 'var(--error)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums"
+        style={{
+          color: b.failed > 0 ? 'var(--error)' : 'var(--text-muted)',
+          fontFamily: 'var(--font-mono)',
+        }}
+      >
         {b.failed}
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums" style={{ color: b.consecutive_failures > 0 ? 'var(--error)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums"
+        style={{
+          color: b.consecutive_failures > 0 ? 'var(--error)' : 'var(--text-muted)',
+          fontFamily: 'var(--font-mono)',
+        }}
+      >
         {b.consecutive_failures}
       </td>
-      <td className="px-3 py-2 text-xs truncate max-w-[240px] hidden md:table-cell" title={b.last_error} style={{ color: broken ? 'var(--error)' : 'var(--text-secondary)' }}>
+      <td
+        className="px-3 py-2 text-xs truncate max-w-[240px] hidden md:table-cell"
+        title={b.last_error}
+        style={{ color: broken ? 'var(--error)' : 'var(--text-secondary)' }}
+      >
         {b.last_error || '—'}
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
         {b.last_failure_at ? formatRelativeTime(b.last_failure_at) : '—'}
       </td>
     </tr>
-  )
+  );
 }
 
 function TranslationErrorRow({ e }: { e: HealthTranslationError }) {
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
-      <td className="px-3 py-2 text-sm font-medium" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-sm font-medium"
+        style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}
+      >
         {e.backend}
       </td>
-      <td className="px-3 py-2 text-xs uppercase" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs uppercase"
+        style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+      >
         {e.source_lang} → {e.target_lang}
       </td>
       <td className="px-3 py-2">
@@ -182,39 +282,49 @@ function TranslationErrorRow({ e }: { e: HealthTranslationError }) {
           {e.error_type || e.status}
         </span>
       </td>
-      <td className="px-3 py-2 text-xs truncate max-w-[240px] hidden md:table-cell" title={e.error_msg} style={{ color: 'var(--text-secondary)' }}>
+      <td
+        className="px-3 py-2 text-xs truncate max-w-[240px] hidden md:table-cell"
+        title={e.error_msg}
+        style={{ color: 'var(--text-secondary)' }}
+      >
         {e.error_msg || '—'}
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums hidden sm:table-cell" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden sm:table-cell"
+        style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+      >
         {e.lines_count}
       </td>
-      <td className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
         {e.started_at ? formatRelativeTime(e.started_at) : ''}
       </td>
     </tr>
-  )
+  );
 }
 
 export function HealthPage() {
-  const { t } = useTranslation('health')
+  const { t } = useTranslation('health');
 
   const { data, isLoading } = useQuery({
     queryKey: ['library-health'],
     queryFn: getLibraryHealth,
     refetchInterval: 60_000,
-  })
+  });
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-60" style={{ color: 'var(--text-muted)' }}>
         <Loader2 size={20} className="animate-spin" />
       </div>
-    )
+    );
   }
 
-  const totals = data?.totals
-  const degradedProviders = (data?.providers ?? []).filter((p) => p.degraded)
-  const healthyProviders = (data?.providers ?? []).filter((p) => !p.degraded)
+  const totals = data?.totals;
+  const degradedProviders = (data?.providers ?? []).filter(p => p.degraded);
+  const healthyProviders = (data?.providers ?? []).filter(p => !p.degraded);
 
   return (
     // Data surface — tables of problem items benefit from the full canvas, so
@@ -231,12 +341,18 @@ export function HealthPage() {
         <StatTile label={t('totals.providers_degraded')} value={totals?.providers_degraded ?? 0} />
         {/* Sat next to a reassuring zero before: "0 degraded" and "no provider
             activity recorded yet" are different statements (forgejo #17). */}
-        <StatTile label={t('totals.providers_no_activity')} value={totals?.providers_no_activity ?? 0} />
+        <StatTile
+          label={t('totals.providers_no_activity')}
+          value={totals?.providers_no_activity ?? 0}
+        />
       </div>
 
       {/* Series with missing subtitles */}
       <Section title={t('series.title')}>
-        <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div
+          className="rounded-lg overflow-hidden"
+          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+        >
           {data?.series.length ? (
             <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
               <table className="w-full min-w-[420px]">
@@ -249,12 +365,35 @@ export function HealthPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.series.map((s) => (
-                    <tr key={`${s.item_type}:${s.title}`} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td className="px-3 py-2 text-sm font-medium truncate max-w-xs" style={{ color: 'var(--text-primary)' }}>{s.title}</td>
-                      <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>{t(`series.type_${s.item_type}`)}</td>
-                      <td className="px-3 py-2 text-xs tabular-nums" style={{ color: 'var(--warning)', fontFamily: 'var(--font-mono)' }}>{s.missing}</td>
-                      <td className="px-3 py-2 text-xs tabular-nums" style={{ color: s.problems > 0 ? 'var(--error)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{s.problems}</td>
+                  {data.series.map(s => (
+                    <tr
+                      key={`${s.item_type}:${s.title}`}
+                      style={{ borderBottom: '1px solid var(--border)' }}
+                    >
+                      <td
+                        className="px-3 py-2 text-sm font-medium truncate max-w-xs"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {s.title}
+                      </td>
+                      <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {t(`series.type_${s.item_type}`)}
+                      </td>
+                      <td
+                        className="px-3 py-2 text-xs tabular-nums"
+                        style={{ color: 'var(--warning)', fontFamily: 'var(--font-mono)' }}
+                      >
+                        {s.missing}
+                      </td>
+                      <td
+                        className="px-3 py-2 text-xs tabular-nums"
+                        style={{
+                          color: s.problems > 0 ? 'var(--error)' : 'var(--text-muted)',
+                          fontFamily: 'var(--font-mono)',
+                        }}
+                      >
+                        {s.problems}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -265,13 +404,19 @@ export function HealthPage() {
           )}
         </div>
         <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-          {t('series.hint')} <Link to="/wanted" className="underline" style={{ color: 'var(--accent)' }}>{t('series.wanted_link')}</Link>
+          {t('series.hint')}{' '}
+          <Link to="/wanted" className="underline" style={{ color: 'var(--accent)' }}>
+            {t('series.wanted_link')}
+          </Link>
         </p>
       </Section>
 
       {/* Problem items (failed / unmatched) */}
       <Section title={t('problems.title')}>
-        <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div
+          className="rounded-lg overflow-hidden"
+          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+        >
           {data?.problems.length ? (
             <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
               <table className="w-full min-w-[520px]">
@@ -286,7 +431,7 @@ export function HealthPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.problems.map((item) => (
+                  {data.problems.map(item => (
                     <ProblemRow key={item.id} item={item} t={t} />
                   ))}
                 </tbody>
@@ -300,7 +445,10 @@ export function HealthPage() {
 
       {/* Provider health */}
       <Section title={t('providers.title')}>
-        <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div
+          className="rounded-lg overflow-hidden"
+          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+        >
           {data?.providers.length ? (
             <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
               <table className="w-full min-w-[520px]">
@@ -315,7 +463,7 @@ export function HealthPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...degradedProviders, ...healthyProviders].map((p) => (
+                  {[...degradedProviders, ...healthyProviders].map(p => (
                     <ProviderRow key={p.provider} p={p} t={t} />
                   ))}
                 </tbody>
@@ -329,7 +477,10 @@ export function HealthPage() {
 
       {/* Translation health */}
       <Section title={t('translation.title')}>
-        <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div
+          className="rounded-lg overflow-hidden"
+          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+        >
           {data?.translation?.backends.length ? (
             <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
               <table className="w-full min-w-[520px]">
@@ -344,7 +495,7 @@ export function HealthPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.translation.backends.map((b) => (
+                  {data.translation.backends.map(b => (
                     <TranslationBackendRow key={b.backend} b={b} />
                   ))}
                 </tbody>
@@ -355,7 +506,10 @@ export function HealthPage() {
           )}
         </div>
 
-        <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div
+          className="rounded-lg overflow-hidden"
+          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+        >
           {data?.translation?.recent_errors.length ? (
             <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
               <table className="w-full min-w-[520px]">
@@ -397,5 +551,5 @@ export function HealthPage() {
         {t('refresh_note')}
       </div>
     </div>
-  )
+  );
 }
