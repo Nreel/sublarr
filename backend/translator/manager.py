@@ -408,9 +408,7 @@ def _translate_in_batches(
 
     job_id = current_job_id()
     if job_id and fallback_chain:
-        get_queue_state().update_progress(
-            job_id, total_lines=len(lines), backend=fallback_chain[0]
-        )
+        get_queue_state().update_progress(job_id, total_lines=len(lines), backend=fallback_chain[0])
 
     if len(lines) <= batch_size:
         # Single batch path: no surrounding lines to provide as context.

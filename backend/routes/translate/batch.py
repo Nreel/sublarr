@@ -243,7 +243,9 @@ def batch_start():
                                 },
                             )
                     except Exception:
-                        logger.warning("Batch: progress reporting failed for %s", f["path"], exc_info=True)
+                        logger.warning(
+                            "Batch: progress reporting failed for %s", f["path"], exc_info=True
+                        )
             finally:
                 with batch_lock:
                     batch_state["running"] = False
