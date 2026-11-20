@@ -189,4 +189,3 @@ def test_translate_ass_threads_explicit_source_language(tmp_path):
 
     _, kwargs = pkg._translate_with_manager.call_args
     assert kwargs["source_lang"] == "ja"
-
