@@ -10,7 +10,7 @@ profile-resolution error. See docs/plans/2026-07-03-v1.6-provisional-mt.md.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, datetime
 
 from db.models.core import DailyStats
 from db.models.providers import SubtitleDownload
@@ -21,7 +21,7 @@ from services import mt_provisional
 
 def _translated_count() -> int:
     """Current daily_stats.translated for today, 0 if no row exists yet."""
-    row = db.session.get(DailyStats, date.today().isoformat())
+    row = db.session.get(DailyStats, datetime.now(UTC).date().isoformat())
     return (row.translated or 0) if row else 0
 
 

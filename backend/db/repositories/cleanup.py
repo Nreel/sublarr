@@ -591,9 +591,7 @@ class CleanupRepository(BaseRepository):
         duplicate_size = dup_row[1]
 
         # Potential savings = duplicate_size - (unique hash count * average single file size)
-        # Simplified: count files that could be removed (total dups - one per group)
         groups = self.get_duplicate_groups()
-        sum(g["count"] - 1 for g in groups)
         # Estimate savings: total dup size - keep one per group
         potential_savings = 0
         for g in groups:

@@ -397,7 +397,11 @@ def _install_alass_binary() -> None:
     asset, sha256 = pinned
     url = f"https://github.com/kaegi/alass/releases/download/{ALASS_VERSION}/{asset}"
 
-    install_dir = os.path.expanduser("~/.local/bin")
+    # $HOME first: on Windows expanduser reads USERPROFILE and ignores HOME,
+    # so a HOME-anchored install target (tests, container overrides) wrote the
+    # binary into the real user home instead.
+    home = os.environ.get("HOME") or os.path.expanduser("~")
+    install_dir = os.path.join(home, ".local", "bin")
     os.makedirs(install_dir, exist_ok=True)
     install_path = os.path.join(install_dir, "alass")
     logger.info("Downloading alass %s from %s → %s", ALASS_VERSION, url, install_path)

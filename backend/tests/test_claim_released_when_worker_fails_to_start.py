@@ -50,3 +50,21 @@ def test_dedup_scan_flag(client):
         client.post("/api/v1/cleanup/scan", json={})
 
     assert _scan_state["running"] is False
+
+
+def test_subtitle_process_series_claim(client):
+    from routes import subtitle_processor as sp
+
+    with patch.object(sp, "submit_background", _boom):
+        assert client.post("/api/v1/library/series/1/process").status_code == 503
+
+    assert sp._batch_running is False
+
+
+def test_subtitle_process_all_claim(client):
+    from routes import subtitle_processor as sp
+
+    with patch.object(sp, "submit_background", _boom):
+        assert client.post("/api/v1/library/process-all", json={"filter": "all"}).status_code == 503
+
+    assert sp._batch_running is False

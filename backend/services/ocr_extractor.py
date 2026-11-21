@@ -162,13 +162,12 @@ def ocr_image(
         raise RuntimeError(f"Image file not found: {image_path}")
 
     try:
-        # Load image
-        image = Image.open(image_path)
-
-        # Preprocess image for better OCR (optional)
-        # Convert to grayscale if needed
-        if image.mode != "L":
-            image = image.convert("L")
+        # Load image, released once the text is read.
+        with Image.open(image_path) as loaded:
+            # Preprocess image for better OCR (optional)
+            # Convert to grayscale if needed
+            image = loaded.convert("L") if loaded.mode != "L" else loaded
+            image.load()  # pixels in memory before the handle closes
 
         # Run OCR
         text = pytesseract.image_to_string(
@@ -317,7 +316,11 @@ def batch_ocr_track(
             return []
 
         def _ocr_frame(frame_path: str) -> str:
-            img = Image.open(frame_path).convert("L")  # grayscale for better OCR
+            # Closed explicitly: an image track is thousands of frames mapped
+            # across a thread pool, and an unclosed handle per frame is an fd
+            # held until GC.
+            with Image.open(frame_path) as frame:
+                img = frame.convert("L")  # grayscale for better OCR
             return pytesseract.image_to_string(img, lang=language).strip()  # type: ignore[union-attr]
 
         with TPE(max_workers=4) as pool:

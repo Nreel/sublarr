@@ -39,11 +39,14 @@ def validate_folder_input(data: dict) -> str | None:
     if not path:
         return "path is required"
 
-    if not os.path.isdir(path):
-        return f"Directory does not exist: {path}"
-
+    # media_type first: it is a cheap in-memory check, and probing the
+    # filesystem first made an invalid type on a missing path report the
+    # directory instead of the type.
     if media_type not in VALID_MEDIA_TYPES:
         return f"media_type must be one of: {', '.join(VALID_MEDIA_TYPES)}"
+
+    if not os.path.isdir(path):
+        return f"Directory does not exist: {path}"
 
     return None
 

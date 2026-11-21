@@ -7,7 +7,7 @@ Return types match the existing functions exactly.
 import json
 import logging
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -260,7 +260,11 @@ class JobRepository(BaseRepository):
             row.by_format_json = json.dumps(by_format)
             row.by_source_json = json.dumps(by_source)
 
-        today = date.today().isoformat()
+        # Keyed by the UTC day: the counters accumulate UTC-stamped events
+        # (BaseRepository._now), and StatsDailyRollup buckets on the same
+        # boundary. A local-day key split the same events across a different
+        # midnight, so /stats and the rollup disagreed on non-UTC installs.
+        today = datetime.now(UTC).date().isoformat()
         for _attempt in range(3):
             existing = self.session.get(DailyStats, today)
             if existing is None:
@@ -325,7 +329,7 @@ class JobRepository(BaseRepository):
             )
 
         # Today's stats
-        today_row = self.session.get(DailyStats, date.today().isoformat())
+        today_row = self.session.get(DailyStats, datetime.now(UTC).date().isoformat())
         today_translated = today_row.translated if today_row else 0
 
         total_subtitles = (
@@ -347,7 +351,10 @@ class JobRepository(BaseRepository):
         # Dashboard StatusStripe + MetricsRow read these. The legacy summary
         # only exposed translation counts (today_translated etc.), so the
         # subtitle-side widgets stayed at "—" and "+0" even on busy installs.
-        today_start = datetime.combine(date.today(), datetime.min.time(), tzinfo=UTC)
+        # downloaded_at is UTC-stamped, so the window must start at UTC
+        # midnight. date.today() is the LOCAL calendar day: combined with a
+        # UTC midnight it shifted the counted 24h by the timezone offset.
+        today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         downloads_today = (
             self.session.execute(
                 select(func.count())

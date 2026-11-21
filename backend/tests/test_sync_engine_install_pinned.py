@@ -46,7 +46,9 @@ def test_alass_with_the_pinned_hash_is_installed(linux):
     assert "latest" not in url
     path = linux / ".local" / "bin" / "alass"
     assert path.read_bytes() == GOOD
-    assert os.stat(path).st_mode & stat.S_IXUSR
+    if os.name == "posix":
+        # Windows chmod only sets read/write; the exec bit is not representable.
+        assert os.stat(path).st_mode & stat.S_IXUSR
 
 
 def test_alass_with_another_hash_is_not_written(linux):

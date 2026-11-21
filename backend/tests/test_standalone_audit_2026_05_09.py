@@ -141,7 +141,11 @@ class TestCleanupCascade:
         # Force watched-roots probe to succeed so cleanup runs.
         with (
             patch.object(StandaloneScanner, "_watched_roots_reachable", return_value=True),
-            patch.object(StandaloneScanner, "_enabled_roots", return_value=("/",)),
+            # A trailing separator, and a root that actually contains the
+            # series folder on this platform (not POSIX "/").
+            patch.object(
+                StandaloneScanner, "_enabled_roots", return_value=(os.path.join(str(tmp_path), ""),)
+            ),
             patch(
                 "db.standalone.get_standalone_series",
                 return_value=[

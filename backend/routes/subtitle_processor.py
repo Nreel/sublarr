@@ -178,7 +178,15 @@ def process_series(series_id):
         finally:
             _batch_running = False
 
-    submit_background(_run, app)
+    try:
+        submit_background(_run, app)
+    except Exception as exc:
+        # The worker never started: release the claim, or every later
+        # /library/.../process answers 409 until a restart (#248 shape).
+        with _batch_lock:
+            _batch_running = False
+        logger.exception("Batch process: submit to background worker failed")
+        return jsonify({"error": f"Failed to start batch: {exc}"}), 503
     return jsonify({"status": "started", "series_id": series_id}), 202
 
 
@@ -208,7 +216,15 @@ def process_all():
         finally:
             _batch_running = False
 
-    submit_background(_run, app)
+    try:
+        submit_background(_run, app)
+    except Exception as exc:
+        # The worker never started: release the claim, or every later
+        # /library/process-all answers 409 until a restart (#248 shape).
+        with _batch_lock:
+            _batch_running = False
+        logger.exception("Batch process-all: submit to background worker failed")
+        return jsonify({"error": f"Failed to start batch: {exc}"}), 503
     return jsonify({"status": "started", "filter": filter_mode}), 202
 
 

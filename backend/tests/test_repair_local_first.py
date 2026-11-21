@@ -66,7 +66,11 @@ def _fetch(calls):
 
 
 def _statuses(run):
-    return {o.file_path.rsplit("/", 1)[-1][:1]: o.status for o in run.outcomes}
+    import os
+
+    # basename, not rsplit("/"): on Windows the sidecar paths are backslash
+    # separated, so rsplit never split and every key collapsed to "C:".
+    return {os.path.basename(o.file_path)[:1]: o.status for o in run.outcomes}
 
 
 def test_backups_are_restored_first_and_one_spent_quota_skips_only_its_provider(app_ctx, mixed):
