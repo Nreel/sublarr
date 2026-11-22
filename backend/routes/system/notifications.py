@@ -66,7 +66,7 @@ def notification_status():
       tags:
         - System
       summary: Get notification status
-      description: Returns whether notifications are configured and the count of notification URLs.
+      description: Returns whether notifications are configured, the count of notification URLs, and the per-event send toggles.
       security:
         - apiKeyAuth: []
       responses:
@@ -81,6 +81,19 @@ def notification_status():
                     type: boolean
                   url_count:
                     type: integer
+                  events:
+                    type: object
+                    properties:
+                      download:
+                        type: boolean
+                      upgrade:
+                        type: boolean
+                      batch_complete:
+                        type: boolean
+                      error:
+                        type: boolean
+                      manual_actions:
+                        type: boolean
     """
     from notifier import get_notification_status
 

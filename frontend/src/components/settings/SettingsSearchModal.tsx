@@ -39,6 +39,7 @@ const TAB_TO_ROUTE: Record<string, string> = {
   'Subtitle Tools': '/settings/subtitles/format',
   Cleanup: '/settings/cleanup',
   Whisper: '/settings/providers/transcription',
+  'Notification Templates': '/settings/notifications',
 }
 
 /** Settings tab -> sublabel group id (translated via `settings_search.groups.*`). */
@@ -56,6 +57,7 @@ const TAB_TO_GROUP: Record<string, string> = {
   'Subtitle Tools': 'subtitles',
   Cleanup: 'subtitles',
   Whisper: 'providers',
+  'Notification Templates': 'notifications',
 }
 
 const PAGE_DEFS: PageDef[] = [

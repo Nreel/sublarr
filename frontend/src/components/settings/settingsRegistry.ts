@@ -54,8 +54,10 @@ export const SETTINGS_REGISTRY: readonly SettingsEntry[] = [
 
   // Notifications
   { id: 'notification-channels', label: 'Notification Channels', keywords: ['notification', 'channel', 'webhook', 'discord', 'telegram'], category: 'Notifications', route: '/settings/notifications' },
+  { id: 'notification-events', label: 'Notification Events', keywords: ['notification', 'download', 'upgrade', 'error', 'batch', 'manual', 'degradation', 'provider'], category: 'Notifications', route: '/settings/notifications' },
+  { id: 'notification-filters', label: 'Notification Filters', keywords: ['notification', 'filter', 'include', 'exclude', 'event'], category: 'Notifications', route: '/settings/notifications' },
   { id: 'events-hooks', label: 'Events & Hooks', keywords: ['event', 'hook', 'trigger', 'webhook', 'callback'], category: 'Notifications', route: '/settings/notifications' },
-  { id: 'quiet-hours', label: 'Quiet Hours', keywords: ['quiet', 'hours', 'silence', 'mute', 'schedule'], category: 'Notifications', route: '/settings/notifications' },
+  { id: 'quiet-hours', label: 'Quiet Hours', keywords: ['quiet', 'hours', 'silence', 'mute', 'schedule', 'days', 'exceptions'], category: 'Notifications', route: '/settings/notifications' },
 
   // System
   { id: 'security', label: 'Security', keywords: ['security', 'password', 'auth', 'authentication', 'login'], category: 'System', route: '/settings/system' },

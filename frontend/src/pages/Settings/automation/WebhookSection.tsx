@@ -46,7 +46,7 @@ export function WebhookContent() {
         data-testid="form-group-webhook-auto-scan"
       >
         <Toggle
-          checked={boolVal(config, 'webhook_auto_scan', false)}
+          checked={boolVal(config, 'webhook_auto_scan', true)}
           onChange={(v) => save({ webhook_auto_scan: v })}
           disabled={updateConfig.isPending}
         />
@@ -72,7 +72,7 @@ export function WebhookContent() {
         data-testid="form-group-webhook-auto-translate"
       >
         <Toggle
-          checked={boolVal(config, 'webhook_auto_translate', false)}
+          checked={boolVal(config, 'webhook_auto_translate', true)}
           onChange={(v) => save({ webhook_auto_translate: v })}
           disabled={updateConfig.isPending}
         />

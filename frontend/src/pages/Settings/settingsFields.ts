@@ -216,6 +216,27 @@ export const FIELDS: FieldConfig[] = [
   { key: 'streaming_enabled', label: 'Enable Video Streaming', type: 'toggle', tab: 'Automation',
     descriptionKey: 'settings_fields.streaming_enabled',
     advanced: true },
+  // Notifications — channels, events, filters (editors live on the Notifications page)
+  { key: 'notification_urls_json', label: 'Notification Channels (Apprise URLs)', type: 'text', tab: 'Notification Templates',
+    descriptionKey: 'settings_fields.notification_urls_json' },
+  { key: 'notify_on_download', label: 'Notify on Download', type: 'toggle', tab: 'Notification Templates',
+    descriptionKey: 'settings_fields.notify_on_download' },
+  { key: 'notify_on_upgrade', label: 'Notify on Upgrade', type: 'toggle', tab: 'Notification Templates',
+    descriptionKey: 'settings_fields.notify_on_upgrade' },
+  { key: 'notify_on_batch_complete', label: 'Notify on Batch Complete', type: 'toggle', tab: 'Notification Templates',
+    descriptionKey: 'settings_fields.notify_on_batch_complete' },
+  { key: 'notify_on_error', label: 'Notify on Error', type: 'toggle', tab: 'Notification Templates',
+    descriptionKey: 'settings_fields.notify_on_error' },
+  { key: 'notify_manual_actions', label: 'Notify Manual Actions', type: 'toggle', tab: 'Notification Templates',
+    descriptionKey: 'settings_fields.notify_manual_actions' },
+  { key: 'provider_degradation_alerts_enabled', label: 'Alert on Provider Degradation', type: 'toggle', tab: 'Notification Templates',
+    descriptionKey: 'settings_fields.provider_degradation_alerts_enabled' },
+  { key: 'notification_filter_include_events', label: 'Notification Filters (Include Events)', type: 'text', tab: 'Notification Templates',
+    descriptionKey: 'settings_fields.notification_filter_include_events',
+    advanced: true },
+  { key: 'notification_filter_exclude_events', label: 'Notification Filters (Exclude Events)', type: 'text', tab: 'Notification Templates',
+    descriptionKey: 'settings_fields.notification_filter_exclude_events',
+    advanced: true },
 ]
 
 // ─── Tab i18n Keys ────────────────────────────────────────────────────────────

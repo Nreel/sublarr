@@ -12,6 +12,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { NotificationsSettings } from '../NotificationsSettings'
+import { toast } from '@/components/shared/Toast'
 import enSettings from '../../../i18n/locales/en/settings.json'
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
@@ -59,6 +60,8 @@ let mockQuietHoursConfigs: Array<{
   start_time: string
   end_time: string
   enabled: number
+  days_of_week?: string
+  exception_events?: string
 }> = []
 
 vi.mock('@/hooks/useSystemApi', () => ({
@@ -353,5 +356,81 @@ describe('Quiet Hours section (Step 39)', () => {
     expect(mockCreateQuietHoursMutate).toHaveBeenCalled()
     const [payload] = mockCreateQuietHoursMutate.mock.calls[0]
     expect(payload).toMatchObject({ enabled: 1 })
+  })
+})
+
+// ─── Quiet Hours: day list + exception events ────────────────────────────────
+
+describe('Quiet Hours days and exceptions', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  function expandStub() {
+    renderPage()
+    const wrapper = screen.getByTestId('section-quiet-hours')
+    fireEvent.click(
+      wrapper.querySelector('[data-testid="settings-section-advanced-toggle"]') as HTMLElement
+    )
+  }
+
+  function dayInput(key: string) {
+    return screen
+      .getByTestId(`quiet-hours-day-${key}`)
+      .querySelector('input') as HTMLInputElement
+  }
+
+  it('defaults to every day and the error exception', () => {
+    expandStub()
+    expect(dayInput('dayMon')).toBeChecked()
+    expect(dayInput('daySun')).toBeChecked()
+    expect(
+      screen.getByTestId('quiet-hours-exception-error').querySelector('input'),
+    ).toBeChecked()
+  })
+
+  it('hydrates the saved day list from the config', () => {
+    mockQuietHoursConfigs = [
+      {
+        id: 1,
+        name: 'Quiet Hours',
+        start_time: '22:00',
+        end_time: '08:00',
+        enabled: 1,
+        days_of_week: '[4,5]',
+        exception_events: '["error","batch_complete"]',
+      },
+    ]
+    expandStub()
+    expect(dayInput('dayFri')).toBeChecked()
+    expect(dayInput('daySat')).toBeChecked()
+    expect(dayInput('dayMon')).not.toBeChecked()
+    expect(
+      screen.getByTestId('quiet-hours-exception-batch_complete').querySelector('input'),
+    ).toBeChecked()
+  })
+
+  it('persists the edited day list and exception events', async () => {
+    mockQuietHoursConfigs = []
+    expandStub()
+    fireEvent.click(dayInput('dayMon'))
+    fireEvent.click(
+      screen.getByTestId('quiet-hours-exception-download').querySelector('input') as HTMLInputElement,
+    )
+    fireEvent.click(screen.getByTestId('quiet-hours-save-btn'))
+    await waitFor(() => expect(mockCreateQuietHoursMutate).toHaveBeenCalled())
+    const [payload] = mockCreateQuietHoursMutate.mock.calls[0]
+    expect(payload.days_of_week).toBe(JSON.stringify([1, 2, 3, 4, 5, 6]))
+    expect(payload.exception_events).toBe(JSON.stringify(['error', 'download']))
+  })
+
+  it('refuses to save with no day selected instead of writing a window that never matches', async () => {
+    mockQuietHoursConfigs = []
+    expandStub()
+    for (const key of ['dayMon', 'dayTue', 'dayWed', 'dayThu', 'dayFri', 'daySat', 'daySun']) {
+      fireEvent.click(dayInput(key))
+    }
+    fireEvent.click(screen.getByTestId('quiet-hours-save-btn'))
+    expect(mockCreateQuietHoursMutate).not.toHaveBeenCalled()
+    expect(mockUpdateQuietHoursMutate).not.toHaveBeenCalled()
+    expect(vi.mocked(toast)).toHaveBeenCalledWith('Select at least one day.', 'error')
   })
 })

@@ -325,6 +325,46 @@ def _retire_replaced_srt(ctx: dict, result, new_score: int, keep: str) -> None:
         provider_name=result.provider_name,
         upgrade_reason=f"SRT->ASS via {result.provider_name}",
     )
+    _announce_upgrade(ctx, result.provider_name, ctx["current_score"], new_score)
+
+
+def _announce_upgrade(ctx: dict, provider_name: str, old_score: int, new_score: int) -> None:
+    """Announce an upgrade on the event bus and to Apprise.
+
+    Single emit site so every upgrade path (batch runner, webhook pipeline,
+    reseek, single-item process) delivers the same payload. The payload keys
+    match EVENT_CATALOG["upgrade_complete"]; paths are absolute, so the file
+    path stays out of it (see ``events.emit_event``). Notification failures
+    must not fail the upgrade — the subtitle is already on disk.
+    """
+    item = ctx.get("item") or {}
+    title = item.get("title") or os.path.basename(ctx["file_path"])
+    payload = {
+        "title": title,
+        "old_format": "srt",
+        "new_format": "ass",
+        "old_score": old_score,
+        "new_score": new_score,
+        "provider_name": provider_name,
+    }
+
+    try:
+        from events import emit_event
+
+        emit_event("upgrade_complete", payload)
+    except Exception:  # noqa: BLE001 — event bus failures must not fail the upgrade
+        logger.warning("Could not emit upgrade_complete for Wanted %d", ctx.get("item_id"), exc_info=True)
+
+    try:
+        from notifier import send_notification
+
+        send_notification(
+            title=f"Sublarr: {title} upgraded",
+            body=f"{title}: SRT -> ASS via {provider_name} (score {old_score} -> {new_score})",
+            event_type="upgrade",
+        )
+    except Exception:  # noqa: BLE001 — notification failures must not fail the upgrade
+        logger.warning("Could not send upgrade notification for Wanted %d", ctx.get("item_id"), exc_info=True)
 
 
 def _try_target_ass_direct(ctx: dict) -> dict | None:

@@ -204,7 +204,7 @@ def get_sample_payload(event_type: str) -> dict:
     return {key: sample_values.get(key, f"sample_{key}") for key in payload_keys}
 
 
-def _is_event_filtered(event_type: str) -> bool:
+def _is_event_filtered(event_type: str, aliases: set[str] | None = None) -> bool:
     """Check user-defined include/exclude event filters.
 
     Reads `notification_filter_include_events` and
@@ -216,7 +216,12 @@ def _is_event_filtered(event_type: str) -> bool:
       - If `include_events` is non-empty, the event MUST appear in it.
       - If the event appears in `exclude_events`, suppress.
       - If both lists are empty, do not suppress.
+
+    The UI stores EVENT_CATALOG names (`subtitle_downloaded`), while callers
+    pass notifier labels (`download`); `aliases` accepts both spellings so a
+    filter saved from the UI — or hand-written against the API — matches.
     """
+    names = {event_type, *(aliases or set())}
     # Per-content notification filtering is intentionally not supported (no operator contract / UI).
     try:
         from db.repositories.config import ConfigRepository
@@ -229,7 +234,7 @@ def _is_event_filtered(event_type: str) -> bool:
                 include_list = json.loads(include_raw)
             except (json.JSONDecodeError, TypeError):
                 include_list = []
-            if include_list and event_type not in include_list:
+            if include_list and not any(name in include_list for name in names):
                 logger.debug(
                     "Notification suppressed by include filter: %s not in %s",
                     event_type,
@@ -243,7 +248,7 @@ def _is_event_filtered(event_type: str) -> bool:
                 exclude_list = json.loads(exclude_raw)
             except (json.JSONDecodeError, TypeError):
                 exclude_list = []
-            if event_type in exclude_list:
+            if any(name in exclude_list for name in names):
                 logger.debug("Notification suppressed by exclude filter: %s", event_type)
                 return True
     except Exception as e:
@@ -251,6 +256,19 @@ def _is_event_filtered(event_type: str) -> bool:
         logger.warning("Notification filter check failed: %s", e)
 
     return False
+
+
+# Notifier event types are internal labels ('download', 'upgrade'); the
+# templates UI and the include/exclude filters store EVENT_CATALOG names
+# ('subtitle_downloaded', 'upgrade_complete'). Lookups against those stores
+# must use the catalog name or they never match. 'batch_complete' and 'error'
+# already coincide (no catalog 'error' event), so they map to themselves.
+_CATALOG_EVENT = {
+    "download": "subtitle_downloaded",
+    "upgrade": "upgrade_complete",
+    "batch_complete": "batch_complete",
+    "error": "error",
+}
 
 
 def send_notification(title: str, body: str, event_type: str, is_manual: bool = False):
@@ -285,12 +303,14 @@ def send_notification(title: str, body: str, event_type: str, is_manual: bool = 
         logger.debug("Notification suppressed for event_type=%s", event_type)
         return
 
+    catalog_event = _CATALOG_EVENT.get(event_type, event_type)
+
     # Apply user-defined event filters (include/exclude lists from the
     # Filters UI, persisted as `notification_filter_*` config_entries).
     # Without this block the filter UI is purely cosmetic — the user sets
     # filters, sees them saved, and notifications fire as if no filter
     # existed. Failures here must not block notification delivery.
-    if _is_event_filtered(event_type):
+    if _is_event_filtered(event_type, {catalog_event}):
         return
 
     # Check quiet hours
@@ -308,12 +328,12 @@ def send_notification(title: str, body: str, event_type: str, is_manual: bool = 
             )
             return
 
-        # Look up matching template
-        template = repo.find_template_for_event(event_type)
+        # Look up matching template (UI stores EVENT_CATALOG names)
+        template = repo.find_template_for_event(catalog_event)
         if template and template.get("enabled"):
             template_id_used = template["id"]
             # Build variables from event context
-            variables = get_sample_payload(event_type)
+            variables = get_sample_payload(catalog_event)
             variables["title"] = title
             variables["body"] = body
             variables["event_type"] = event_type

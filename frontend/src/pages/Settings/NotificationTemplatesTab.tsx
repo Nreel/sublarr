@@ -28,6 +28,7 @@ function NotificationToggles() {
     { key: 'notify_on_batch_complete', label: t('notifications.on_batch_complete', 'Notify on Batch Complete') },
     { key: 'notify_on_error', label: t('notifications.on_error', 'Notify on Error') },
     { key: 'notify_manual_actions', label: t('notifications.manual_actions', 'Notify Manual Actions') },
+    { key: 'provider_degradation_alerts_enabled', label: t('notifications.on_provider_degradation', 'Alert on Provider Degradation') },
   ]
 
   const handleToggle = (key: string) => {

@@ -261,6 +261,7 @@ class ScanningSettings(_SettingsView):
             "notify_on_batch_complete",
             "notify_on_error",
             "notify_manual_actions",
+            "provider_degradation_alerts_enabled",
             "remux_trash_dir",
             "remux_backup_retention_days",
             "remux_use_reflink",

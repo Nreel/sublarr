@@ -93,6 +93,26 @@ const QH_DEFAULTS = {
   exception_events: '["error"]',
 }
 
+// Repository semantics: days_of_week is JSON of Python weekday() ints (0=Monday);
+// exception_events holds notifier event labels that bypass quiet hours.
+const DAY_KEYS = ['dayMon', 'dayTue', 'dayWed', 'dayThu', 'dayFri', 'daySat', 'daySun']
+const EXCEPTION_KEYS: ReadonlyArray<{ event: string; labelKey: string }> = [
+  { event: 'download', labelKey: 'exceptionDownload' },
+  { event: 'upgrade', labelKey: 'exceptionUpgrade' },
+  { event: 'batch_complete', labelKey: 'exceptionBatchComplete' },
+  { event: 'error', labelKey: 'exceptionError' },
+]
+
+function parseJsonList<T>(raw: string | undefined, fallback: T[]): T[] {
+  if (!raw) return fallback
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed as T[] : fallback
+  } catch {
+    return fallback
+  }
+}
+
 function QuietHoursConfigStub() {
   const { t } = useTranslation('settings')
   const { data: configs, isLoading } = useQuietHours()
@@ -105,6 +125,8 @@ function QuietHoursConfigStub() {
   const [enabled, setEnabled] = useState(false)
   const [start, setStart] = useState(QH_DEFAULTS.start)
   const [end, setEnd] = useState(QH_DEFAULTS.end)
+  const [days, setDays] = useState<number[]>(parseJsonList<number>(QH_DEFAULTS.days_of_week, [0, 1, 2, 3, 4, 5, 6]))
+  const [exceptions, setExceptions] = useState<string[]>(parseJsonList<string>(QH_DEFAULTS.exception_events, ['error']))
 
   // Hydrate local state when the server config arrives or changes.
   useEffect(() => {
@@ -113,17 +135,25 @@ function QuietHoursConfigStub() {
       setEnabled(Number(existing.enabled) === 1)
       setStart(existing.start_time || QH_DEFAULTS.start)
       setEnd(existing.end_time || QH_DEFAULTS.end)
+      setDays(parseJsonList<number>(existing.days_of_week, [0, 1, 2, 3, 4, 5, 6]))
+      setExceptions(parseJsonList<string>(existing.exception_events, ['error']))
     }
   }, [existing])
 
   const persist = (next: { enabled?: boolean; start?: string; end?: string }) => {
+    // An empty day list makes the window match no day at all (repository checks
+    // `current_day not in days`), so saving it would silently disable quiet hours.
+    if (days.length === 0) {
+      toast(t('settings.notifications.quietHours.daysRequired', 'Select at least one day.'), 'error')
+      return
+    }
     const payload = {
       name: existing?.name ?? QH_DEFAULTS.name,
       start_time: next.start ?? start,
       end_time: next.end ?? end,
       enabled: (next.enabled ?? enabled) ? 1 : 0,
-      days_of_week: QH_DEFAULTS.days_of_week,
-      exception_events: QH_DEFAULTS.exception_events,
+      days_of_week: JSON.stringify(days),
+      exception_events: JSON.stringify(exceptions),
     }
     if (existingId !== null) {
       updateMut.mutate(
@@ -238,6 +268,60 @@ function QuietHoursConfigStub() {
           placeholder="07:00"
           style={{ ...quietInputStyle, width: '120px' }}
         />
+      </FormGroup>
+
+      <FormGroup
+        label={t('settings.notifications.quietHours.daysLabel', 'Active Days')}
+        hint={t('settings.notifications.quietHours.daysHint', 'Quiet hours apply only on the selected days. Week starts Monday.')}
+        data-testid="form-group-quiet-hours-days"
+      >
+        <div data-testid="quiet-hours-days" className="flex flex-wrap gap-2">
+          {DAY_KEYS.map((key, index) => (
+            <label
+              key={key}
+              data-testid={`quiet-hours-day-${key}`}
+              className="flex items-center gap-1.5 px-2 py-1 rounded text-xs"
+              style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+            >
+              <input
+                type="checkbox"
+                checked={days.includes(index)}
+                disabled={createMut.isPending || updateMut.isPending}
+                onChange={(e) =>
+                  setDays(e.target.checked ? [...days, index] : days.filter((d) => d !== index))
+                }
+              />
+              {t(`settings.notifications.quietHours.${key}`)}
+            </label>
+          ))}
+        </div>
+      </FormGroup>
+
+      <FormGroup
+        label={t('settings.notifications.quietHours.exceptionsLabel', 'Exception Events')}
+        hint={t('settings.notifications.quietHours.exceptionsHint', 'These notifications are never suppressed by quiet hours.')}
+        data-testid="form-group-quiet-hours-exceptions"
+      >
+        <div data-testid="quiet-hours-exceptions" className="flex flex-wrap gap-2">
+          {EXCEPTION_KEYS.map(({ event, labelKey }) => (
+            <label
+              key={event}
+              data-testid={`quiet-hours-exception-${event}`}
+              className="flex items-center gap-1.5 px-2 py-1 rounded text-xs"
+              style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+            >
+              <input
+                type="checkbox"
+                checked={exceptions.includes(event)}
+                disabled={createMut.isPending || updateMut.isPending}
+                onChange={(e) =>
+                  setExceptions(e.target.checked ? [...exceptions, event] : exceptions.filter((x) => x !== event))
+                }
+              />
+              {t(`settings.notifications.quietHours.${labelKey}`)}
+            </label>
+          ))}
+        </div>
       </FormGroup>
 
       <div className="flex justify-end pt-1">

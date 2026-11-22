@@ -5,6 +5,31 @@ All notable changes to Sublarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Provider degradation alerts are configurable** — `provider_degradation_alerts_enabled` existed in the backend with no UI and was not part of the `/config` payload, so it stayed off with no way to turn it on. It now shows as a toggle in Settings → Notifications → Notification Events.
+- **Quiet hours can be scoped to days and event types** — the editor hardcoded "every day" and `exception_events=["error"]`; the day picker and exception-event checkboxes now edit what the backend actually stores (Monday-first day list, per-event bypass). Saving with no day selected is refused, since an empty day list matches no day and silently disables quiet hours.
+- **Webhook switches show the real defaults** — Auto-Scan and Auto-Translate fell back to *off* in the UI while the backend defaults are *on*, so a not-yet-loaded config displayed a state the server was not using.
+- **Notification settings are findable and documented** — the channel URL field, the five send toggles, the degradation alert and the include/exclude event filters are now in the settings search index (they route to the Notifications page, not General), the settings registry gained Notification Events and Notification Filters entries, and `GET /notifications/status` documents the `events` object it already returned.
+- **Dead notification help text removed** — `settingsHelpText.ts` documented `discord_webhook_url`, `slack_webhook_url`, `ntfy_url`, `apprise_urls` and `notifications_enabled`, none of which exist; the module had no consumers at all. Help text for the real notification keys lives in the locale files.
+- **Upgrade notifications now actually send** — `notify_on_upgrade` was read by
+  the notifier but nothing ever called `send_notification("upgrade")`, so the
+  checkbox, the *Notify on Upgrade* help text and the upgrade templates did
+  nothing. The upgrade is announced at the one place that records it (the SRT
+  retire step in wanted processing), so every upgrade path — batch runner,
+  webhook pipeline, re-seek, single-item process — now pushes via Apprise and
+  fires the `upgrade_complete` outgoing webhook. Notification/event failures are
+  logged but never fail the upgrade, and `POST /wanted/<id>/process` no longer
+  emits a second (path-bearing) `upgrade_complete`.
+- **Notification templates and event filters match the UI's event names** —
+  templates and include/exclude filters are stored under `EVENT_CATALOG` names
+  (`subtitle_downloaded`, `upgrade_complete`), but the notifier looked them up
+  under its internal labels (`download`, `upgrade`), so a UI-created template or
+  filter never applied. Lookups now use the catalog name; filters also accept
+  the legacy internal spelling, and notification history keeps the internal
+  label so the history filter UI is unchanged.
+
 ## [1.22.1] - 2026-11-21
 
 ### Changed

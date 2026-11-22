@@ -118,14 +118,6 @@ def process_wanted(item_id):
             try:
                 result = process_wanted_item(item_id)
                 emit_event("wanted_item_processed", result)
-                if result.get("upgraded"):
-                    emit_event(
-                        "upgrade_complete",
-                        {
-                            "file_path": result.get("output_path"),
-                            "provider": result.get("provider"),
-                        },
-                    )
             except Exception as e:
                 logger.exception("Wanted process failed for item_id=%s", item_id)
                 emit_event("wanted_item_processed", {"wanted_id": item_id, "error": str(e)})
