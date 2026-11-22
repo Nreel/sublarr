@@ -145,6 +145,13 @@ export interface ApiKeyService {
   testable: boolean
 }
 
+/** GET /api-keys/<service>/reveal — the full values auth actually accepts. */
+export interface ApiKeyReveal {
+  service: string
+  label: string
+  keys: { name: string; value: string }[]
+}
+
 export interface ApiKeyExportData {
   config: Record<string, string>
   profiles: unknown[]

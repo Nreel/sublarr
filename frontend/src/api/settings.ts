@@ -2,7 +2,7 @@ import { api } from './core'
 import type {
   AppConfig, LanguageProfile, HookConfig, WebhookConfig,
   MediaServerType, MediaServerInstance, MediaServerTestResult, MediaServerHealthResult,
-  AuthStatus,
+  AuthStatus, ApiKeyReveal,
 } from '@/lib/types'
 import { withBase } from '@/basePath'
 
@@ -247,6 +247,18 @@ export async function getApiKeyService(service: string): Promise<import('@/lib/t
 
 export async function updateApiKey(service: string, keyName: string, value: string): Promise<{ status: string }> {
   const { data } = await api.put(`/api-keys/${service}`, { [keyName]: value })
+  return data
+}
+
+/** Full values, for the reveal/copy affordance. Only an authenticated caller gets them. */
+export async function revealApiKeys(service: string): Promise<ApiKeyReveal> {
+  const { data } = await api.get(`/api-keys/${service}/reveal`)
+  return data
+}
+
+/** Generate a fresh key server-side; the raw value is read back via reveal. */
+export async function rotateApiKey(service: string): Promise<{ status: string; key: string; masked_value: string }> {
+  const { data } = await api.post(`/api-keys/${service}/rotate`)
   return data
 }
 

@@ -71,7 +71,7 @@ Only these bootstrap variables are read from the environment (`backend/config_se
 | Variable | Default | Description |
 |---|---|---|
 | `SUBLARR_PORT` | `5765` | HTTP port |
-| `SUBLARR_API_KEY` | *(empty)* | Optional API key (`X-Api-Key` header); empty = no API-key auth |
+| `SUBLARR_API_KEY` | *(empty)* | API key (`X-Api-Key` header). Set: mirrored into the settings store at startup, where the UI shows it and rotation is refused. Unset: Sublarr keeps a key in the store (auto-generated on first start, rotatable in Settings → System → API Keys). Explicitly empty: auth off |
 | `SUBLARR_CORS_ORIGINS` | *(empty)* | Extra Socket.IO origins, comma-separated. Sublarr's own origin is always allowed; behind a reverse proxy, forward the original `Host` header (nginx: `proxy_set_header Host $http_host;`) or list the public origin here |
 | `SUBLARR_MEDIA_PATH` | `/media` | Media library root inside the container |
 | `SUBLARR_CONFIG_DIR` | `/config` | Persistent config directory |

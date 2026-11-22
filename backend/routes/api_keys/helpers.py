@@ -68,17 +68,45 @@ def _mask_value(val: str) -> str:
     return val[:4] + "***" + val[-4:]
 
 
-def _get_service_info(service_name: str) -> dict | None:
-    """Build a status dict for a single registered service."""
+def _effective_value(key_name: str) -> str:
+    """The value request-time code actually uses for a registry key.
+
+    UI fields live only in ``config_entries``. Boot fields (``api_key``) load
+    from ENV, and startup mirrors an explicitly set env value into the row — so
+    the stored row is the effective value when present, and the boot value is
+    the fallback when the row is empty. Without the fallback a compose
+    deployment that sets ``SUBLARR_API_KEY`` reported "(not set)" while that key
+    was the one auth accepted. Boot-field defaults are never surfaced: an unset
+    boot field is empty, not a placeholder.
+    """
     from db.config import get_config_entry
 
+    stored = get_config_entry(key_name) or ""
+    if stored:
+        return stored
+
+    from config_settings import BootSettings
+
+    if key_name not in BootSettings.model_fields:
+        return ""
+
+    from config import peek_settings
+
+    settings = peek_settings()
+    if settings is None:
+        return ""
+    return getattr(settings, key_name, "") or ""
+
+
+def _get_service_info(service_name: str) -> dict | None:
+    """Build a status dict for a single registered service."""
     entry = API_KEY_REGISTRY.get(service_name)
     if entry is None:
         return None
 
     keys_list = []
     for key_name in entry["keys"]:
-        raw = get_config_entry(key_name) or ""
+        raw = _effective_value(key_name)
         keys_list.append(
             {
                 "name": key_name,
@@ -96,4 +124,20 @@ def _get_service_info(service_name: str) -> dict | None:
         "keys": keys_list,
         "status": "configured" if all_configured else ("partial" if any_configured else "missing"),
         "testable": entry["test_fn"] is not None,
+    }
+
+
+def _reveal_values(service_name: str) -> dict | None:
+    """Unmasked values for a service, for the settings UI's reveal/copy action.
+
+    Only reachable through the API-key / UI-session gate that every ``/api/``
+    route already passes, so the caller has proven it holds the credential.
+    """
+    entry = API_KEY_REGISTRY.get(service_name)
+    if entry is None:
+        return None
+    return {
+        "service": service_name,
+        "label": entry["label"],
+        "keys": [{"name": key_name, "value": _effective_value(key_name)} for key_name in entry["keys"]],
     }

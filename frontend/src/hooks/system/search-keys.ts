@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import {
   searchGlobal, getFilterPresets, createFilterPreset, deleteFilterPreset,
   getApiKeys, updateApiKey, testApiKey, exportApiKeys, importApiKeys,
+  revealApiKeys, rotateApiKey,
 } from '@/api/client'
 import type { FilterScope } from '@/lib/types'
 
@@ -56,7 +57,35 @@ export function useUpdateApiKey() {
   return useMutation({
     mutationFn: ({ service, keyName, value }: { service: string; keyName: string; value: string }) =>
       updateApiKey(service, keyName, value),
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['api-keys'] }) },
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ['api-keys'] })
+      // The revealed value changed too, so the cached raw copy is stale.
+      void qc.invalidateQueries({ queryKey: ['api-keys-raw', vars.service] })
+    },
+  })
+}
+
+/**
+ * Full values for the reveal/copy affordance. Fetched on demand: the list
+ * endpoint only ever carries masks, so revealing needs its own request.
+ */
+export function useRevealApiKeys(service: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['api-keys-raw', service],
+    queryFn: () => revealApiKeys(service),
+    enabled,
+    staleTime: 0,
+  })
+}
+
+export function useRotateApiKey() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (service: string) => rotateApiKey(service),
+    onSuccess: (_data, service) => {
+      void qc.invalidateQueries({ queryKey: ['api-keys'] })
+      void qc.invalidateQueries({ queryKey: ['api-keys-raw', service] })
+    },
   })
 }
 

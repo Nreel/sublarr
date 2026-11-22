@@ -29,11 +29,11 @@ We aim to acknowledge reports within 48 hours and provide a fix within 7 days fo
 
 Sublarr supports two authentication mechanisms:
 
-1. **API Key Authentication** — Set via `SUBLARR_API_KEY` environment variable. All `/api/v1/` endpoints require the key in the `X-Api-Key` header. Enforced by a global `before_request` hook in `auth.py`.
+1. **API Key Authentication** — All `/api/v1/` endpoints require the key in the `X-Api-Key` header, enforced by a global `before_request` hook in `auth.py`. The live key is the `api_key` value in `config_entries`; `SUBLARR_API_KEY` is mirrored into that row at startup and wins when set, rotation in Settings → System → API Keys is refused while it is set. With the variable unset the row is authoritative (auto-generated on first start), and rotation takes effect immediately.
 
 2. **UI Session Authentication** — Browser-based login with bcrypt-hashed passwords. Session cookies use `HttpOnly`, `SameSite=Lax` flags. Minimum password length: 8 characters.
 
-**Important:** At least one authentication mechanism must be enabled. If both `SUBLARR_API_KEY` is empty and UI auth is disabled, a startup warning is logged and all endpoints are publicly accessible.
+**Important:** At least one authentication mechanism must be enabled. Public access requires `SUBLARR_API_KEY=""` (an explicit empty value clears the stored key; an unset variable leaves the generated/stored key active) plus UI auth disabled — a startup warning is logged in that case.
 
 ### Rate Limiting
 

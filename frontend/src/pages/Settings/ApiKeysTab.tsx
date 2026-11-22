@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   useApiKeys, useUpdateApiKey, useTestApiKey,
+  useRevealApiKeys, useRotateApiKey,
   useExportApiKeys, useImportApiKeys,
   useBazarrMigration, useConfirmBazarrImport,
 } from '@/hooks/useApi'
@@ -10,26 +11,86 @@ import { apiErrorMessage } from '@/lib/apiError'
 import { BazarrImportPreview } from '@/components/settings/BazarrImportPreview'
 import {
   Loader2, Shield, ShieldCheck, ShieldAlert, TestTube,
-  FileDown, Upload, Eye, EyeOff, Check, X, KeyRound,
+  FileDown, Upload, Eye, EyeOff, Check, X, KeyRound, Copy,
 } from 'lucide-react'
 import type { ApiKeyService, BazarrMigrationPreview } from '@/lib/types'
 
 // ─── Service Key Card ────────────────────────────────────────────────────────
 
+/**
+ * Clipboard write with a fallback. `navigator.clipboard` is unavailable (or
+ * rejects) on insecure origins — a plain `http://LAN:5765` deployment is one.
+ */
+async function copyToClipboard(value: string): Promise<boolean> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value)
+      return true
+    } catch {
+      // Fall through to the selection-based copy.
+    }
+  }
+  const area = document.createElement('textarea')
+  area.value = value
+  area.setAttribute('readonly', '')
+  area.style.position = 'fixed'
+  area.style.left = '-1000px'
+  document.body.appendChild(area)
+  area.select()
+  const ok = document.execCommand('copy')
+  document.body.removeChild(area)
+  return ok
+}
+
 function ServiceKeyCard({
   service,
   onUpdate,
   onTest,
+  onRotate,
+  rotating = false,
 }: {
   service: ApiKeyService
   onUpdate: (service: string, keyName: string, value: string) => void
   onTest: (service: string) => void
+  onRotate: (service: string) => void
+  rotating?: boolean
 }) {
   const { t } = useTranslation('settings')
   const { t: tc } = useTranslation('common')
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [showValues, setShowValues] = useState<Record<string, boolean>>({})
+  // The list endpoint only ever carries masks, so revealing needs a separate
+  // request for the full value. It runs on the first eye click for this service.
+  const revealQuery = useRevealApiKeys(service.service, Object.values(showValues).some(Boolean))
+
+  async function toggleShow(keyName: string) {
+    const next = !showValues[keyName]
+    setShowValues((prev) => ({ ...prev, [keyName]: next }))
+    if (!next) return
+    const result = await revealQuery.refetch()
+    if (result.isError) {
+      setShowValues((prev) => ({ ...prev, [keyName]: false }))
+      toast(apiErrorMessage(result.error, t('apiKeys.reveal_failed', 'Could not reveal the key')), 'error')
+    }
+  }
+
+  async function handleCopy(keyName: string) {
+    let value = revealQuery.data?.keys.find((k) => k.name === keyName)?.value
+    if (!value) {
+      const result = await revealQuery.refetch()
+      value = result.data?.keys.find((k) => k.name === keyName)?.value
+    }
+    if (!value) {
+      toast(t('apiKeys.copy_empty', 'No key to copy'), 'error')
+      return
+    }
+    if (!(await copyToClipboard(value))) {
+      toast(t('apiKeys.copy_failed', 'Could not copy the key'), 'error')
+      return
+    }
+    toast(t('apiKeys.copied', 'Key copied to clipboard'))
+  }
 
   const handleStartEdit = (keyName: string) => {
     setEditingKey(keyName)
@@ -47,10 +108,6 @@ function ServiceKeyCard({
   const handleCancel = () => {
     setEditingKey(null)
     setEditValue('')
-  }
-
-  const toggleShow = (keyName: string) => {
-    setShowValues((prev) => ({ ...prev, [keyName]: !prev[keyName] }))
   }
 
   const allConfigured = service.keys.every((k) => k.status === 'configured')
@@ -138,10 +195,11 @@ function ServiceKeyCard({
               ) : (
                 <div className="flex items-center gap-2 mt-1">
                   <code
-                    className="text-xs text-muted font-mono"
+                    className="text-xs text-muted font-mono break-all"
+                    data-testid={`api-key-value-${key.name}`}
                   >
-                    {showValues[key.name] && key.masked_value !== '(not set)'
-                      ? key.masked_value
+                    {showValues[key.name] && key.status === 'configured'
+                      ? revealQuery.data?.keys.find((k) => k.name === key.name)?.value || key.masked_value
                       : key.status === 'configured'
                         ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'
                         : '(not set)'}
@@ -150,12 +208,25 @@ function ServiceKeyCard({
                     <button
                       onClick={() => toggleShow(key.name)}
                       className="p-0.5 rounded text-muted"
+                      aria-label={showValues[key.name] ? t('apiKeys.hide', 'Hide key') : t('apiKeys.reveal', 'Reveal key')}
+                      data-testid={`api-key-reveal-${key.name}`}
                     >
                       {showValues[key.name] ? <EyeOff size={12} /> : <Eye size={12} />}
                     </button>
                   )}
+                  {key.status === 'configured' && (
+                    <button
+                      onClick={() => handleCopy(key.name)}
+                      className="p-0.5 rounded text-muted"
+                      aria-label={t('apiKeys.copy', 'Copy key')}
+                      data-testid={`api-key-copy-${key.name}`}
+                    >
+                      <Copy size={12} />
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleStartEdit(key.name)}
+                    onClick={key.status === 'configured' ? () => onRotate(service.service) : () => handleStartEdit(key.name)}
+                    disabled={key.status === 'configured' && rotating}
                     className="text-[10px] px-1.5 py-0.5 rounded font-medium transition-all duration-150 text-accent border border-accent-dim"
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--accent-bg)' }}
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
@@ -185,6 +256,7 @@ export function ApiKeysTab({
   const { data, isLoading } = useApiKeys()
   const updateKey = useUpdateApiKey()
   const testKey = useTestApiKey()
+  const rotateKey = useRotateApiKey()
   const exportKeys = useExportApiKeys()
   const importKeys = useImportApiKeys()
   const bazarrMigrate = useBazarrMigration()
@@ -213,6 +285,16 @@ export function ApiKeysTab({
         }
       },
       onError: (err) => toast(apiErrorMessage(err, t('apiKeys.connection_failed', { service })), 'error'),
+    })
+  }
+
+  const handleRotate = (service: string) => {
+    if (!window.confirm(t('apiKeys.rotate_confirm', 'Rotate this key? Callers that use the current key will stop working until they are updated.'))) {
+      return
+    }
+    rotateKey.mutate(service, {
+      onSuccess: () => toast(t('apiKeys.rotated', 'Key rotated')),
+      onError: (err) => toast(apiErrorMessage(err, t('apiKeys.rotate_failed', 'Failed to rotate key')), 'error'),
     })
   }
 
@@ -358,6 +440,8 @@ export function ApiKeysTab({
             service={service}
             onUpdate={handleUpdate}
             onTest={handleTest}
+            onRotate={handleRotate}
+            rotating={rotateKey.isPending}
           />
         ))}
       </div>

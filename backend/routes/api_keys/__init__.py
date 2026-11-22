@@ -4,9 +4,9 @@ Centralised API key registry with test, rotate, export/import, and Bazarr
 migration endpoints.
 
 Package layout:
-    helpers.py  — API_KEY_REGISTRY + _mask_value + _get_service_info
+    helpers.py  — API_KEY_REGISTRY + _mask_value + _effective_value + _get_service_info/_reveal_values
     testing.py  — _test_* connectivity helpers + _TEST_DISPATCH
-    routes.py   — list/get/update/test services endpoints + _invalidate_for_service
+    routes.py   — list/get/update/reveal/rotate/test services endpoints + _invalidate_for_service
     io.py       — export/import/bazarr endpoints + ZIP/CSV helpers
 
 Public re-exports below are kept because tests and other callers access

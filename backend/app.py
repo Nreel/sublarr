@@ -634,7 +634,7 @@ def create_app(testing=False):
         app.extensions["webhook_dispatcher"] = webhook_dispatcher
 
         # Apply DB config overrides on startup (settings saved via UI take precedence)
-        from db.config import get_all_config_entries, save_config_entry
+        from db.config import get_all_config_entries, get_config_entry, save_config_entry
 
         _db_overrides = get_all_config_entries()
         if _db_overrides:
@@ -657,10 +657,23 @@ def create_app(testing=False):
         # Pre-1.18 standalone rows are not moved: they are read where they are
         # until a title's first change (services/standalone_owner_keys.py).
 
-        # Auto-generate API key on first start if not set via env or DB.
-        # Skip when SUBLARR_API_KEY is explicitly set (even to "") — that means
-        # the operator consciously chose to disable API-key auth (also covers tests).
-        if not settings.api_key and "SUBLARR_API_KEY" not in os.environ:
+        # An explicitly set SUBLARR_API_KEY is the deployment credential and wins
+        # over the database row: mirror it into config_entries so the settings UI
+        # shows (and can copy) the exact key auth accepts, and so a stale
+        # auto-generated row from an earlier boot cannot override the operator's
+        # env value after a restart. An explicit empty value is the deliberate
+        # auth-off kill switch — it clears the stored key rather than leaving one
+        # active (also covers tests).
+        _env_api_key = os.environ.get("SUBLARR_API_KEY")
+        if _env_api_key is not None:
+            if (get_config_entry("api_key") or "") != _env_api_key:
+                save_config_entry("api_key", _env_api_key)
+                settings = reload_settings(get_all_config_entries())
+                logger.info(
+                    "API key taken from SUBLARR_API_KEY%s",
+                    " (auth disabled)" if not _env_api_key else "",
+                )
+        elif not settings.api_key:
             import secrets
 
             _generated_key = secrets.token_hex(32)

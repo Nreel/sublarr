@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from flask import jsonify, request
 
 from routes.api_keys import bp
-from routes.api_keys.helpers import API_KEY_REGISTRY, _get_service_info
+from routes.api_keys.helpers import (
+    API_KEY_REGISTRY,
+    _get_service_info,
+    _mask_value,
+    _reveal_values,
+)
 from routes.api_keys.testing import _TEST_DISPATCH
 
 logger = logging.getLogger(__name__)
@@ -74,6 +80,54 @@ def get_service(service):
     return jsonify(info)
 
 
+@bp.route("/<service>/reveal", methods=["GET"])
+def reveal_service_keys(service):
+    """Return the unmasked key values for a service.
+    ---
+    get:
+      tags:
+        - API Keys
+      summary: Reveal service keys
+      description: >
+        Returns the full values the server actually accepts, for the settings UI's
+        reveal/copy affordance. Reachable only by callers that already passed the
+        API-key or UI-session gate applied to every /api/ route.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: service
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Unmasked key values
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        value:
+                          type: string
+        404:
+          description: Service not found
+    """
+    info = _reveal_values(service)
+    if info is None:
+        return jsonify({"error": f"Service '{service}' not found"}), 404
+    return jsonify(info)
+
+
 @bp.route("/<service>", methods=["PUT"])
 def update_service_keys(service):
     """Update API keys for a service and invalidate caches.
@@ -122,13 +176,17 @@ def update_service_keys(service):
 
     saved_keys = []
     for key_name in entry["keys"]:
-        if key_name in data:
-            val = str(data[key_name]).strip()
-            # Skip masked values (user did not change)
-            if "***" in val:
-                continue
-            save_config_entry(key_name, val)
-            saved_keys.append(key_name)
+        if key_name not in data:
+            continue
+        val = str(data[key_name]).strip()
+        # A masked display value ("abcd***wxyz") is not a credential — saving it
+        # would replace the real key with a string auth rejects, silently.
+        if "***" in val:
+            return jsonify(
+                {"error": f"'{key_name}' looks masked; paste the full key or use Reveal"}
+            ), 400
+        save_config_entry(key_name, val)
+        saved_keys.append(key_name)
 
     # Reload settings so new values take effect
     all_overrides = get_all_config_entries()
@@ -145,6 +203,90 @@ def update_service_keys(service):
             "status": "updated",
             "updated_keys": saved_keys,
             "service": info,
+        }
+    )
+
+
+@bp.route("/<service>/rotate", methods=["POST"])
+def rotate_service_key(service):
+    """Generate a new key for a single-credential service.
+    ---
+    post:
+      tags:
+        - API Keys
+      summary: Rotate service key
+      description: >
+        Writes a fresh 64-hex key into config_entries and reloads settings so it
+        takes effect immediately. The raw value is not returned — read it back via
+        /reveal. Refused with 409 for the Sublarr key when SUBLARR_API_KEY is set:
+        the environment variable is the deployment credential and would win at the
+        next restart, so rotation there would break external integrations.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: service
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Key rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  key:
+                    type: string
+                  masked_value:
+                    type: string
+        400:
+          description: Service has multiple credentials
+        404:
+          description: Service not found
+        409:
+          description: Key is fixed by the environment
+    """
+    entry = API_KEY_REGISTRY.get(service)
+    if entry is None:
+        return jsonify({"error": f"Service '{service}' not found"}), 404
+
+    if len(entry["keys"]) != 1:
+        return jsonify(
+            {"error": f"Service '{service}' has multiple credentials; set them individually"}
+        ), 400
+
+    key_name = entry["keys"][0]
+    if service == "sublarr" and os.environ.get("SUBLARR_API_KEY"):
+        return jsonify(
+            {
+                "error": (
+                    "The Sublarr API key is set via SUBLARR_API_KEY, which wins on restart. "
+                    "Change the environment variable and restart instead."
+                )
+            }
+        ), 409
+
+    import secrets
+
+    new_key = secrets.token_hex(32)
+    from config import reload_settings
+    from db.config import get_all_config_entries, save_config_entry
+
+    save_config_entry(key_name, new_key)
+    reload_settings(get_all_config_entries())
+    _invalidate_for_service(service)
+
+    logger.info("API key rotated for service '%s'", service)
+    return jsonify(
+        {
+            "status": "rotated",
+            "key": key_name,
+            "masked_value": _mask_value(new_key),
+            "service": _get_service_info(service),
         }
     )
 

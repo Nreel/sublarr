@@ -5,7 +5,7 @@ routes/__init__.py so the B1A split cannot silently break callers.
 
 Covers:
 1. `from routes.api_keys import bp` works and is a flask.Blueprint.
-2. All 8 expected URL rules are registered under /api/v1/api-keys.
+2. All expected URL rules are registered under /api/v1/api-keys.
 3. Public re-exports are accessible at `routes.api_keys.<name>`:
    - `_mask_value` (imported by tests/test_routes_api_keys.py line 16)
    - `_TEST_DISPATCH` (patched via patch.dict in several tests)
@@ -28,6 +28,8 @@ EXPECTED_URL_RULES = {
     ("/api/v1/api-keys/", "GET"),
     ("/api/v1/api-keys/<service>", "GET"),
     ("/api/v1/api-keys/<service>", "PUT"),
+    ("/api/v1/api-keys/<service>/reveal", "GET"),
+    ("/api/v1/api-keys/<service>/rotate", "POST"),
     ("/api/v1/api-keys/<service>/test", "POST"),
     ("/api/v1/api-keys/export", "POST"),
     ("/api/v1/api-keys/import", "POST"),

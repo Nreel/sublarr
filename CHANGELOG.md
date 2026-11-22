@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **API key reveal shows the real key** — the API key endpoints only ever
+  returned masked values (`first4***last4`), so the eye button next to the
+  Sublarr key in Settings → System → API Keys revealed the mask and the hidden
+  state showed eight bullets; neither ever matched the key the deployment
+  actually authenticates with. `GET /api/v1/api-keys/<service>/reveal` now
+  returns the raw value, and the eye fetches it on demand per key.
+- **Copy key button** — the API key card had no way to take the key to a
+  clipboard, so external tools had to retype it. Revealed keys now get a copy
+  button that puts the full value on the clipboard.
+- **Rotate key actually rotates** — the *Rotate* button opened an empty manual
+  input instead of generating a key: saving was discarded when the input was
+  blank, any value containing `***` was silently dropped, and a written
+  `api_key` had no effect at request time because `reload_settings` skipped
+  boot-scoped fields. `POST /api/v1/api-keys/<service>/rotate` now generates a
+  fresh 64-hex key, reloads settings so it is live immediately, and refreshes
+  the card. Rotating the Sublarr key is refused with 409 when `SUBLARR_API_KEY`
+  is set, since that variable wins at the next restart and would break every
+  caller configured against the rotated value; the refusal reason reaches the
+  UI as a toast.
+- **`SUBLARR_API_KEY` and the stored key agree** — the environment variable was
+  the only authority for request authentication while the settings UI read a
+  `config_entries` value that setup had generated independently, so the page
+  could display a key the server never accepted. Startup now mirrors
+  `SUBLARR_API_KEY` into `config_entries` (and generates one on first run when
+  neither the env nor the database has it), and `api_key` became a
+  runtime-overridable setting rather than a boot-only field, so the UI, the
+  auth hook and the env describe the same key.
 - **Provider degradation alerts are configurable** — `provider_degradation_alerts_enabled` existed in the backend with no UI and was not part of the `/config` payload, so it stayed off with no way to turn it on. It now shows as a toggle in Settings → Notifications → Notification Events.
 - **Quiet hours can be scoped to days and event types** — the editor hardcoded "every day" and `exception_events=["error"]`; the day picker and exception-event checkboxes now edit what the backend actually stores (Monday-first day list, per-event bypass). Saving with no day selected is refused, since an empty day list matches no day and silently disables quiet hours.
 - **Webhook switches show the real defaults** — Auto-Scan and Auto-Translate fell back to *off* in the UI while the backend defaults are *on*, so a not-yet-loaded config displayed a state the server was not using.

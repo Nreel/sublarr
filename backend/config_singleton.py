@@ -26,10 +26,15 @@ _settings_lock = threading.Lock()
 # ``config_entries`` (set via the UI). Logging is fully re-applied live by
 # ``_setup_logging`` on save, so a UI change to these takes effect without a
 # restart and survives one (DB override wins over ENV once the user sets it).
-# Everything else in ``_ALLOWED_BOOT_FIELDS`` (port, paths, database_url, …)
-# stays ENV-only.
+# ``api_key`` is included so a key generated on first boot or rotated in the
+# UI actually gates requests — before this it was written to the database and
+# then dropped by the reload below, leaving auth off while the UI claimed a
+# key was configured. An explicitly set ``SUBLARR_API_KEY`` still wins: startup
+# (app.py) mirrors the env value into the row, so env remains authoritative
+# for compose deployments. Everything else in ``_ALLOWED_BOOT_FIELDS``
+# (port, paths, database_url, …) stays ENV-only.
 _RUNTIME_OVERRIDABLE_BOOT_FIELDS: frozenset[str] = frozenset(
-    {"log_level", "log_file", "log_format"}
+    {"log_level", "log_file", "log_format", "api_key"}
 )
 
 
