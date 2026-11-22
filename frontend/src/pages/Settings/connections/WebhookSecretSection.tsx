@@ -11,6 +11,9 @@ import { SettingRow } from '@/components/shared/SettingRow'
 import { Toggle } from '@/components/shared/Toggle'
 import { toast } from '@/components/shared/Toast'
 import { getWebhookSecret, regenerateWebhookSecret } from '@/api/client'
+import type { WebhookSecret } from '@/api/settings'
+import { apiErrorMessage } from '@/lib/apiError'
+import { copyToClipboard } from '@/lib/clipboard'
 import { useUpdateConfig } from '@/hooks/useApi'
 
 const QUERY_KEY = ['webhook-secret']
@@ -19,22 +22,48 @@ export function WebhookSecretSection() {
   const { t } = useTranslation('settings')
   const queryClient = useQueryClient()
   const [shown, setShown] = useState(false)
-  const { data } = useQuery({ queryKey: QUERY_KEY, queryFn: getWebhookSecret })
+  // staleTime: 0 — a cached secret must never be shown or copied after a
+  // regeneration, mirroring the API-key reveal query (#71).
+  const secretQuery = useQuery({ queryKey: QUERY_KEY, queryFn: getWebhookSecret, staleTime: 0 })
   const updateConfig = useUpdateConfig()
 
   const regenerate = useMutation({
     mutationFn: regenerateWebhookSecret,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+    onSuccess: (data) => {
+      // The response carries the new plaintext; write it straight into the
+      // cache so display and copy use it even if a later refetch fails.
+      queryClient.setQueryData(QUERY_KEY, (prev: WebhookSecret | undefined) => ({
+        webhook_secret: data.webhook_secret,
+        legacy_auth: prev?.legacy_auth ?? true,
+      }))
       toast(t('webhooks_page.secret_regenerated'))
     },
   })
 
-  const secret = data?.webhook_secret ?? ''
+  const secret = secretQuery.data?.webhook_secret ?? ''
 
-  function copy() {
-    if (!secret || !navigator.clipboard) return
-    void navigator.clipboard.writeText(secret).then(() => toast(t('webhooks_page.copied')))
+  async function copy() {
+    let value = secret
+    if (!value) {
+      const result = await secretQuery.refetch()
+      value = result.data?.webhook_secret ?? ''
+    }
+    if (!value) {
+      toast(
+        secretQuery.isError
+          ? apiErrorMessage(secretQuery.error, t('webhooks_page.secret_load_failed', 'Could not load the webhook secret'))
+          : t('webhooks_page.copy_empty', 'No secret to copy'),
+        'error',
+      )
+      return
+    }
+    // navigator.clipboard alone rejects on insecure origins (plain http LAN);
+    // copyToClipboard falls back to execCommand there.
+    if (!(await copyToClipboard(value))) {
+      toast(t('webhooks_page.copy_failed', 'Could not copy the secret'), 'error')
+      return
+    }
+    toast(t('webhooks_page.copied'))
   }
 
   function confirmRegenerate() {
@@ -91,9 +120,9 @@ export function WebhookSecretSection() {
       </SettingRow>
       <SettingRow label={t('webhooks_page.legacy_label')} description={t('webhooks_page.legacy_hint')}>
         <Toggle
-          checked={data?.legacy_auth ?? true}
+          checked={secretQuery.data?.legacy_auth ?? true}
           onChange={setLegacy}
-          disabled={!data || updateConfig.isPending}
+          disabled={!secretQuery.data || updateConfig.isPending}
         />
       </SettingRow>
     </SettingsSection>

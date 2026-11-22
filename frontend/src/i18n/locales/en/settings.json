@@ -1269,6 +1269,9 @@
     "secret_regenerate": "Regenerate",
     "secret_regenerate_confirm": "Generate a new webhook secret? Connections using the old one stop working.",
     "secret_regenerated": "New webhook secret generated",
+    "copy_failed": "Could not copy to clipboard",
+    "copy_empty": "No secret to copy",
+    "secret_load_failed": "Could not load the webhook secret",
     "legacy_label": "Keep accepting the API key on webhooks",
     "legacy_hint": "Turn this off once Sonarr, Radarr and Jellyfin use the webhook secret. Then nobody who reads their settings can control Sublarr with the API key."
   },

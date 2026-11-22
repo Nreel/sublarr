@@ -8,6 +8,7 @@ import {
 } from '@/hooks/useApi'
 import { toast } from '@/components/shared/Toast'
 import { apiErrorMessage } from '@/lib/apiError'
+import { copyToClipboard } from '@/lib/clipboard'
 import { BazarrImportPreview } from '@/components/settings/BazarrImportPreview'
 import {
   Loader2, Shield, ShieldCheck, ShieldAlert, TestTube,
@@ -16,31 +17,6 @@ import {
 import type { ApiKeyService, BazarrMigrationPreview } from '@/lib/types'
 
 // ─── Service Key Card ────────────────────────────────────────────────────────
-
-/**
- * Clipboard write with a fallback. `navigator.clipboard` is unavailable (or
- * rejects) on insecure origins — a plain `http://LAN:5765` deployment is one.
- */
-async function copyToClipboard(value: string): Promise<boolean> {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(value)
-      return true
-    } catch {
-      // Fall through to the selection-based copy.
-    }
-  }
-  const area = document.createElement('textarea')
-  area.value = value
-  area.setAttribute('readonly', '')
-  area.style.position = 'fixed'
-  area.style.left = '-1000px'
-  document.body.appendChild(area)
-  area.select()
-  const ok = document.execCommand('copy')
-  document.body.removeChild(area)
-  return ok
-}
 
 function ServiceKeyCard({
   service,

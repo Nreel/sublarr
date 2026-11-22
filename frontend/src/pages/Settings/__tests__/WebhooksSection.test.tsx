@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
@@ -80,10 +80,10 @@ describe('WebhooksSection', () => {
     expect(el.textContent).toContain('/api/v1/webhook/jellyfin')
   })
 
-  it('copies URL and shows toast when copy button clicked', () => {
+  it('copies URL and shows toast when copy button clicked', async () => {
     renderSection()
     fireEvent.click(screen.getByTestId('webhook-copy-sonarr'))
     expect(mockClipboardWrite).toHaveBeenCalledWith(expect.stringContaining('/api/v1/webhook/sonarr'))
-    expect(mockToast).toHaveBeenCalledWith('webhooks_page.copied')
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith('webhooks_page.copied'))
   })
 })

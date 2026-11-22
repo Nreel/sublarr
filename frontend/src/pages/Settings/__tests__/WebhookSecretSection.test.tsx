@@ -60,6 +60,33 @@ describe('WebhookSecretSection', () => {
     confirm.mockRestore()
   })
 
+  it('copies the plaintext secret, not the mask, through the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    renderSection()
+    fireEvent.click(screen.getByTestId('webhook-secret-copy'))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('abc123secret'))
+  })
+
+  it('keeps the regenerated secret shown and copyable when the refetch fails', async () => {
+    getWebhookSecret.mockResolvedValueOnce({ webhook_secret: 'abc123secret', legacy_auth: true })
+    getWebhookSecret.mockRejectedValue(new Error('session required'))
+    regenerateWebhookSecret.mockResolvedValue({ webhook_secret: 'newsecret' })
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderSection()
+    const value = screen.getByTestId('webhook-secret')
+    await waitFor(() => expect(value.textContent).toMatch(/^•+$/))
+    fireEvent.click(screen.getByTestId('webhook-secret-toggle'))
+    await waitFor(() => expect(value.textContent).toBe('abc123secret'))
+    fireEvent.click(screen.getByTestId('webhook-secret-regenerate'))
+    await waitFor(() => expect(value.textContent).toBe('newsecret'))
+    fireEvent.click(screen.getByTestId('webhook-secret-copy'))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('newsecret'))
+    confirm.mockRestore()
+  })
+
   it('turns legacy API-key auth off through the config', async () => {
     renderSection()
     const toggle = await screen.findByRole('switch')

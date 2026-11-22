@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { SettingsSection } from '@/components/settings/SettingsSection'
 import { SettingRow } from '@/components/shared/SettingRow'
 import { toast } from '@/components/shared/Toast'
+import { copyToClipboard } from '@/lib/clipboard'
 import { withBase } from '@/basePath'
 import { WebhookSecretSection } from './WebhookSecretSection'
 
@@ -45,17 +46,10 @@ export function WebhooksSection() {
                 <span data-testid={`webhook-url-${w.service.toLowerCase()}`} className="min-w-0 break-all">{fullUrl}</span>
                 <button
                   onClick={() => {
-                    if (navigator.clipboard) {
-                      void navigator.clipboard.writeText(fullUrl)
-                    } else {
-                      const el = document.createElement('textarea')
-                      el.value = fullUrl
-                      document.body.appendChild(el)
-                      el.select()
-                      document.execCommand('copy')
-                      document.body.removeChild(el)
-                    }
-                    toast(t('webhooks_page.copied'))
+                    void copyToClipboard(fullUrl).then((ok) => {
+                      if (ok) toast(t('webhooks_page.copied'))
+                      else toast(t('webhooks_page.copy_failed', 'Could not copy the URL'), 'error')
+                    })
                   }}
                   className="p-1 rounded transition-colors hover:opacity-80"
                   title={t('webhooks_page.copy_url_title')}

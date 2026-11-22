@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Webhook secret copy and regenerate work** — on plain-HTTP LAN deployments
+  `navigator.clipboard` is undefined, so the copy button in Settings → System →
+  Hooks silently no-oped and callers pasted stale clipboard content, which the
+  server rejected with 401; hand-selecting the displayed span copied the `•`
+  bullets instead of the secret. Copy now uses the shared `copyToClipboard`
+  helper (async clipboard with an `execCommand` fallback) and surfaces empty,
+  failed and successful copies as toasts. *Regenerate* discarded the plaintext
+  the endpoint returns and only refetched, so a failed refetch left the old
+  secret displayed and copyable; the new plaintext is now written straight into
+  the query cache. The webhook secret query never serves a cached value
+  (`staleTime: 0`), and a failed load (403) no longer renders an empty secret
+  without a toast.
 - **API key reveal shows the real key** — the API key endpoints only ever
   returned masked values (`first4***last4`), so the eye button next to the
   Sublarr key in Settings → System → API Keys revealed the mask and the hidden

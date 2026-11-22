@@ -1269,6 +1269,9 @@
     "secret_regenerate": "Neu erzeugen",
     "secret_regenerate_confirm": "Neuen Webhook-Schlüssel erzeugen? Verbindungen mit dem alten Schlüssel funktionieren danach nicht mehr.",
     "secret_regenerated": "Neuer Webhook-Schlüssel erzeugt",
+    "copy_failed": "Kopieren in Zwischenablage fehlgeschlagen",
+    "copy_empty": "Kein Schlüssel zum Kopieren",
+    "secret_load_failed": "Webhook-Schlüssel konnte nicht geladen werden",
     "legacy_label": "API-Schlüssel für Webhooks weiter akzeptieren",
     "legacy_hint": "Ausschalten, sobald Sonarr, Radarr und Jellyfin den Webhook-Schlüssel nutzen. Dann kann niemand, der deren Einstellungen liest, mit dem API-Schlüssel Sublarr steuern."
   },
