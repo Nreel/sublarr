@@ -503,7 +503,10 @@ def create_app(testing=False):
 
             with sa_db.engine.connect() as conn:
                 conn.execute(text("PRAGMA journal_mode=WAL"))
-                conn.execute(text(f"PRAGMA busy_timeout={settings.sqlite_busy_timeout_ms}"))
+                # PRAGMA takes no bind parameters (SQLite rejects `busy_timeout=?`),
+                # so the setting is coerced to int before interpolating; exec_driver_sql
+                # avoids the semgrep `avoid-sqlalchemy-text` ERROR on dynamic text().
+                conn.exec_driver_sql(f"PRAGMA busy_timeout={int(settings.sqlite_busy_timeout_ms)}")
                 conn.commit()
 
             # Diagnostic: the #1 cause of "Sublarr is painfully slow" reports is
@@ -843,5 +846,9 @@ if __name__ == "__main__":
     app = create_app()
     _debug = _os.environ.get("FLASK_DEBUG", "0") == "1"
     socketio.run(
-        app, host=get_settings().host, port=get_settings().port, debug=_debug, allow_unsafe_werkzeug=_debug
+        app,
+        host=get_settings().host,
+        port=get_settings().port,
+        debug=_debug,
+        allow_unsafe_werkzeug=_debug,
     )

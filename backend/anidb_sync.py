@@ -24,11 +24,11 @@ from datetime import UTC
 
 import requests
 
-from config import get_settings
-
 # defusedxml hardens against XXE / Billion-Laughs on the anime-list feed
 # (3rd-party GitHub-hosted XML). See PENTEST_FINDINGS.md R4-02.
 from defusedxml import ElementTree as ET
+
+from config import get_settings
 
 logger = logging.getLogger(__name__)
 
