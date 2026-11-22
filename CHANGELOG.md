@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.1] - 2026-11-23
+
+### Fixed
+- **Containers start again** — the 1.23.0 image's start command was rewritten
+  from gunicorn's exec-form arguments to `sh -c`, and `/bin/sh` (dash) parses
+  gunicorn's app factory as shell syntax: `app:create_app()` is rejected with
+  `sh: 1: Syntax error: "(" unexpected`, so every container exited 2 and
+  restart-looped, never passing its healthcheck (`docker compose up` reported
+  `container sublarr is unhealthy`). The factory is quoted now.
+  `SUBLARR_HOST`/`SUBLARR_PORT` still drive the bind and the healthcheck, and
+  the `1.23.0` image on GHCR stays broken — pull `1.23.1`, `:latest` or
+  `:stable`.
+
 ## [1.23.0] - 2026-11-23
 
 ### Added
