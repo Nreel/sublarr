@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-11-23
+
 ### Added
 - **Health page badges name every problem and link to its setting** — the
   Health page's *Problems* column was a bare number, and provider rows,
