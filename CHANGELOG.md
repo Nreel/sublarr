@@ -26,6 +26,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Health lists are complete** — the series view was capped at 50 rows; every
   list is now uncapped (worst-hit series first) and paints in chunks as the
   reader scrolls, so nothing is silently hidden.
+- **Tunables became settings** — ANiDB dump URL/TTL, anime list URL, SQLite
+  busy timeout, Redis connect timeout, response-cache TTL and the
+  `pg_dump`/`pg_restore`/`pg_archive_check` timeouts were module constants with
+  no way to change them; they now live in the settings registry. The
+  response-cache TTL resolves per request, so a change takes effect without a
+  restart.
+
+### Changed
+- **Host and port come from the environment** — the server bound a hardcoded
+  `0.0.0.0` and the container assumed fixed ports, so a custom port broke the
+  bind and the Docker healthcheck. `SUBLARR_HOST` (with `SUBLARR_PORT`) now
+  drives the bind in `app.py`, the Dockerfile `CMD` and the `HEALTHCHECK`, and
+  the CLI's `--url` default derives from `SUBLARR_PORT`.
+
+### Removed
+- **Hardcoded community links** — the sidebar and About page's PayPal *Donate*,
+  GitHub *Star*/*Report Issue*, Discord and Reddit links (and their en/de
+  strings) pointed at upstream, not at this deployment.
 
 ### Fixed
 - **Webhook secret copy and regenerate work** — on plain-HTTP LAN deployments
@@ -88,6 +106,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   filter never applied. Lookups now use the catalog name; filters also accept
   the legacy internal spelling, and notification history keeps the internal
   label so the history filter UI is unchanged.
+- **Series episode batch toolbar queues the right items** — *Translate* and
+  *Search* on a season's episode toolbar sent episode IDs to
+  `/wanted/batch-translate` / `/wanted/batch-search`, which take wanted-item
+  IDs, so the batch ran nothing or unrelated items. Selection is now mapped
+  through the episode→wanted map, and both buttons disable when the selection
+  has no wanted rows.
+- **Windows path separators stop splitting the library** — on a Windows host
+  mapped media paths were rewritten to backslashes regardless of the local
+  prefix, so POSIX-style locals produced paths no caller could match; separator
+  style now follows the local prefix. Mixed `/` and `\` spellings created
+  duplicate wanted rows and pruned foreign-track scan rows that should have
+  been spared, and quarantined sidecars were trashed under case-folded keys so
+  a restored file vanished from the subtitle manifest. A folder missing at
+  drive level no longer vouches that a share is simply offline.
+- **Library locks release when the worker fails to start** — a batch whose
+  background worker could not start stayed claimed, so every later
+  `POST /library/series/<id>/process` and `/library/process-all` answered 409
+  until restart; the lock is now released and the request returns 503.
+- **Stats "today" counts the UTC day** — dashboard and Stats counted a local
+  day against UTC-stamped events, so counts were skewed by up to 24 hours on
+  non-UTC installs; the day key and the `downloads_today` window now start at
+  UTC midnight.
+- **OCR no longer leaks file handles** — image-track OCR left one handle open
+  per frame, which exhausted the process across a thread pool on long tracks;
+  the PIL image handles are now closed.
+- **Folder validation order** — an invalid `media_type` is now reported
+  instead of the misleading "Directory does not exist", and the `alass` binary
+  install honours `$HOME`.
 
 ## [1.22.1] - 2026-11-21
 
