@@ -70,6 +70,9 @@ def test_other_link_errors_are_not_masked(tmp_path):
     assert src.exists()
 
 
+@pytest.mark.skipif(
+    os.name == "nt", reason="Windows refuses os.replace onto a file the writer still holds"
+)
 def test_a_failed_copy_spares_a_file_that_replaced_the_half_copy(tmp_path):
     """Codex review: a download that lands mid-copy wins; cleanup must not delete it."""
     src, dst = tmp_path / "a.srt", tmp_path / "b.srt"

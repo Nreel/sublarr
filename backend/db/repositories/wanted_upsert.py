@@ -168,8 +168,10 @@ class _WantedUpsertMixin:
         Returns (row_id, was_updated) where was_updated=True if an existing row
         was updated, False if a new row was inserted.
         """
-        # Normalize path separators to avoid duplicate rows from mixed / and \ paths
-        file_path = os.path.normpath(file_path) if file_path else file_path
+        # Stored verbatim: callers hand the same spelling they query with.
+        # Windows os.path.normpath here used to rewrite "/a.mkv" to "\\a.mkv",
+        # splitting rows and cursor comparisons apart from the callers' paths;
+        # mixed-separator dedup lives in the normpath comparisons below.
         now = self._now()
         langs_json = json.dumps(missing_languages or [])
         embedded_json = json.dumps(embedded_languages) if embedded_languages is not None else None

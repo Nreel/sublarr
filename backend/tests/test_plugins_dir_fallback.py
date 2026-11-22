@@ -35,4 +35,6 @@ def test_every_start_in_a_process_shares_one_private_fallback(tmp_path, monkeypa
     assert os.path.dirname(first) == str(tmp_path)
     assert len(os.listdir(tmp_path)) == 1
     # Plugins are code: the folder must not be writable by anyone else.
-    assert stat.S_IMODE(os.stat(first).st_mode) == 0o700
+    # Windows mkdtemp carries no mode bits there — its ACL does the job.
+    if os.name == "posix":
+        assert stat.S_IMODE(os.stat(first).st_mode) == 0o700

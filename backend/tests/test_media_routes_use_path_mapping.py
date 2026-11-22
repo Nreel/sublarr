@@ -5,6 +5,7 @@ read ``settings.media_path_mapping`` — a setting that does not exist — so a
 path as Sonarr reports it was never mapped and ended in 403/404.
 """
 
+import os
 from unittest.mock import patch
 
 
@@ -26,7 +27,9 @@ def test_the_spell_check_maps_a_remote_path(client, tmp_path):
         )
 
     assert response.status_code == 200, response.get_json()
-    assert check.call_args.args[0] == str(local / "Ep.de.srt")
+    # map_path returns the slash-canonical spelling; the route hands the OS a
+    # path that resolves to the mapped file whichever separator it spells.
+    assert os.path.normpath(check.call_args.args[0]) == str(local / "Ep.de.srt")
 
 
 def test_no_route_reads_the_setting_that_does_not_exist():

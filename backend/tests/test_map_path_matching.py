@@ -21,11 +21,6 @@ def _mapped(mapping: str, path: str) -> str:
         return map_path(path)
 
 
-@pytest.fixture(autouse=True)
-def _posix(monkeypatch):
-    monkeypatch.setattr("config_utils.os.name", "posix")
-
-
 def test_a_single_pair_maps_as_before():
     assert _mapped("/data/tv=/mnt/tv", "/data/tv/Show/S01E01.mkv") == "/mnt/tv/Show/S01E01.mkv"
 
@@ -58,8 +53,8 @@ def test_no_matching_pair_leaves_the_path():
     assert _mapped("/data/tv=/mnt/tv;broken;=/x", "/other/ep.mkv") == "/other/ep.mkv"
 
 
-def test_windows_gets_backslashes(monkeypatch):
-    monkeypatch.setattr("config_utils.os.name", "nt")
+def test_a_windows_local_prefix_joins_backslashes():
+    # Separator style follows the local prefix, not the host.
     assert _mapped("/data/tv=D:/tv", "/data/tv/Show/ep.mkv") == "D:\\tv\\Show\\ep.mkv"
 
 
@@ -96,6 +91,5 @@ def test_a_backslash_in_a_posix_file_name_is_kept():
     assert _mapped("/data/tv=/mnt/tv", "/data/tv/Show/a\\b.mkv") == "/mnt/tv/Show/a\\b.mkv"
 
 
-def test_a_windows_path_on_a_windows_host_keeps_backslashes(monkeypatch):
-    monkeypatch.setattr("config_utils.os.name", "nt")
+def test_a_windows_local_prefix_keeps_backslashes():
     assert _mapped("\\\\nas\\tv=T:\\", "\\\\nas\\tv\\Show\\ep.mkv") == "T:\\Show\\ep.mkv"

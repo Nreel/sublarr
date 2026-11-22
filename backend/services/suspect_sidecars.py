@@ -447,7 +447,11 @@ def trash_quarantined_on_disk() -> int:
     """
     try:
         by_folder: dict[str, list[str]] = {}
-        for path, flags in _suspects().items():
+        # Suspect keys are normcase-folded; the trash must move and name the
+        # file's own spelling, or a restored file goes missing from the manifest.
+        spelled = {_norm(p): p for sidecars in _load()[1].values() for p in sidecars}
+        for norm_path, flags in _suspects().items():
+            path = spelled.get(norm_path, norm_path)
             if not os.path.isfile(path) or not is_suspect_sidecar(path):
                 continue
             if _restored_since_flagged(path, flags):

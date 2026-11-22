@@ -52,6 +52,10 @@ class PathPresence:
         if found is None:
             return False
         folder, empty, mount, holds_mounts = found
+        if os.path.dirname(folder) == folder:
+            # The filesystem root vouches for nothing: a folder missing at
+            # drive level is indistinguishable from a share that is off.
+            return False
         if holds_mounts:
             # A folder of mount points (/media/<user>, /mnt, /): udisks and
             # autofs remove a disk's folder on unmount, so a missing entry

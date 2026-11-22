@@ -52,7 +52,11 @@ def test_the_first_line_after_a_big_fonts_section_is_found(tmp_path):
     assert has_subtitle_lines(str(path))
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root reads mode-000 files")
+# POSIX-only probe: Windows has no geteuid and does not enforce mode 000.
+_SKIP_MODE_000 = not hasattr(os, "geteuid") or os.geteuid() == 0
+
+
+@pytest.mark.skipif(_SKIP_MODE_000, reason="root reads mode-000 files; Windows lacks POSIX perms")
 def test_an_unreadable_sidecar_still_counts_so_it_is_not_downloaded_forever(tmp_path):
     video = _video(tmp_path)
     path = tmp_path / "Film.de.ass"

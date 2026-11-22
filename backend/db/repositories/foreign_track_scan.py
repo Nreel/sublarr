@@ -79,13 +79,16 @@ class ForeignTrackScanRepository(BaseRepository):
         """Stamp rows at or below ``paths`` with ``generation`` so the prune spares them."""
         kept = 0
         for path in dict.fromkeys(paths):
-            under = os.path.join(path, "")
+            base = path.rstrip("/\\")
             result = self.session.execute(
                 update(ForeignTrackScan)
                 .where(
                     or_(
-                        ForeignTrackScan.path == path,
-                        ForeignTrackScan.path.startswith(under, autoescape=True),
+                        # Rows and walk paths can spell separators differently
+                        # on Windows: spare both spellings of the folder.
+                        ForeignTrackScan.path.in_({path, base + "/", base + os.sep}),
+                        ForeignTrackScan.path.startswith(base + "/", autoescape=True),
+                        ForeignTrackScan.path.startswith(base + os.sep, autoescape=True),
                     ),
                     ForeignTrackScan.generation < generation,
                 )

@@ -14,7 +14,10 @@ from security_utils import is_safe_path
 
 
 def test_a_relative_path_is_refused_even_when_cwd_is_inside_the_base(tmp_path, monkeypatch):
-    (tmp_path / "C:").mkdir()
+    if os.name == "posix":
+        # On Windows "C:" is a drive-relative path, not a folder name; the
+        # refusal of "C:/Windows/..." there comes from realpath, not cwd.
+        (tmp_path / "C:").mkdir()
     monkeypatch.chdir(tmp_path)
     assert not is_safe_path("C:/Windows/System32/drivers/etc/hosts", str(tmp_path))
     assert not is_safe_path("movie.mkv", str(tmp_path))

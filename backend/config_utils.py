@@ -3,7 +3,6 @@
 config.py re-exports map_path for backwards compatibility.
 """
 
-import os
 import re
 
 # "D:\..." or UNC "\\server\share\..." — what Sonarr/Radarr on Windows report.
@@ -33,9 +32,12 @@ def map_path(path: str) -> str:
     "/data/movies-4k/..."), and the pair with the longest remote prefix wins,
     so a specific pair beats a general one in any order.
 
-    On Windows, forward slashes in the mapped path are converted to backslashes.
     A Windows remote path ("D:\\TV\\...", "\\\\nas\\tv\\...") matches its pair
-    with either separator, and elsewhere its backslashes become "/".
+    with either separator, and elsewhere its backslashes become "/". The
+    result's separator style follows the local prefix, not the host: a
+    Windows-shaped local ("D:\\tv", "\\\\nas\\share") joins in backslashes
+    wherever Sublarr runs; a POSIX local stays "/" even on a Windows host.
+    Callers compare through normcase/normpath and the OS accepts either spelling.
 
     SECURITY NOTE: This function performs prefix replacement only.
     Callers that serve or delete files MUST validate the mapped result with
@@ -83,6 +85,6 @@ def map_path(path: str) -> str:
     remote_prefix, local_prefix = best
     # Join at the folder boundary whichever side spells the trailing separator.
     mapped = local_prefix.rstrip("/\\") + probe[len(remote_prefix.rstrip("/\\")) :]
-    if os.name == "nt":
+    if _WINDOWS_PATH_RE.match(local_prefix):
         mapped = mapped.replace("/", "\\")
     return mapped

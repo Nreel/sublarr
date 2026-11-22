@@ -6,7 +6,10 @@ ceiling — a Raspberry Pi on an SD card, a slow network mount, a very large
 library — was stopped every time and never finished.
 """
 
+import os
 import threading
+
+import pytest
 
 from services.foreign_tracks import sweep as sw
 from services.foreign_tracks.state import load_state
@@ -92,6 +95,9 @@ def test_rows_under_an_unreadable_folder_survive_the_prune(app, repo, tmp_path, 
     assert "/media/gone.mkv" not in paths
 
 
+@pytest.mark.skipif(
+    os.name == "nt", reason="Windows chmod(0) keeps a folder listable; only POSIX locks it"
+)
 def test_safe_walk_reports_folders_it_cannot_read(tmp_path):
     from services.cleanup_executors import _safe_walk
 
