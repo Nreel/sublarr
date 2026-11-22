@@ -60,7 +60,9 @@ def _add_breaker(app, name, state="open", failures=5):
         db.session.commit()
 
 
-def _add_translation_event(app, backend, status, started, error_type=None, error_msg=None, lines=5):
+def _add_translation_event(
+    app, backend, status, started, error_type=None, error_msg=None, lines=5, job_id=None
+):
     from db.models.translation import TranslationEvent
     from extensions import db
 
@@ -76,6 +78,27 @@ def _add_translation_event(app, backend, status, started, error_type=None, error
                 error_type=error_type,
                 error_msg=error_msg,
                 started_at=started,
+                job_id=job_id,
+            )
+        )
+        db.session.commit()
+
+
+def _add_job(app, job_id, status="failed", error="", created=None, source_format="ass"):
+    from db.models.core import Job
+    from extensions import db
+
+    with app.app_context():
+        now = created or datetime.now(UTC)
+        db.session.add(
+            Job(
+                id=job_id,
+                file_path="/media/Show A/Show A - S01E01.mkv",
+                status=status,
+                source_format=source_format,
+                error=error,
+                created_at=now,
+                completed_at=now if status != "queued" else None,
             )
         )
         db.session.commit()
@@ -117,6 +140,7 @@ class TestLibraryHealthService:
             "stuck_items": 0,
             "backends": [],
             "recent_errors": [],
+            "pipeline_errors": [],
         }
 
     def test_series_aggregation_and_problem_items(self, client):
@@ -188,6 +212,23 @@ class TestLibraryHealthService:
         _add_translation_event(app, "ollama", "ok", now - timedelta(minutes=30))
         _add_translation_event(app, "ollama", "cancelled", now - timedelta(minutes=10))
         _add_translation_event(app, "azure", "error", now - timedelta(days=8))
+        # Pipeline failures — jobs that broke before reaching a backend. The 8-day-old
+        # one is listed (the list is not windowed) but not counted.
+        _add_job(app, "j1", error="No source subtitle found to translate from")
+        _add_job(app, "j2", error="boom", created=now - timedelta(days=8))
+        # A backend exception fails its job too; that job belongs to the event,
+        # so it must not appear in the pipeline list or inflate the count.
+        _add_translation_event(
+            app,
+            "ollama",
+            "error",
+            now - timedelta(hours=3),
+            error_msg="Connection refused",
+            job_id="j3",
+        )
+        _add_job(app, "j3", error="Connection refused")
+        _add_job(app, "j4", status="completed")
+        _add_job(app, "j5", status="cancelled", error="operator cancel")
         _add_wanted(
             app,
             "Show T",
@@ -201,8 +242,9 @@ class TestLibraryHealthService:
         tr = resp.get_json()["translation"]
 
         # error + timeout inside the window; ok, cancelled, and an 8-day-old
-        # error are all excluded.
-        assert tr["failures_7d"] == 2
+        # error are all excluded. j1 (no backend event) counts as a pipeline
+        # failure; j3's job is already counted as its event.
+        assert tr["failures_7d"] == 4
         assert tr["stuck_items"] == 1
 
         # Failing backend sorts first.
@@ -213,12 +255,20 @@ class TestLibraryHealthService:
 
         # Recent errors: newest first, failed statuses only — the list is not
         # windowed, so the 8-day-old azure failure is listed too.
-        assert len(tr["recent_errors"]) == 3
+        assert len(tr["recent_errors"]) == 4
         assert tr["recent_errors"][0]["status"] == "timeout"
         assert tr["recent_errors"][1]["error_type"] == "LineCountMismatchError"
         assert tr["recent_errors"][1]["error_msg"] == "expected 4 lines, got 3"
-        assert tr["recent_errors"][2]["backend"] == "azure"
+        assert tr["recent_errors"][2]["error_msg"] == "Connection refused"
+        assert tr["recent_errors"][3]["backend"] == "azure"
         assert tr["recent_errors"][0]["started_at"] > tr["recent_errors"][1]["started_at"]
+
+        # Pipeline failures: failed jobs with no backend event, newest first.
+        # j3 (backend-attributed), j4 (completed) and j5 (cancelled) are out.
+        assert [p["job_id"] for p in tr["pipeline_errors"]] == ["j1", "j2"]
+        assert tr["pipeline_errors"][0]["error"] == "No source subtitle found to translate from"
+        assert tr["pipeline_errors"][0]["source_format"] == "ass"
+        assert tr["pipeline_errors"][0]["created_at"] > tr["pipeline_errors"][1]["created_at"]
 
 
 class TestSyncRateInSubtitlesStats:

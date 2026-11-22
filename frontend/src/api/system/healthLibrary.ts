@@ -42,13 +42,28 @@ export interface HealthTranslationError {
   started_at: string | null;
 }
 
+export interface HealthPipelineError {
+  job_id: string;
+  file_path: string;
+  source_format: string;
+  error: string;
+  created_at: string | null;
+  completed_at: string | null;
+}
+
 export interface HealthTranslation {
-  /** Failed translate_batch calls (status error/timeout) in the last 7 days. */
+  /** Failed translations in the last 7 days: backend call errors (status
+   *  error/timeout) plus pipeline failures — jobs that broke before reaching
+   *  a backend. A job whose failure already has a backend event is counted
+   *  once, as that event. */
   failures_7d: number;
   /** Wanted items whose recorded failure_kind is translation_error. */
   stuck_items: number;
   backends: HealthTranslationBackend[];
   recent_errors: HealthTranslationError[];
+  /** Failed translation jobs with no backend event — no source subtitle,
+   *  nothing to translate, format errors. */
+  pipeline_errors: HealthPipelineError[];
 }
 
 export interface HealthProviderRow {

@@ -70,6 +70,10 @@
     "col_lines": "Zeilen",
     "col_when": "Wann",
     "empty_errors": "Keine Übersetzungsfehler.",
+    "pipeline_title": "Pipeline-Fehler",
+    "backend_errors_title": "Backend-Fehler",
+    "col_file": "Datei",
+    "col_format": "Format",
     "summary": "{{failures7d}} fehlgeschlagene Übersetzungen in den letzten 7 Tagen · {{stuck}} Einträge warten auf erneute Übersetzung",
     "hint": "Versuche und Fehler pro Episode stehen hinter dem History-Button der Episode."
   }

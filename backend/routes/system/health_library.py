@@ -67,6 +67,10 @@ def health_library():
                         type: array
                         items:
                           type: object
+                      pipeline_errors:
+                        type: array
+                        items:
+                          type: object
     """
     from services.health_overview import get_library_health
 

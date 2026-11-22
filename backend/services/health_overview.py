@@ -11,10 +11,11 @@ Aggregates three "where does it hurt" views from data that already exists:
   * ``providers``— per-provider health: circuit-breaker state merged with
                    the hit/failure counters from provider_stats.
   * ``translation``— translation-pipeline health: per-backend failure counters
-                     from translation_backend_stats plus the most recent failed
-                     translate_batch calls from translation_events. Until this,
-                     a translation error was only visible behind one episode's
-                     History button; a dead backend showed nowhere.
+                     from translation_backend_stats, the most recent failed
+                     translate_batch calls from translation_events, and failed
+                     translation jobs from ``jobs``. Until this, a translation
+                     error was only visible behind one episode's History
+                     button; a dead backend showed nowhere.
 
 Everything is read-only and bounded (top-N lists) so the endpoint stays
 cheap enough for a dashboard poll.
@@ -44,6 +45,9 @@ _EXCLUDED_STATUSES = ("ignored",)
 # "cancelled" is an operator action, not a failure.
 _FAILED_TRANSLATION_STATUSES = ("error", "timeout")
 
+# jobs.status that means the pipeline broke. "cancelled" is an operator action.
+_FAILED_JOB_STATUS = "failed"
+
 
 def _is_problem_clause(wanted_model):
     """Filter: item is stuck — failed outright or classified with a failure kind."""
@@ -52,7 +56,7 @@ def _is_problem_clause(wanted_model):
 
 def get_library_health() -> dict:
     from db.models.circuit_breaker import CircuitBreakerState
-    from db.models.core import WantedItem
+    from db.models.core import Job, WantedItem
     from db.models.providers import ProviderStats
     from db.models.translation import TranslationBackendStats, TranslationEvent
     from extensions import db
@@ -190,7 +194,13 @@ def get_library_health() -> dict:
     # Same defensive contract as the breaker join above: an install whose
     # schema drifted from its alembic_version may lack the translation tables,
     # and a health overview must never be the thing that 500s.
-    translation: dict = {"failures_7d": 0, "stuck_items": 0, "backends": [], "recent_errors": []}
+    translation: dict = {
+        "failures_7d": 0,
+        "stuck_items": 0,
+        "backends": [],
+        "recent_errors": [],
+        "pipeline_errors": [],
+    }
     try:
         window_start = datetime.now(UTC) - timedelta(days=7)
         translation["failures_7d"] = int(
@@ -224,6 +234,52 @@ def get_library_health() -> dict:
             }
             for e in error_rows
         ]
+        # Pipeline failures: translation jobs that broke without reaching a
+        # backend — no source subtitle, nothing to translate, container/format
+        # errors. Those only ever surfaced behind an episode's History button:
+        # they write no translation_events row and no backend stat, so this
+        # page said "No translation errors" while the pipeline was failing.
+        # A backend exception also fails its job, so a job already accounted
+        # for by an error/timeout event is excluded here — one incident must
+        # not be counted, or listed, twice.
+        backend_failed_jobs = (
+            select(TranslationEvent.job_id)
+            .where(TranslationEvent.status.in_(_FAILED_TRANSLATION_STATUSES))
+            .where(TranslationEvent.job_id.isnot(None))
+            .where(TranslationEvent.job_id != "")
+        )
+        pipeline_rows = (
+            session.execute(
+                select(Job)
+                .where(Job.status == _FAILED_JOB_STATUS)
+                .where(Job.id.notin_(backend_failed_jobs))
+                .order_by(Job.created_at.desc())
+                .limit(MAX_TRANSLATION_ERROR_ROWS)
+            )
+            .scalars()
+            .all()
+        )
+        translation["pipeline_errors"] = [
+            {
+                "job_id": j.id,
+                "file_path": j.file_path,
+                "source_format": j.source_format or "",
+                "error": j.error or "",
+                "created_at": j.created_at.isoformat() if j.created_at else None,
+                "completed_at": j.completed_at.isoformat() if j.completed_at else None,
+            }
+            for j in pipeline_rows
+        ]
+        # Same dedup as the list above, windowed like the backend count.
+        translation["failures_7d"] += int(
+            session.execute(
+                select(func.count(Job.id))
+                .where(Job.status == _FAILED_JOB_STATUS)
+                .where(Job.created_at >= window_start)
+                .where(Job.id.notin_(backend_failed_jobs))
+            ).scalar_one()
+            or 0
+        )
         backend_rows = session.execute(select(TranslationBackendStats)).scalars().all()
         # Failing backends first — the page exists to show where it hurts.
         translation["backends"] = sorted(

@@ -70,6 +70,10 @@
     "col_lines": "Lines",
     "col_when": "When",
     "empty_errors": "No translation errors.",
+    "pipeline_title": "Pipeline failures",
+    "backend_errors_title": "Backend errors",
+    "col_file": "File",
+    "col_format": "Format",
     "summary": "{{failures7d}} failed translations in the last 7 days · {{stuck}} items waiting to re-translate",
     "hint": "Per-episode attempts and errors live behind the History button on each episode."
   }

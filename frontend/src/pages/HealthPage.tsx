@@ -4,9 +4,9 @@
  * Four bounded views from GET /api/v1/health/library: series with missing
  * subtitles, wanted items stuck in a failure state (unmatched episodes),
  * per-provider health (circuit breaker ⋈ provider stats), and translation
- * health (backend failure counters + recent failed translation calls — before
- * this block those errors were only visible behind one episode's History
- * button).
+ * health (backend failure counters, recent failed translation calls, and
+ * failed translation jobs — before this block those errors were only visible
+ * behind one episode's History button).
  */
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +17,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { StatTile } from '@/components/statistics/primitives';
 import {
   getLibraryHealth,
+  type HealthPipelineError,
   type HealthProblemRow,
   type HealthProviderRow,
   type HealthTranslationBackend,
@@ -42,6 +43,17 @@ function Th({ children, className = '' }: { children: ReactNode; className?: str
     >
       {children}
     </th>
+  );
+}
+
+function BlockLabel({ label }: { label: string }) {
+  return (
+    <p
+      className="text-[11px] font-semibold uppercase tracking-wider px-3 pt-2"
+      style={{ color: 'var(--text-muted)' }}
+    >
+      {label}
+    </p>
   );
 }
 
@@ -305,6 +317,41 @@ function TranslationErrorRow({ e }: { e: HealthTranslationError }) {
   );
 }
 
+function TranslationPipelineErrorRow({ e }: { e: HealthPipelineError }) {
+  // The path is a media path; the file name is what identifies the item.
+  const name = e.file_path.split(/[\\/]/).pop() || e.file_path;
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+      <td
+        className="px-3 py-2 text-sm font-medium truncate max-w-[260px]"
+        title={e.file_path}
+        style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}
+      >
+        {name}
+      </td>
+      <td
+        className="px-3 py-2 text-xs uppercase hidden sm:table-cell"
+        style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.source_format || '—'}
+      </td>
+      <td
+        className="px-3 py-2 text-xs truncate max-w-[320px]"
+        title={e.error}
+        style={{ color: 'var(--error)' }}
+      >
+        {e.error || '—'}
+      </td>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.created_at ? formatRelativeTime(e.created_at) : ''}
+      </td>
+    </tr>
+  );
+}
+
 export function HealthPage() {
   const { t } = useTranslation('health');
 
@@ -510,29 +557,56 @@ export function HealthPage() {
           className="rounded-lg overflow-hidden"
           style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
         >
+          {data?.translation?.pipeline_errors.length ? (
+            <>
+              <BlockLabel label={t('translation.pipeline_title')} />
+              <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+                <table className="w-full min-w-[460px]">
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <Th>{t('translation.col_file')}</Th>
+                      <Th className="hidden sm:table-cell">{t('translation.col_format')}</Th>
+                      <Th>{t('translation.col_error')}</Th>
+                      <Th className="hidden lg:table-cell">{t('translation.col_when')}</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.translation.pipeline_errors.map((e, i) => (
+                      <TranslationPipelineErrorRow key={`${e.job_id}:${i}`} e={e} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : null}
           {data?.translation?.recent_errors.length ? (
-            <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
-              <table className="w-full min-w-[520px]">
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <Th>{t('translation.col_backend')}</Th>
-                    <Th>{t('translation.col_langs')}</Th>
-                    <Th>{t('translation.col_error')}</Th>
-                    <Th className="hidden md:table-cell">{t('translation.col_message')}</Th>
-                    <Th className="hidden sm:table-cell">{t('translation.col_lines')}</Th>
-                    <Th className="hidden lg:table-cell">{t('translation.col_when')}</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.translation.recent_errors.map((e, i) => (
-                    <TranslationErrorRow key={`${e.backend}:${e.started_at}:${i}`} e={e} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
+            <>
+              <BlockLabel label={t('translation.backend_errors_title')} />
+              <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
+                <table className="w-full min-w-[520px]">
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <Th>{t('translation.col_backend')}</Th>
+                      <Th className="hidden sm:table-cell">{t('translation.col_langs')}</Th>
+                      <Th>{t('translation.col_error')}</Th>
+                      <Th className="hidden md:table-cell">{t('translation.col_message')}</Th>
+                      <Th className="hidden sm:table-cell">{t('translation.col_lines')}</Th>
+                      <Th className="hidden lg:table-cell">{t('translation.col_when')}</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.translation.recent_errors.map((e, i) => (
+                      <TranslationErrorRow key={`${e.backend}:${e.started_at}:${i}`} e={e} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : null}
+          {!data?.translation?.pipeline_errors.length &&
+          !data?.translation?.recent_errors.length ? (
             <EmptyState label={t('translation.empty_errors')} />
-          )}
+          ) : null}
         </div>
 
         <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
