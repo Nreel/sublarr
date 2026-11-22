@@ -1,6 +1,6 @@
 from click.testing import CliRunner
 
-from cli.main import cli
+from cli.main import _default_url, cli
 
 
 class TestCliMain:
@@ -18,6 +18,8 @@ class TestCliMain:
         assert result.exit_code == 0
 
     def test_default_url_is_localhost(self):
-        result = self.runner.invoke(cli, ["--help"])
-        assert result.exit_code == 0
-        assert "localhost:5765" in result.output
+        assert _default_url() == "http://localhost:5765"
+
+    def test_default_url_derives_from_port_env(self, monkeypatch):
+        monkeypatch.setenv("SUBLARR_PORT", "6765")
+        assert _default_url() == "http://localhost:6765"

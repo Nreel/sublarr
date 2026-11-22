@@ -10,13 +10,16 @@ from functools import wraps
 
 from flask import Response, current_app, request
 
+from config import get_settings
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_TTL = 60  # seconds
 
-
-def cached_get(ttl_seconds: int = DEFAULT_TTL, key_prefix: str = "response:get:"):
+def cached_get(ttl_seconds: int | None = None, key_prefix: str = "response:get:"):
     """Decorator: cache GET response in app.cache_backend.
+
+    ``ttl_seconds`` defaults to ``settings.response_cache_ttl_secs`` (resolved
+    per request, so a UI config change takes effect without restarting).
 
     Only applies to GET. Cache key is key_prefix + request.path + '?' + query_string.
     Cached value is JSON: {"status": int, "body": str}.
@@ -27,6 +30,8 @@ def cached_get(ttl_seconds: int = DEFAULT_TTL, key_prefix: str = "response:get:"
         def inner(*args, **kwargs):
             if request.method != "GET":
                 return f(*args, **kwargs)
+
+            ttl = ttl_seconds if ttl_seconds is not None else get_settings().response_cache_ttl_secs
 
             cache = getattr(current_app, "cache_backend", None)
             if cache is None:
@@ -68,7 +73,7 @@ def cached_get(ttl_seconds: int = DEFAULT_TTL, key_prefix: str = "response:get:"
                     cache.set(
                         key,
                         json.dumps({"status": status, "body": body}),
-                        ttl_seconds=ttl_seconds,
+                        ttl_seconds=ttl,
                     )
             except Exception as e:
                 logger.debug("Response cache set failed: %s", e)

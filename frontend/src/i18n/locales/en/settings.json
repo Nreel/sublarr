@@ -1131,18 +1131,9 @@
   },
   "about_page": {
     "title": "About",
-    "subtitle": "Version, support, and project links",
+    "subtitle": "Version and build information",
     "version_title": "Version",
-    "version_desc": "Currently running Sublarr build",
-    "support_title": "Support the Project",
-    "support_desc": "Star the repo, report issues, or buy a coffee",
-    "star_github": "Star on GitHub",
-    "donate": "Donate",
-    "report_issue": "Report Issue",
-    "community_title": "Community",
-    "community_desc": "Chat, showcases, and announcements",
-    "join_discord": "Join Discord",
-    "visit_reddit": "r/Sublarr on Reddit"
+    "version_desc": "Currently running Sublarr build"
   },
   "config_export_import": {
     "export_label": "Export settings",

@@ -1,15 +1,22 @@
 """Sublarr CLI — root group and global options."""
 
+import os
+
 import click
 
 from cli.client import SublarrClient
+
+
+def _default_url() -> str:
+    """API base URL derived from SUBLARR_PORT (default 5765, the BootSettings default)."""
+    return f"http://localhost:{os.environ.get('SUBLARR_PORT', '5765')}"
 
 
 @click.group()
 @click.option(
     "--url",
     envvar="SUBLARR_URL",
-    default="http://localhost:5765",
+    default=_default_url,
     show_default=True,
     help="Sublarr API base URL.",
 )

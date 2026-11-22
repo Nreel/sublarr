@@ -128,7 +128,7 @@ EXPOSE 5765
 VOLUME ["/config", "/media"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:5765/api/v1/health || exit 1
+    CMD curl -f "http://localhost:${SUBLARR_PORT:-5765}/api/v1/health" || exit 1
 
 STOPSIGNAL SIGTERM
 
@@ -158,4 +158,4 @@ ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 # allow four browser connections to starve every API request, even /health.
 # Use the threaded Flask-SocketIO deployment recommendation (100 threads).
 # Keep one process: the scheduler and Socket.IO session state are process-local.
-CMD ["gunicorn", "--bind", "0.0.0.0:5765", "--worker-class", "gthread", "--workers", "1", "--threads", "100", "--timeout", "7200", "--graceful-timeout", "15", "--access-logfile", "-", "--access-logformat", "%(h)s %(t)s \"%(m)s %(U)s\" %(s)s %(b)s %(D)sus", "app:create_app()"]
+CMD ["sh", "-c", "gunicorn --bind ${SUBLARR_HOST:-0.0.0.0}:${SUBLARR_PORT:-5765} --worker-class gthread --workers 1 --threads 100 --timeout 7200 --graceful-timeout 15 --access-logfile - --access-logformat '%(h)s %(t)s \"%(m)s %(U)s\" %(s)s %(b)s %(D)sus' app:create_app()"]

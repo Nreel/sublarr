@@ -3,10 +3,11 @@
 Write-Host "Checking Sublarr Server Status..." -ForegroundColor Cyan
 Write-Host ""
 
-# Check Backend (Port 5765)
-Write-Host "Backend (Port 5765):" -ForegroundColor Yellow
+# Check Backend
+$BackendPort = if ($env:SUBLARR_PORT) { $env:SUBLARR_PORT } else { 5765 }
+Write-Host "Backend (Port $BackendPort):" -ForegroundColor Yellow
 try {
-    $response = Invoke-WebRequest -Uri "http://localhost:5765/api/v1/health" -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
+    $response = Invoke-WebRequest -Uri "http://localhost:$BackendPort/api/v1/health" -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
     $data = $response.Content | ConvertFrom-Json
     Write-Host "   [OK] Running" -ForegroundColor Green
     Write-Host "   Status: $($data.status)" -ForegroundColor $(if ($data.status -eq 'healthy') { 'Green' } else { 'Yellow' })
@@ -33,13 +34,13 @@ Write-Host ""
 
 # Check Ports
 Write-Host "Port Status:" -ForegroundColor Yellow
-$port5765 = Get-NetTCPConnection -LocalPort 5765 -ErrorAction SilentlyContinue
+$portBackend = Get-NetTCPConnection -LocalPort $BackendPort -ErrorAction SilentlyContinue
 $port5173 = Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue
 
-if ($port5765) {
-    Write-Host "   Port 5765: [OK] In use (PID: $($port5765.OwningProcess))" -ForegroundColor Green
+if ($portBackend) {
+    Write-Host "   Port $BackendPort: [OK] In use (PID: $($portBackend.OwningProcess))" -ForegroundColor Green
 } else {
-    Write-Host "   Port 5765: [FAIL] Not in use" -ForegroundColor Red
+    Write-Host "   Port $BackendPort: [FAIL] Not in use" -ForegroundColor Red
 }
 
 if ($port5173) {

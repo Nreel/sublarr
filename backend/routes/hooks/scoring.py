@@ -9,7 +9,7 @@ from routes.hooks import bp
 
 
 @bp.route("/scoring/weights", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def get_weights():
     """Return all scoring weights (episode + movie) merged with defaults.
     ---
@@ -153,7 +153,7 @@ def reset_weights():
 
 
 @bp.route("/scoring/modifiers", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def get_modifiers():
     """Return all provider score modifiers.
     ---
@@ -272,7 +272,7 @@ def delete_modifier(provider_name):
 
 
 @bp.route("/scoring/presets", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def list_presets():
     """Return metadata for all bundled scoring presets.
     ---
@@ -293,7 +293,7 @@ def list_presets():
 
 
 @bp.route("/scoring/presets/<name>", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def get_preset(name: str):
     """Return a single bundled preset by name.
     ---
@@ -386,7 +386,7 @@ def import_preset():
 
 
 @bp.route("/scoring/penalty-rules", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def list_penalty_rules():
     """Return all registered penalty rules with their metadata and current weight.
     ---

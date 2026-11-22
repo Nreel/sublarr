@@ -94,9 +94,11 @@ def create_cache_backend(redis_url: str = "") -> CacheBackend:
             return MemoryCacheBackend()
 
         try:
+            from config import get_settings
+
             client = redis.Redis.from_url(
                 redis_url,
-                socket_connect_timeout=5,
+                socket_connect_timeout=get_settings().redis_connect_timeout_secs,
                 decode_responses=True,
             )
             client.ping()

@@ -97,8 +97,6 @@
     "name": "Sublarr",
     "online": "Online",
     "offline": "Offline",
-    "donate": "Spenden",
-    "star": "Star",
     "update_available": "{{version}} verfügbar"
   },
   "pagination": {

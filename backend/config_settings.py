@@ -57,6 +57,7 @@ logger = logging.getLogger(__name__)
 _ALLOWED_BOOT_FIELDS: frozenset[str] = frozenset(
     {
         "port",
+        "host",
         "api_key",
         "media_path",
         "db_path",
@@ -108,6 +109,7 @@ class BootSettings(BaseSettings):
     """
 
     # Server bind
+    host: str = "0.0.0.0"
     port: int = 5765
 
     # Initial auth bootstrap (empty = no auth required)
@@ -744,14 +746,20 @@ class UISettings(BaseModel):
     anidb_cache_ttl_days: int = 30  # Cache TTL for TVDB → AniDB mappings
     anidb_custom_field_name: str = "anidb_id"  # Custom field name in Sonarr
     anidb_fallback_to_mapping: bool = True  # Use cache/mapping as fallback
+    anidb_dump_url: str = "https://anidb.net/api/anime-titles.xml.gz"  # Title dump source
+    anidb_dump_ttl_hours: int = 36  # Refresh interval for the title dump
+    anime_list_url: str = "https://raw.githubusercontent.com/Anime-Lists/anime-lists/master/anime-list.xml"  # Absolute-episode mapping source
 
     # Database (PERF-01, PERF-02) — pool tuning, not connection (URL is in BootSettings)
     db_pool_size: int = 5  # SQLAlchemy pool_size (ignored for SQLite)
     db_pool_max_overflow: int = 10  # SQLAlchemy max_overflow (ignored for SQLite)
     db_pool_recycle: int = 3600  # Recycle connections after N seconds
+    sqlite_busy_timeout_ms: int = 5000  # SQLite PRAGMA busy_timeout (writers wait, not fail)
 
     # Redis behaviour (URL is in BootSettings)
     redis_cache_enabled: bool = True  # Use Redis for provider cache
+    redis_connect_timeout_secs: int = 5  # socket_connect_timeout when connecting Redis
+    response_cache_ttl_secs: int = 60  # Default TTL for cached GET responses
     # RQ requires a SEPARATE `python worker.py` process (see docker-compose.redis.yml).
     # Sublarr ships single-container without that worker, so RQ must NOT be the
     # default: enabling it without a worker leaves every queued job stuck in
@@ -768,6 +776,9 @@ class UISettings(BaseModel):
     backup_auto_interval_hours: int = 24
     backup_auto_on_startup: bool = False
     backup_notify_on_failure: bool = True
+    pg_dump_timeout_secs: int = 300  # pg_dump subprocess ceiling
+    pg_restore_timeout_secs: int = 300  # pg_restore subprocess ceiling
+    pg_archive_check_timeout_secs: int = 120  # pg_restore --list verification ceiling
 
     # Disk Monitoring (Step 41)
     disk_warning_threshold_percent: int = 90

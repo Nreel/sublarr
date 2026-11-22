@@ -15,9 +15,7 @@ import {
   Ban,
   BarChart3,
   ListChecks,
-  Heart,
   HeartPulse,
-  Star,
   LogOut,
   Puzzle,
 } from 'lucide-react'
@@ -241,52 +239,6 @@ export function Sidebar() {
               <span>{t('nav.log_out')}</span>
             </button>
           )}
-
-          {/* Donate + Star */}
-          <div className="flex gap-1.5 mb-2">
-            <a
-              href="https://www.paypal.com/donate?hosted_button_id=GLXYTD3FV9Y78"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 flex-1 py-1 rounded text-[11px] font-medium transition-colors duration-150"
-              style={{
-                color: 'var(--text-muted)',
-                border: '1px solid var(--border)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#e85d8a'
-                e.currentTarget.style.color = '#e85d8a'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--border)'
-                e.currentTarget.style.color = 'var(--text-muted)'
-              }}
-            >
-              <Heart size={11} style={{ color: '#e85d8a' }} />
-              {t('app.donate')}
-            </a>
-            <a
-              href="https://github.com/Abrechen2/sublarr"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 flex-1 py-1 rounded text-[11px] font-medium transition-colors duration-150"
-              style={{
-                color: 'var(--text-muted)',
-                border: '1px solid var(--border)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#f5a623'
-                e.currentTarget.style.color = '#f5a623'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--border)'
-                e.currentTarget.style.color = 'var(--text-muted)'
-              }}
-            >
-              <Star size={11} style={{ color: '#f5a623' }} />
-              {t('app.star')}
-            </a>
-          </div>
 
           {/* Interface language moved to Settings → General; theme stays here. */}
           <div className="flex items-center justify-end mb-1.5">

@@ -16,7 +16,7 @@ from services.profile_service import (
 
 
 @bp.route("/prompt-presets", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def list_prompt_presets():
     """Get all prompt presets.
     ---

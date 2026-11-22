@@ -86,42 +86,6 @@ describe('AboutSettings', () => {
     expect(screen.getByTestId('section-version')).toBeInTheDocument()
   })
 
-  it('renders the section-links section', () => {
-    renderWithProviders(<AboutSettings />)
-    expect(screen.getByTestId('section-links')).toBeInTheDocument()
-  })
-
-  // ── GitHub link ─────────────────────────────────────────────────────────
-
-  it('renders the GitHub Star link', () => {
-    renderWithProviders(<AboutSettings />)
-    const link = screen.getByTestId('link-github')
-    expect(link).toBeInTheDocument()
-    expect(link).toHaveAttribute('href', 'https://github.com/abrechen2/sublarr')
-    expect(link).toHaveAttribute('target', '_blank')
-    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
-  })
-
-  // ── Donation link ───────────────────────────────────────────────────────
-
-  it('renders the Donate link', () => {
-    renderWithProviders(<AboutSettings />)
-    const link = screen.getByTestId('link-donate')
-    expect(link).toBeInTheDocument()
-    expect(link).toHaveAttribute('target', '_blank')
-    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
-  })
-
-  // ── Issues link ─────────────────────────────────────────────────────────
-
-  it('renders the Report Issue link', () => {
-    renderWithProviders(<AboutSettings />)
-    const link = screen.getByTestId('link-issues')
-    expect(link).toBeInTheDocument()
-    expect(link).toHaveAttribute('href', 'https://github.com/abrechen2/sublarr/issues')
-    expect(link).toHaveAttribute('target', '_blank')
-  })
-
   // ── Usage statistics: informed consent ──────────────────────────────────
 
   it('links the privacy policy and names the controller next to the usage-stats toggle', () => {

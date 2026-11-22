@@ -100,7 +100,7 @@ def _providers_became_usable(data: dict, before: dict) -> set[str]:
 
 
 @bp.route("/config", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def get_config():
     """Get current configuration (without secrets).
     ---

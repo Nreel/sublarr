@@ -299,7 +299,7 @@ def statistics_providers():
 
 
 @bp.route("/statistics/system", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def statistics_system():
     from services.statistics_service import get_system_stats
 
@@ -323,7 +323,7 @@ def statistics_trends():
 
 
 @bp.route("/statistics/foreign-tracks", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def statistics_foreign_tracks():
     """What the foreign-track sweep has cleaned so far.
     ---

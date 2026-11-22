@@ -27,10 +27,9 @@ from config import get_settings
 from db.cache import get_anidb_mapping, save_anidb_mapping
 
 # ---------------------------------------------------------------------------
-# AniDB title dump — module-level cache (populated lazily, refreshed every 36 h)
+# AniDB title dump — module-level cache (populated lazily, refreshed every
+# settings.anidb_dump_ttl_hours)
 # ---------------------------------------------------------------------------
-_DUMP_URL = "https://anidb.net/api/anime-titles.xml.gz"
-_DUMP_TTL = 36 * 3600  # seconds
 _DUMP_MIN_ENTRIES = 8_000  # sanity-check: valid dump has >8 k anime
 _DUMP_CACHE_FILE = os.path.join(tempfile.gettempdir(), "sublarr_anidb_titles.xml.gz")
 _DUMP_MATCH_THRESHOLD = 0.82  # rapidfuzz fuzz.ratio required for a title hit
@@ -43,7 +42,7 @@ _title_index_loaded_at: float = 0.0
 # Negative cache for Tier-4 fuzzy misses — { normalized_title: monotonic ts }.
 # A miss means "no title in the ~100k-entry index scored above threshold";
 # avoids re-running the (now C-backed, but still O(n)) fuzzy scan for the
-# same unmatched title within _DUMP_TTL.
+# same unmatched title within the dump TTL (settings.anidb_dump_ttl_hours).
 _dump_miss_cache: dict[str, float] = {}
 _dump_miss_lock = threading.Lock()
 
@@ -218,7 +217,7 @@ def _fetch_dump() -> bool:
     _max_compressed = 100 * 1024 * 1024  # 100 MB
     _max_decompressed = 200 * 1024 * 1024  # 200 MB
     try:
-        req = Request(_DUMP_URL, headers={"User-Agent": "Sublarr/1.0"})
+        req = Request(get_settings().anidb_dump_url, headers={"User-Agent": "Sublarr/1.0"})
         with urlopen(req, timeout=30) as resp:
             data = resp.read(_max_compressed + 1)
         if len(data) > _max_compressed:
@@ -252,21 +251,23 @@ def _fetch_dump() -> bool:
 def warm_title_index() -> None:
     """Build in-memory title → AID index from the cached dump file.
 
-    Downloads the dump if missing or stale (>36 h).  Falls back to stale cache
-    on download failure.  No-ops if the index was populated within _DUMP_TTL.
+    Downloads the dump if missing or stale (> settings.anidb_dump_ttl_hours).
+    Falls back to stale cache on download failure.  No-ops if the index was
+    populated within the dump TTL.
     """
     global _title_index, _title_index_loaded_at
 
+    ttl = get_settings().anidb_dump_ttl_hours * 3600
     with _title_index_lock:
         now = time.monotonic()
-        if _title_index and (now - _title_index_loaded_at) < _DUMP_TTL:
+        if _title_index and (now - _title_index_loaded_at) < ttl:
             return  # still fresh
 
         # Decide whether we need a fresh download
         needs_download = True
         if os.path.exists(_DUMP_CACHE_FILE):
             age = time.time() - os.path.getmtime(_DUMP_CACHE_FILE)
-            if age < _DUMP_TTL:
+            if age < ttl:
                 needs_download = False
 
         if needs_download:
@@ -328,7 +329,8 @@ def resolve_anidb_from_title_dump(series_title: str, tvdb_id: int | None = None)
     """Resolve AniDB ID via the offline anime-titles.xml.gz dump.
 
     Tries exact match first, then fuzzy (rapidfuzz fuzz.ratio ≥ 0.82).
-    Fuzzy misses are negative-cached for ``_DUMP_TTL`` in ``_dump_miss_cache``.
+    Fuzzy misses are negative-cached for the dump TTL
+    (``settings.anidb_dump_ttl_hours``) in ``_dump_miss_cache``.
     Caches the result in ``anidb_mappings`` when *tvdb_id* is provided.
 
     Returns:
@@ -360,7 +362,7 @@ def resolve_anidb_from_title_dump(series_title: str, tvdb_id: int | None = None)
     now = time.monotonic()
     with _dump_miss_lock:
         miss_ts = _dump_miss_cache.get(needle)
-        if miss_ts is not None and (now - miss_ts) < _DUMP_TTL:
+        if miss_ts is not None and (now - miss_ts) < get_settings().anidb_dump_ttl_hours * 3600:
             return None
 
     best_aid, best_score = _fuzzy_best_match(needle)

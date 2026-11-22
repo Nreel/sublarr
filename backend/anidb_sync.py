@@ -24,13 +24,13 @@ from datetime import UTC
 
 import requests
 
+from config import get_settings
+
 # defusedxml hardens against XXE / Billion-Laughs on the anime-list feed
 # (3rd-party GitHub-hosted XML). See PENTEST_FINDINGS.md R4-02.
 from defusedxml import ElementTree as ET
 
 logger = logging.getLogger(__name__)
-
-ANIME_LIST_URL = "https://raw.githubusercontent.com/Anime-Lists/anime-lists/master/anime-list.xml"
 
 # A single <mapping> range wider than this is a broken entry, not a season.
 MAX_RANGE_SPAN = 1000
@@ -270,8 +270,9 @@ def run_sync(app) -> dict:
     start = time.monotonic()
     result = {"series_processed": 0, "mappings_upserted": 0, "skipped": 0, "error": None}
     try:
-        logger.info("Starting AniDB absolute episode sync from %s", ANIME_LIST_URL)
-        xml_bytes = _fetch_xml(ANIME_LIST_URL)
+        anime_list_url = get_settings().anime_list_url
+        logger.info("Starting AniDB absolute episode sync from %s", anime_list_url)
+        xml_bytes = _fetch_xml(anime_list_url)
         result = _process_xml(xml_bytes, app)
     except requests.RequestException as exc:
         result["error"] = f"Network error fetching anime-list: {exc}"

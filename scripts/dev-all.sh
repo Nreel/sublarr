@@ -21,7 +21,7 @@ FRONTEND_PID=$!
 
 echo ""
 echo "Both servers started!"
-echo "   Backend:  http://localhost:5765"
+echo "   Backend:  http://localhost:${SUBLARR_PORT:-5765}"
 echo "   Frontend: http://localhost:5173"
 echo ""
 echo "Press Ctrl+C to stop all servers..."

@@ -163,7 +163,7 @@ def download_logs():
 
 
 @bp.route("/logs/rotation", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def get_log_rotation():
     """Get current log rotation configuration.
     ---

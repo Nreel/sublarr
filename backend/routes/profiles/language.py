@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 @bp.route("/language-profiles", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def list_language_profiles():
     """Get all language profiles.
     ---

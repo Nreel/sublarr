@@ -44,8 +44,9 @@ def test_warm_title_index_clears_dump_miss_cache(tmp_path, monkeypatch):
     """A fuzzy MISS cached before a dump refresh must not survive the rebuild.
 
     Otherwise a title that missed pre-refresh keeps returning None for up to
-    _DUMP_TTL (36h) even after the refreshed index would now fuzzy-match it —
-    exactly the new-seasonal-anime case.
+    the dump TTL (settings.anidb_dump_ttl_hours, default 36h) even after the
+    refreshed index would now fuzzy-match it — exactly the new-seasonal-anime
+    case.
     """
     import gzip
 

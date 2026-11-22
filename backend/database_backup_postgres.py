@@ -58,6 +58,16 @@ def _get_database_url() -> str:
         return ""
 
 
+def _pg_timeout(field: str, fallback: int) -> int:
+    """Subprocess ceiling from UISettings (e.g. ``pg_dump_timeout_secs``)."""
+    try:
+        from config import get_settings
+
+        return int(getattr(get_settings(), field))
+    except Exception:
+        return fallback
+
+
 def _server_major_version() -> int | None:
     """Major version of the connected PostgreSQL server, or None if unknown."""
     try:
@@ -173,12 +183,13 @@ class _PostgresBackupMixin:
         ]
 
         try:
+            dump_timeout = _pg_timeout("pg_dump_timeout_secs", 300)
             result = subprocess.run(
                 cmd,
                 env=env,
                 capture_output=True,
                 text=True,
-                timeout=300,  # 5 minute timeout
+                timeout=dump_timeout,
             )
             if result.returncode != 0:
                 raise DatabaseBackupError(
@@ -190,7 +201,7 @@ class _PostgresBackupMixin:
                 with contextlib.suppress(OSError):
                     os.remove(dest)
             raise DatabaseBackupError(
-                "pg_dump timed out after 300 seconds",
+                f"pg_dump timed out after {dump_timeout} seconds",
                 context={"dest": dest},
             )
         except DatabaseBackupError:
@@ -231,7 +242,7 @@ class _PostgresBackupMixin:
                 [_pg_binary("pg_restore", None), "--list", backup_path],
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=_pg_timeout("pg_archive_check_timeout_secs", 120),
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise DatabaseRestoreError(
@@ -311,7 +322,7 @@ class _PostgresBackupMixin:
                 env=env,
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=_pg_timeout("pg_restore_timeout_secs", 300),
             )
             if result.returncode != 0 and watchdog is not None and watchdog.cancelled:
                 raise DatabaseRestoreError(

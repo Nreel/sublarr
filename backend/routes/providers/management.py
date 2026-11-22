@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @bp.route("/providers", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def list_providers():
     """Get status of all subtitle providers.
     ---

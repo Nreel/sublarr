@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 @bp.route("/health/library", methods=["GET"])
-@cached_get(ttl_seconds=60)
+@cached_get()
 def health_library():
     """Library health overview.
     ---

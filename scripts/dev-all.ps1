@@ -20,7 +20,8 @@ Start-Process powershell -ArgumentList "-NoExit", "-File", $frontendScript
 
 Write-Host ""
 Write-Host "✅ Both servers started!" -ForegroundColor Green
-Write-Host "   Backend:  http://localhost:5765" -ForegroundColor Cyan
+$BackendPort = if ($env:SUBLARR_PORT) { $env:SUBLARR_PORT } else { 5765 }
+Write-Host "   Backend:  http://localhost:$BackendPort" -ForegroundColor Cyan
 Write-Host "   Frontend: http://localhost:5173" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Press any key to stop servers..." -ForegroundColor Yellow
