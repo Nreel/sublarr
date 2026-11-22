@@ -12,6 +12,9 @@ __pycache__/
 # Frontend
 node_modules/
 dist/
+# Flask's served frontend bundle — produced by the Docker build (COPY from
+# the vite stage); never committed, same rationale as dist/.
+backend/static/
 .vite/
 *.tsbuildinfo
 
