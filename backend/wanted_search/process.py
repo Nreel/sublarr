@@ -353,7 +353,9 @@ def _announce_upgrade(ctx: dict, provider_name: str, old_score: int, new_score: 
 
         emit_event("upgrade_complete", payload)
     except Exception:  # noqa: BLE001 — event bus failures must not fail the upgrade
-        logger.warning("Could not emit upgrade_complete for Wanted %d", ctx.get("item_id"), exc_info=True)
+        logger.warning(
+            "Could not emit upgrade_complete for Wanted %d", ctx.get("item_id"), exc_info=True
+        )
 
     try:
         from notifier import send_notification
@@ -364,7 +366,9 @@ def _announce_upgrade(ctx: dict, provider_name: str, old_score: int, new_score: 
             event_type="upgrade",
         )
     except Exception:  # noqa: BLE001 — notification failures must not fail the upgrade
-        logger.warning("Could not send upgrade notification for Wanted %d", ctx.get("item_id"), exc_info=True)
+        logger.warning(
+            "Could not send upgrade notification for Wanted %d", ctx.get("item_id"), exc_info=True
+        )
 
 
 def _try_target_ass_direct(ctx: dict) -> dict | None:

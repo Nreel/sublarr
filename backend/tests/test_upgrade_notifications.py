@@ -4,6 +4,7 @@ Regression guard for the inert `notify_on_upgrade` toggle — no code path used
 to call send_notification("upgrade"), so upgrades never reached Apprise and
 never fired the upgrade_complete webhook.
 """
+
 import os
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -42,7 +43,10 @@ class TestUpgradeAnnouncement:
                 patch("notifier.send_notification") as notify,
             ):
                 proc._retire_replaced_srt(
-                    _ctx(tmp_path), SimpleNamespace(provider_name="AnimeTosho"), 95, str(tmp_path / "keep.ass")
+                    _ctx(tmp_path),
+                    SimpleNamespace(provider_name="AnimeTosho"),
+                    95,
+                    str(tmp_path / "keep.ass"),
                 )
         finally:
             upgrade_complete.disconnect(receiver)
@@ -67,7 +71,10 @@ class TestUpgradeAnnouncement:
             patch("events.emit_event", side_effect=RuntimeError("bus broken")),
         ):
             proc._retire_replaced_srt(
-                _ctx(tmp_path), SimpleNamespace(provider_name="AnimeTosho"), 95, str(tmp_path / "keep.ass")
+                _ctx(tmp_path),
+                SimpleNamespace(provider_name="AnimeTosho"),
+                95,
+                str(tmp_path / "keep.ass"),
             )
 
         assert record.called
@@ -131,8 +138,14 @@ class TestNotifierResolvesCatalogEventNames:
         ap = MagicMock()
         with (
             patch("config.get_settings", return_value=self._settings()),
-            patch("db.repositories.config.ConfigRepository", return_value=self._cfg(exclude='["upgrade_complete"]')),
-            patch("db.repositories.notifications.NotificationRepository", return_value=self._repo(None)),
+            patch(
+                "db.repositories.config.ConfigRepository",
+                return_value=self._cfg(exclude='["upgrade_complete"]'),
+            ),
+            patch(
+                "db.repositories.notifications.NotificationRepository",
+                return_value=self._repo(None),
+            ),
             patch("notifier._get_apprise", return_value=ap),
         ):
             send_notification(title="raw", body="raw", event_type="upgrade")
@@ -145,8 +158,14 @@ class TestNotifierResolvesCatalogEventNames:
         ap = MagicMock()
         with (
             patch("config.get_settings", return_value=self._settings()),
-            patch("db.repositories.config.ConfigRepository", return_value=self._cfg(exclude='["upgrade"]')),
-            patch("db.repositories.notifications.NotificationRepository", return_value=self._repo(None)),
+            patch(
+                "db.repositories.config.ConfigRepository",
+                return_value=self._cfg(exclude='["upgrade"]'),
+            ),
+            patch(
+                "db.repositories.notifications.NotificationRepository",
+                return_value=self._repo(None),
+            ),
             patch("notifier._get_apprise", return_value=ap),
         ):
             send_notification(title="raw", body="raw", event_type="upgrade")

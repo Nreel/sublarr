@@ -139,5 +139,7 @@ def _reveal_values(service_name: str) -> dict | None:
     return {
         "service": service_name,
         "label": entry["label"],
-        "keys": [{"name": key_name, "value": _effective_value(key_name)} for key_name in entry["keys"]],
+        "keys": [
+            {"name": key_name, "value": _effective_value(key_name)} for key_name in entry["keys"]
+        ],
     }
