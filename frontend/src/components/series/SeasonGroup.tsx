@@ -109,13 +109,24 @@ export function SeasonGroup({
   onProcess, onPreviewSub, onEditSub, onCompare, onCombine, onSync, onAutoSync, onVideoSync, onSyncCompare,
   onHealthCheck, healthScores, onOpenEditor, sidecarMap, onDeleteSidecar,
   onOpenCleanupModal, onPreview, streamingEnabled, onRefreshSidecars, t,
-  episodeWantedMap: _episodeWantedMap, onSkipEpisode, onAcceptEpisode,
+  episodeWantedMap, onSkipEpisode, onAcceptEpisode,
 }: SeasonGroupProps) {
   const [expanded, setExpanded] = useState(true)
   const [selectedEpisodes, setSelectedEpisodes] = useState<Set<number>>(new Set())
   const batchTranslateMutation = useBatchTranslate()
   const transcribe = useTranscribeEpisode()
   const detectOpEd = useDetectOpeningEnding()
+
+  // The batch toolbar hits /wanted/* endpoints, which take WANTED item IDs.
+  // Selection keys are episode IDs — a different namespace; translating them
+  // verbatim queued nothing (get_wanted_item misses) or, worse, unrelated items.
+  const selectedWantedIds = useMemo(
+    () =>
+      [...selectedEpisodes]
+        .map((epId) => episodeWantedMap?.get(epId))
+        .filter((id): id is number => id != null),
+    [selectedEpisodes, episodeWantedMap],
+  )
 
   const allSelectableIds = useMemo(
     () => episodes.map((e) => e.id).filter((id): id is number => id != null),
@@ -225,6 +236,7 @@ export function SeasonGroup({
                     {/* Col 1: Checkbox */}
                     <input
                       type="checkbox"
+                      data-testid={`episode-select-${ep.id}`}
                       checked={selectedEpisodes.has(ep.id)}
                       onChange={() => toggleEpisode(ep.id)}
                       onClick={(e) => e.stopPropagation()}
@@ -554,8 +566,13 @@ export function SeasonGroup({
                 {t('episode_ui.selected_count', { count: selectedEpisodes.size })}
               </span>
               <button
-                onClick={() => { void startWantedBatchSearch([...selectedEpisodes]); clearAll() }}
-                className="px-3 py-1 rounded text-xs font-medium"
+                onClick={() => {
+                  if (selectedWantedIds.length === 0) return
+                  void startWantedBatchSearch(selectedWantedIds)
+                  clearAll()
+                }}
+                disabled={selectedWantedIds.length === 0}
+                className="px-3 py-1 rounded text-xs font-medium disabled:opacity-60"
                 style={{ backgroundColor: 'var(--accent-bg)', color: 'var(--accent)', border: '1px solid var(--accent-dim)' }}
               >
                 {t('episode_ui.search')}
@@ -571,10 +588,11 @@ export function SeasonGroup({
               </button>
               <button
                 onClick={() => {
-                  void batchTranslateMutation.mutate([...selectedEpisodes])
+                  if (selectedWantedIds.length === 0) return
+                  void batchTranslateMutation.mutate(selectedWantedIds)
                   clearAll()
                 }}
-                disabled={batchTranslateMutation.isPending}
+                disabled={batchTranslateMutation.isPending || selectedWantedIds.length === 0}
                 className="px-3 py-1 rounded text-xs font-medium disabled:opacity-60"
                 style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
               >
