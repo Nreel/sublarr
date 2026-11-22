@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { LayoutDashboard, BookOpen, Bell, Settings, Search, Trash2, ScrollText, BarChart3, HeartPulse, Server, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatVersion } from '@/lib/version'
-import { useHealth, useUpdateInfo, useActiveJobCount } from '@/hooks/useApi'
+import { useHealth, useUpdateInfo, useActiveJobCount, useLibraryHealth } from '@/hooks/useApi'
+import { healthProblemCount } from '@/lib/healthProblems'
 import { useQueueTaskCount, useWantedSummary } from '@/hooks/useWantedApi'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
 
@@ -17,7 +18,7 @@ interface NavItem {
   readonly badges?: readonly { testId: string; tone: BadgeTone }[]
 }
 
-type BadgeTone = 'warning' | 'accent'
+type BadgeTone = 'warning' | 'accent' | 'error'
 
 const mainNavItems: readonly NavItem[] = [
   { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard, testId: 'nav-link-dashboard' },
@@ -39,11 +40,13 @@ const mainNavItems: readonly NavItem[] = [
 const badgeTones = {
   warning: { backgroundColor: 'var(--warning)', color: '#000' },
   accent: { backgroundColor: 'var(--accent)', color: '#000' },
+  // Problems the Health page can act on: a chip here is a call to open it.
+  error: { backgroundColor: 'var(--error)', color: '#fff' },
 } as const
 
 const bottomNavItems: readonly NavItem[] = [
   { to: '/statistics', labelKey: 'nav.statistics', icon: BarChart3, testId: 'nav-link-statistics' },
-  { to: '/health', labelKey: 'nav.health', icon: HeartPulse, testId: 'nav-link-health' },
+  { to: '/health', labelKey: 'nav.health', icon: HeartPulse, testId: 'nav-link-health', badges: [{ testId: 'nav-badge-health', tone: 'error' }] },
   { to: '/providers', labelKey: 'nav.providers', icon: Server, testId: 'nav-link-providers' },
   { to: '/settings', labelKey: 'nav.settings', icon: Settings, testId: 'nav-link-settings' },
   { to: '/logs', labelKey: 'nav.logs', icon: ScrollText, testId: 'nav-link-logs' },
@@ -53,6 +56,7 @@ export function IconSidebar() {
   const { t } = useTranslation('common')
   const { data: health } = useHealth()
   const { data: wantedSummary } = useWantedSummary()
+  const { data: libraryHealth } = useLibraryHealth()
   const { data: updateInfo } = useUpdateInfo()
   const hasUpdate = updateInfo?.available === true
 
@@ -80,6 +84,7 @@ export function IconSidebar() {
     'nav-badge-wanted': wantedCount,
     'nav-badge-activity-queue': queueCount,
     'nav-badge-activity-translations': translationCount,
+    'nav-badge-health': healthProblemCount(libraryHealth),
   }
 
   return (
@@ -162,7 +167,7 @@ export function IconSidebar() {
             key={item.to}
             item={item}
             label={t(item.labelKey)}
-            badgeCounts={{}}
+            badgeCounts={badgeCounts}
             showUpdateDot={item.to === '/settings' && hasUpdate}
           />
         ))}

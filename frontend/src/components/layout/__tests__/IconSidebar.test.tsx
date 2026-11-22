@@ -16,6 +16,7 @@ vi.mock('@/hooks/useApi', () => ({
   useUpdateInfo: vi.fn(() => ({ data: null })),
   useUpdateConfig: () => ({ mutate: vi.fn(), isPending: false }),
   useActiveJobCount: vi.fn(() => 0),
+  useLibraryHealth: vi.fn(() => ({ data: undefined })),
 }))
 
 vi.mock('@/hooks/useWantedApi', () => ({

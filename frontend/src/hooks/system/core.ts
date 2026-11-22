@@ -11,6 +11,7 @@ import {
   getStats,
   getJobs,
   getBatchStatus,
+  getLibraryHealth,
   getConfig,
   updateConfig,
   disableTranslation,
@@ -59,6 +60,17 @@ export function useDetailedHealth() {
   return useQuery({
     queryKey: ['health', 'detailed'],
     queryFn: getDetailedHealth,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+}
+
+/** Library problem overview — the Health page and the sidebar's error chip
+ *  share one cache entry, so opening the page costs no extra request. */
+export function useLibraryHealth() {
+  return useQuery({
+    queryKey: ['library-health'],
+    queryFn: getLibraryHealth,
     refetchInterval: 60_000,
     staleTime: 30_000,
   });

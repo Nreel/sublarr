@@ -2,6 +2,7 @@
   "title": "Health",
   "subtitle": "Wo es in der Bibliothek klemmt: fehlende Untertitel, nicht gematchte Episoden, fehlschlagende Provider",
   "refresh_note": "Aktualisiert sich automatisch jede Minute.",
+  "more": "Weitere Zeilen laden beim Scrollen.",
   "totals": {
     "wanted": "Fehlende Untertitel",
     "problems": "Problem-Einträge",
@@ -32,14 +33,123 @@
     "col_updated": "Aktualisiert",
     "empty": "Keine fehlgeschlagenen oder nicht gematchten Einträge."
   },
-  "failure": {
-    "no_result": "Kein Treffer",
-    "no_result_slow": "Kein Treffer (langsamer Retry)",
-    "provider_error": "Provider-Fehler",
-    "file_missing": "Datei fehlt",
-    "translation_error": "Übersetzungsfehler",
-    "unsourceable": "Nicht gematcht",
-    "failed": "Fehlgeschlagen"
+  "badges": {
+    "no_result": {
+      "label": "Kein Treffer",
+      "hint": "Provider wurden gefragt und fanden nichts für diesen Eintrag."
+    },
+    "no_result_slow": {
+      "label": "Kein Treffer (langsam)",
+      "hint": "Versuchslimit erreicht — jetzt nur noch einmal pro Monat gesucht."
+    },
+    "provider_error": {
+      "label": "Provider-Fehler",
+      "hint": "Provider schlugen fehl oder wurden übersprungen: Ausfall, Rate-Limit oder Budget."
+    },
+    "file_missing": {
+      "label": "Datei fehlt",
+      "hint": "Die Mediendatei liegt nicht dort, wo der Eintrag sie erwartet — prüfe den Medienpfad."
+    },
+    "translation_error": {
+      "label": "Übersetzungsfehler",
+      "hint": "Gefunden, aber das Übersetzungs-Backend konnte nicht fertig werden."
+    },
+    "unsourceable": {
+      "label": "Nicht gematcht",
+      "hint": "Aufgegeben: kein Provider konnte diesen Eintrag beschaffen."
+    },
+    "failed": {
+      "label": "Fehlgeschlagen",
+      "hint": "Fehlgeschlagen ohne aufgezeichneten Grund — siehe Diagnose."
+    },
+    "auto_disabled": {
+      "label": "Auto-deaktiviert",
+      "hint": "Nach wiederholten Fehlern abgeschaltet — hier wieder aktivieren."
+    },
+    "circuit_open": {
+      "label": "Breaker offen",
+      "hint": "Der Circuit-Breaker hat ausgelöst; Anfragen werden zurückgehalten."
+    },
+    "credentials_rejected": {
+      "label": "Zugangsdaten abgelehnt",
+      "hint": "Der gespeicherte Schlüssel oder das Account wurde abgelehnt — aktualisiere ihn."
+    },
+    "host_unreachable": {
+      "label": "Host nicht erreichbar",
+      "hint": "Der Host des Providers war nicht erreichbar."
+    },
+    "consecutive_failures": {
+      "label": "Fehlend",
+      "hint": "Mehrere Anfragen hintereinander sind fehlgeschlagen."
+    },
+    "no_results": {
+      "label": "Liefert nichts",
+      "hint": "Antwortet Anfragen, aber weder Ergebnis noch Download."
+    },
+    "no_credentials": {
+      "label": "Keine Zugangsdaten",
+      "hint": "Ein Pflichtfeld ist leer, der Provider startete nie."
+    },
+    "not_initialized": {
+      "label": "Nicht initialisiert",
+      "hint": "Dieser Provider wurde konfiguriert, kam aber nie hoch."
+    },
+    "low_hit_rate": {
+      "label": "Niedrige Trefferquote",
+      "hint": "Findet selten etwas, das sich zu laden lohnt."
+    },
+    "no_activity": {
+      "label": "Nie gefragt",
+      "hint": "Über diesen Provider wurde noch nichts gesucht."
+    },
+    "timeout": {
+      "label": "Timeout",
+      "hint": "Das Backend antwortete nicht rechtzeitig — Timeout erhöhen."
+    },
+    "line_mismatch": {
+      "label": "Zeilenzahl falsch",
+      "hint": "Die Übersetzung kam mit einer anderen Zeilenzahl zurück."
+    },
+    "backend_auth": {
+      "label": "Backend-Key abgelehnt",
+      "hint": "Das Übersetzungs-Backend lehnte den API-Key ab."
+    },
+    "backend_quota": {
+      "label": "Budget erschöpft",
+      "hint": "Kosten- oder Anfrage-Budget dieses Backends ist aufgebraucht."
+    },
+    "backend_unreachable": {
+      "label": "Backend nicht erreichbar",
+      "hint": "Der Backend-Host verweigerte die Verbindung."
+    },
+    "backend_error": {
+      "label": "Backend-Fehler",
+      "hint": "Das Backend schlug beim Übersetzen fehl."
+    },
+    "source_missing": {
+      "label": "Kein Quell-Untertitel",
+      "hint": "Nichts zu übersetzen — der Quell-Untertitel wurde nie geholt."
+    },
+    "signs_only": {
+      "label": "Nur Gebärden",
+      "hint": "Der Quell-Untertitel ist Gebärdensprache, kein Dialog."
+    },
+    "unsupported_format": {
+      "label": "Format nicht unterstützt",
+      "hint": "Die Untertiteldatei hat ein Format, das Sublarr nicht lesen kann."
+    },
+    "outside_media": {
+      "label": "Außerhalb des Medienordners",
+      "hint": "Die Datei liegt außerhalb des Medienordners und kann nicht verarbeitet werden."
+    },
+    "job_error": {
+      "label": "Job fehlgeschlagen",
+      "hint": "Der Übersetzungs-Job brach vor dem Backend ab."
+    },
+    "unknown": {
+      "label": "Problem",
+      "hint": "Ein Problem ohne eigene Erklärung auf dieser Seite."
+    }
   },
   "providers": {
     "title": "Provider-Gesundheit",
@@ -74,6 +184,7 @@
     "backend_errors_title": "Backend-Fehler",
     "col_file": "Datei",
     "col_format": "Format",
+    "col_reason": "Grund",
     "summary": "{{failures7d}} fehlgeschlagene Übersetzungen in den letzten 7 Tagen · {{stuck}} Einträge warten auf erneute Übersetzung",
     "hint": "Versuche und Fehler pro Episode stehen hinter dem History-Button der Episode."
   }

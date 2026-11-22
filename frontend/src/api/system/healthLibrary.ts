@@ -6,6 +6,9 @@ export interface HealthSeriesRow {
   item_type: string;
   missing: number;
   problems: number;
+  /** Per failure kind behind `problems` (kind -> count); `failed` holds rows
+   *  with no recorded kind. Sorted by nothing server-side — sort by count. */
+  problem_kinds: Record<string, number>;
 }
 
 export interface HealthProblemRow {
@@ -27,6 +30,8 @@ export interface HealthTranslationBackend {
   failed: number;
   consecutive_failures: number;
   last_error: string;
+  /** Classified cause of `last_error`; empty when the backend is healthy. */
+  last_error_kind: string;
   last_failure_at: string | null;
   last_success_at: string | null;
 }
@@ -38,6 +43,8 @@ export interface HealthTranslationError {
   lines_count: number;
   status: string;
   error_type: string;
+  /** Classified cause (timeout / backend_auth / backend_unreachable / …). */
+  error_kind: string;
   error_msg: string;
   started_at: string | null;
 }
@@ -47,6 +54,8 @@ export interface HealthPipelineError {
   file_path: string;
   source_format: string;
   error: string;
+  /** Classified cause (source_missing / signs_only / unsupported_format / …). */
+  error_kind: string;
   created_at: string | null;
   completed_at: string | null;
 }
@@ -75,6 +84,9 @@ export interface HealthProviderRow {
   failed_downloads: number;
   auto_disabled: boolean;
   degraded: boolean;
+  /** Machine-readable verdict behind `degraded` (ok / no_activity /
+   *  low_hit_rate / circuit_open / …) — the badge keys off this, not the state. */
+  status_reason: string;
 }
 
 export interface LibraryHealth {

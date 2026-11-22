@@ -17,8 +17,10 @@ Aggregates three "where does it hurt" views from data that already exists:
                      error was only visible behind one episode's History
                      button; a dead backend showed nowhere.
 
-Everything is read-only and bounded (top-N lists) so the endpoint stays
-cheap enough for a dashboard poll.
+Everything is read-only and complete (no top-N truncation): the frontend
+renders in chunks so a large library stays cheap to paint, while the payload
+never hides a problem the reader would otherwise miss. Polling stays cheap
+because the endpoint is cached.
 """
 
 from __future__ import annotations
@@ -33,10 +35,11 @@ from providers.manager_status_mixin import _classify_health
 
 logger = logging.getLogger(__name__)
 
-# Bounded list sizes — a dashboard needs the worst offenders, not everything.
-MAX_SERIES_ROWS = 50
-MAX_PROBLEM_ROWS = 100
-MAX_TRANSLATION_ERROR_ROWS = 50
+# No row caps. The page exists to be trusted: a list truncated at 50 series
+# hides the series that hurt most when there are 51, and the reader cannot
+# tell "no more problems" from "not shown". The frontend renders in chunks
+# (see ScrollList-style infinite scroll in HealthPage) instead of trimming
+# the payload.
 
 # Wanted statuses that mean "the user does not want this tracked".
 _EXCLUDED_STATUSES = ("ignored",)
@@ -54,6 +57,66 @@ def _is_problem_clause(wanted_model):
     return (wanted_model.status == "failed") | (wanted_model.failure_kind.isnot(None))
 
 
+# Job failures that broke before a backend was ever reached. The Health page
+# badges these, so each needs a machine-readable kind rather than a free-text
+# error string the reader has to parse.
+_PIPELINE_ERROR_KINDS = (
+    ("no source subtitle found", "source_missing"),
+    ("looks like signs only", "signs_only"),
+    ("lies outside its folder or the media folder", "outside_media"),
+    ("unsupported format", "unsupported_format"),
+    ("unsupported subtitle format", "unsupported_format"),
+    ("unsupported codec", "unsupported_format"),
+    ("unsupported subtitle codec", "unsupported_format"),
+)
+
+# Backend call failures. ``error_type`` is an exception class name and
+# ``error_msg`` free text; both are searched, newest rule first.
+_BACKEND_ERROR_KINDS = (
+    ("timeout", "timeout"),
+    ("timed out", "timeout"),
+    ("linecountmismatch", "line_mismatch"),
+    ("unauthorized", "backend_auth"),
+    ("forbidden", "backend_auth"),
+    ("authentication", "backend_auth"),
+    ("api key", "backend_auth"),
+    ("apikey", "backend_auth"),
+    ("invalid key", "backend_auth"),
+    ("rate limit", "backend_quota"),
+    ("too many requests", "backend_quota"),
+    ("429", "backend_quota"),
+    ("quota", "backend_quota"),
+    ("budget", "backend_quota"),
+    ("connection refused", "backend_unreachable"),
+    ("connection error", "backend_unreachable"),
+    ("connectionreset", "backend_unreachable"),
+    ("unreachable", "backend_unreachable"),
+    ("networkerror", "backend_unreachable"),
+    ("connectionerror", "backend_unreachable"),
+    ("oserror", "backend_unreachable"),
+)
+
+
+def _classify_pipeline_error(error: str) -> str:
+    """Kind of a failed translation job that never reached a backend."""
+    lowered = (error or "").lower()
+    for needle, kind in _PIPELINE_ERROR_KINDS:
+        if needle in lowered:
+            return kind
+    return "job_error"
+
+
+def _classify_backend_error(status: str, error_type: str, error_msg: str) -> str:
+    """Kind of a failed backend call: outage, auth, quota, timeout, or bad output."""
+    if status == "timeout":
+        return "timeout"
+    blob = f"{error_type} {error_msg}".lower()
+    for needle, kind in _BACKEND_ERROR_KINDS:
+        if needle in blob:
+            return kind
+    return "backend_error"
+
+
 def get_library_health() -> dict:
     from db.models.circuit_breaker import CircuitBreakerState
     from db.models.core import Job, WantedItem
@@ -65,6 +128,26 @@ def get_library_health() -> dict:
 
     # ── series/movies with missing subtitles ────────────────────────────────
     problem_case = case((_is_problem_clause(WantedItem), 1), else_=0)
+    # Per-series breakdown of WHY the stuck items are stuck. The Problems
+    # column used to be a bare number: three episodes failing because the
+    # media file vanished and three because no provider matched looked
+    # identical, and only one of those has a setting to fix it. Rows whose
+    # status is 'failed' with no recorded kind share the 'failed' bucket.
+    kind_case = case((WantedItem.failure_kind.is_(None), "failed"), else_=WantedItem.failure_kind)
+    kind_counts: dict[tuple[str, str], dict[str, int]] = {}
+    for row in session.execute(
+        select(
+            WantedItem.title,
+            WantedItem.item_type,
+            kind_case.label("kind"),
+            func.count(WantedItem.id).label("count"),
+        )
+        .where(_is_problem_clause(WantedItem))
+        .where(WantedItem.status.notin_(_EXCLUDED_STATUSES))
+        .group_by(WantedItem.title, WantedItem.item_type, kind_case)
+    ).all():
+        kinds = kind_counts.setdefault((row[0] or "?", row[1]), {})
+        kinds[row[2]] = int(row[3] or 0)
     series_rows = session.execute(
         select(
             WantedItem.title,
@@ -74,8 +157,10 @@ def get_library_health() -> dict:
         )
         .where(WantedItem.status.notin_(_EXCLUDED_STATUSES))
         .group_by(WantedItem.title, WantedItem.item_type)
-        .order_by(func.count(WantedItem.id).desc())
-        .limit(MAX_SERIES_ROWS)
+        # Stuck items first: the table answers "where does it hurt", and a
+        # series with 40 missing-but-searchable episodes is not more urgent
+        # than one with 5 episodes that no provider can source.
+        .order_by(func.sum(problem_case).desc(), func.count(WantedItem.id).desc(), WantedItem.title)
     ).all()
     series = [
         {
@@ -83,6 +168,7 @@ def get_library_health() -> dict:
             "item_type": row[1],
             "missing": int(row[2] or 0),
             "problems": int(row[3] or 0),
+            "problem_kinds": kind_counts.get((row[0] or "?", row[1]), {}),
         }
         for row in series_rows
     ]
@@ -94,7 +180,6 @@ def get_library_health() -> dict:
             .where(_is_problem_clause(WantedItem))
             .where(WantedItem.status.notin_(_EXCLUDED_STATUSES))
             .order_by(WantedItem.updated_at.desc())
-            .limit(MAX_PROBLEM_ROWS)
         )
         .scalars()
         .all()
@@ -216,7 +301,6 @@ def get_library_health() -> dict:
                 select(TranslationEvent)
                 .where(TranslationEvent.status.in_(_FAILED_TRANSLATION_STATUSES))
                 .order_by(TranslationEvent.started_at.desc())
-                .limit(MAX_TRANSLATION_ERROR_ROWS)
             )
             .scalars()
             .all()
@@ -229,6 +313,9 @@ def get_library_health() -> dict:
                 "lines_count": int(e.lines_count or 0),
                 "status": e.status,
                 "error_type": e.error_type or "",
+                "error_kind": _classify_backend_error(
+                    e.status or "", e.error_type or "", e.error_msg or ""
+                ),
                 "error_msg": e.error_msg or "",
                 "started_at": e.started_at.isoformat() if e.started_at else None,
             }
@@ -254,7 +341,6 @@ def get_library_health() -> dict:
                 .where(Job.status == _FAILED_JOB_STATUS)
                 .where(Job.id.notin_(backend_failed_jobs))
                 .order_by(Job.created_at.desc())
-                .limit(MAX_TRANSLATION_ERROR_ROWS)
             )
             .scalars()
             .all()
@@ -265,6 +351,7 @@ def get_library_health() -> dict:
                 "file_path": j.file_path,
                 "source_format": j.source_format or "",
                 "error": j.error or "",
+                "error_kind": _classify_pipeline_error(j.error or ""),
                 "created_at": j.created_at.isoformat() if j.created_at else None,
                 "completed_at": j.completed_at.isoformat() if j.completed_at else None,
             }
@@ -290,6 +377,12 @@ def get_library_health() -> dict:
                     "failed": int(r.failed_translations or 0),
                     "consecutive_failures": int(r.consecutive_failures or 0),
                     "last_error": r.last_error or "",
+                    # The badge behind "Last error" needs a kind, not the raw
+                    # string: "Connection refused" and "API key rejected" are
+                    # different fixes on the same settings page.
+                    "last_error_kind": _classify_backend_error("error", "", r.last_error or "")
+                    if (r.failed_translations or r.consecutive_failures)
+                    else "",
                     "last_failure_at": r.last_failure_at.isoformat() if r.last_failure_at else None,
                     "last_success_at": r.last_success_at.isoformat() if r.last_success_at else None,
                 }

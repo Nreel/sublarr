@@ -16,8 +16,8 @@
  *   – AniDB / Remux            – navigation tiles to per-domain pages
  *   – Diagnostics              – cross-link to /settings/system/diagnostics
  */
-import { lazy, Suspense, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { SubtitleRepairPanel } from '@/components/repair/SubtitleRepairPanel'
 import {
@@ -150,35 +150,9 @@ const SECTIONS: readonly FormSectionDef[] = [
 export function SystemSettings() {
   const { t } = useTranslation('settings')
   const { t: tSettings } = useTranslation('settings')
-  const { hash } = useLocation()
 
-  // The data-loss notice links straight here with #subtitle-repair. React Router
-  // does not act on the fragment, so bring the section into view ourselves.
-  //
-  // One scroll is not enough: the sections above are lazy-loaded, so they grow
-  // *after* the jump and push the target back out of view — the click lands in
-  // the middle of the Backup section instead. So keep re-anchoring until the
-  // element's position stops moving.
-  useEffect(() => {
-    if (!hash) return
-    const id = hash.slice(1)
-    let last = -1
-    let settled = 0
-    const timer = window.setInterval(() => {
-      const el = document.getElementById(id)
-      if (!el) return
-      const top = el.getBoundingClientRect().top
-      el.scrollIntoView({ block: 'start' })
-      settled = Math.abs(top - last) < 2 ? settled + 1 : 0
-      last = top
-      if (settled >= 3) window.clearInterval(timer)
-    }, 120)
-    const stop = window.setTimeout(() => window.clearInterval(timer), 4000)
-    return () => {
-      window.clearInterval(timer)
-      window.clearTimeout(stop)
-    }
-  }, [hash])
+  // #subtitle-repair deep links are anchored by SettingsShell for every
+  // /settings/* page, so the data-loss notice can land on this section.
 
   return (
     <SettingsDetailLayout

@@ -22,7 +22,8 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { formatVersion } from '@/lib/version'
-import { useHealth, useUpdateInfo } from '@/hooks/useApi'
+import { useHealth, useUpdateInfo, useLibraryHealth } from '@/hooks/useApi'
+import { healthProblemCount } from '@/lib/healthProblems'
 import { getAuthStatus, logout } from '@/api/client'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import { ScanProgressIndicator } from '@/components/shared/ScanProgressIndicator'
@@ -31,6 +32,9 @@ interface NavItem {
   to: string
   labelKey: string
   icon: typeof LayoutDashboard
+  /** Count chip beside the label; drops out at zero. Same contract as the
+   *  desktop IconSidebar — the Health chip must not appear on one sidebar only. */
+  badge?: { testId: string; tone: 'error' | 'warning' }
 }
 
 interface NavGroup {
@@ -61,7 +65,7 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/settings', labelKey: 'nav.settings', icon: Settings },
       { to: '/statistics', labelKey: 'nav.statistics', icon: BarChart3 },
-      { to: '/health', labelKey: 'nav.health', icon: HeartPulse },
+      { to: '/health', labelKey: 'nav.health', icon: HeartPulse, badge: { testId: 'nav-badge-health', tone: 'error' } },
       { to: '/tasks', labelKey: 'nav.tasks', icon: ListChecks },
       { to: '/logs', labelKey: 'nav.logs', icon: ScrollText },
       { to: '/plugins', labelKey: 'nav.plugins', icon: Puzzle },
@@ -72,6 +76,8 @@ const navGroups: NavGroup[] = [
 export function Sidebar() {
   const { t } = useTranslation('common')
   const { data: health } = useHealth()
+  const { data: libraryHealth } = useLibraryHealth()
+  const healthCount = healthProblemCount(libraryHealth)
   const { data: updateInfo } = useUpdateInfo()
   const [mobileOpen, setMobileOpen] = useState(false)
   const isHealthy = health?.status === 'healthy'
@@ -181,7 +187,7 @@ export function Sidebar() {
               >
                 {t(group.titleKey)}
               </div>
-              {group.items.map(({ to, labelKey, icon: Icon }) => (
+              {group.items.map(({ to, labelKey, icon: Icon, badge }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -215,6 +221,18 @@ export function Sidebar() {
                         style={{ marginLeft: isActive ? 2 : 0 }}
                       />
                       {t(labelKey)}
+                      {badge && healthCount > 0 && (
+                        <span
+                          data-testid={badge.testId}
+                          className="ml-auto text-[10px] font-bold rounded-full px-1.5"
+                          style={{
+                            backgroundColor: badge.tone === 'error' ? 'var(--error)' : 'var(--warning)',
+                            color: badge.tone === 'error' ? '#fff' : '#000',
+                          }}
+                        >
+                          {healthCount > 99 ? '99+' : healthCount}
+                        </span>
+                      )}
                     </>
                   )}
                 </NavLink>

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Health page badges name every problem and link to its setting** — the
+  Health page's *Problems* column was a bare number, and provider rows,
+  translation-backend rows and pipeline rows only showed raw error text, so a
+  series with three vanished media files looked identical to one with three
+  episodes no provider can source, and only one of those has a setting to fix.
+  `GET /api/v1/health/library` now emits a machine-readable kind per problem
+  (`problem_kinds` per series, `status_reason` per provider, `error_kind` /
+  `last_error_kind` per translation failure), and every row renders a badge
+  naming the fault with a one-line explanation that links to the setting which
+  resolves it (`lib/healthProblems.ts` — one taxonomy for search retries, media
+  paths, provider credentials, scoring, translation backends, quality, cost and
+  diagnostics). Unknown codes still render their raw text under a generic badge.
+  The sidebar *Health* entry shows a count of actionable problems.
+- **Health lists are complete** — the series view was capped at 50 rows; every
+  list is now uncapped (worst-hit series first) and paints in chunks as the
+  reader scrolls, so nothing is silently hidden.
+
 ### Fixed
 - **Webhook secret copy and regenerate work** — on plain-HTTP LAN deployments
   `navigator.clipboard` is undefined, so the copy button in Settings → System →

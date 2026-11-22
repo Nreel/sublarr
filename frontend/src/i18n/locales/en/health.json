@@ -2,6 +2,7 @@
   "title": "Health",
   "subtitle": "Where the library hurts: missing subtitles, unmatched episodes, failing providers",
   "refresh_note": "Refreshes automatically every minute.",
+  "more": "More rows load as you scroll down.",
   "totals": {
     "wanted": "Missing subtitles",
     "problems": "Problem items",
@@ -32,14 +33,123 @@
     "col_updated": "Updated",
     "empty": "No failed or unmatched items."
   },
-  "failure": {
-    "no_result": "No result",
-    "no_result_slow": "No result (slow retry)",
-    "provider_error": "Provider error",
-    "file_missing": "File missing",
-    "translation_error": "Translation error",
-    "unsourceable": "Unmatched",
-    "failed": "Failed"
+  "badges": {
+    "no_result": {
+      "label": "No result",
+      "hint": "Providers were asked and found nothing for this item."
+    },
+    "no_result_slow": {
+      "label": "No result (slow)",
+      "hint": "Retry limit reached — now searched once a month."
+    },
+    "provider_error": {
+      "label": "Provider error",
+      "hint": "Providers failed or were skipped: outage, rate limit, or budget."
+    },
+    "file_missing": {
+      "label": "File missing",
+      "hint": "The media file is not where the record says — check the media path."
+    },
+    "translation_error": {
+      "label": "Translation error",
+      "hint": "Found, but the translation backend could not finish it."
+    },
+    "unsourceable": {
+      "label": "Unmatched",
+      "hint": "Given up on: no provider could source this item."
+    },
+    "failed": {
+      "label": "Failed",
+      "hint": "Failed without a recorded reason — see diagnostics."
+    },
+    "auto_disabled": {
+      "label": "Auto-disabled",
+      "hint": "Turned off after repeated failures — re-enable it here."
+    },
+    "circuit_open": {
+      "label": "Breaker open",
+      "hint": "Circuit breaker tripped; requests are being held off."
+    },
+    "credentials_rejected": {
+      "label": "Credentials rejected",
+      "hint": "The stored key or account was refused — update it."
+    },
+    "host_unreachable": {
+      "label": "Host unreachable",
+      "hint": "The provider's host could not be reached."
+    },
+    "consecutive_failures": {
+      "label": "Failing",
+      "hint": "Several requests in a row failed."
+    },
+    "no_results": {
+      "label": "Delivers nothing",
+      "hint": "Answers requests but never returns a result or download."
+    },
+    "no_credentials": {
+      "label": "No credentials",
+      "hint": "A required field is empty, so this provider never started."
+    },
+    "not_initialized": {
+      "label": "Not initialized",
+      "hint": "This provider was configured but never came up."
+    },
+    "low_hit_rate": {
+      "label": "Low hit rate",
+      "hint": "Rarely finds anything worth downloading."
+    },
+    "no_activity": {
+      "label": "Never asked",
+      "hint": "Nothing has searched through this provider yet."
+    },
+    "timeout": {
+      "label": "Timeout",
+      "hint": "The backend did not answer in time — raise its timeout."
+    },
+    "line_mismatch": {
+      "label": "Line mismatch",
+      "hint": "The translation came back with a different line count."
+    },
+    "backend_auth": {
+      "label": "Backend key rejected",
+      "hint": "The translation backend refused the API key."
+    },
+    "backend_quota": {
+      "label": "Budget exhausted",
+      "hint": "Cost or request budget ran out for this backend."
+    },
+    "backend_unreachable": {
+      "label": "Backend unreachable",
+      "hint": "The backend host refused the connection."
+    },
+    "backend_error": {
+      "label": "Backend error",
+      "hint": "The backend failed while translating."
+    },
+    "source_missing": {
+      "label": "No source subtitle",
+      "hint": "Nothing to translate from — the source subtitle was never fetched."
+    },
+    "signs_only": {
+      "label": "Signs only",
+      "hint": "The source subtitle is sign language, not dialogue."
+    },
+    "unsupported_format": {
+      "label": "Unsupported format",
+      "hint": "The subtitle file is in a format Sublarr cannot read."
+    },
+    "outside_media": {
+      "label": "Outside media folder",
+      "hint": "The file lies outside the media folder, so it cannot be processed."
+    },
+    "job_error": {
+      "label": "Job failed",
+      "hint": "The translation job broke before reaching a backend."
+    },
+    "unknown": {
+      "label": "Problem",
+      "hint": "A problem the page has no specific explanation for."
+    }
   },
   "providers": {
     "title": "Provider health",
@@ -74,6 +184,7 @@
     "backend_errors_title": "Backend errors",
     "col_file": "File",
     "col_format": "Format",
+    "col_reason": "Reason",
     "summary": "{{failures7d}} failed translations in the last 7 days · {{stuck}} items waiting to re-translate",
     "hint": "Per-episode attempts and errors live behind the History button on each episode."
   }

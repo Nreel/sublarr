@@ -1,29 +1,28 @@
 /**
  * Health page — "where does it hurt" overview of the library.
  *
- * Four bounded views from GET /api/v1/health/library: series with missing
- * subtitles, wanted items stuck in a failure state (unmatched episodes),
- * per-provider health (circuit breaker ⋈ provider stats), and translation
- * health (backend failure counters, recent failed translation calls, and
- * failed translation jobs — before this block those errors were only visible
- * behind one episode's History button).
+ * Four views from GET /api/v1/health/library: series with missing subtitles,
+ * wanted items stuck in a failure state (unmatched episodes), per-provider
+ * health (circuit breaker ⋈ provider stats), and translation health (backend
+ * failure counters, recent failed translation calls, and failed translation
+ * jobs — before this block those errors were only visible behind one
+ * episode's History button). Every row carries a badge naming its problem and
+ * linking to the setting that fixes it (see lib/healthProblems); lists are
+ * complete and paint in chunks as the reader scrolls.
  */
-import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { HeartPulse, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatTile } from '@/components/statistics/primitives';
-import {
-  getLibraryHealth,
-  type HealthPipelineError,
-  type HealthProblemRow,
-  type HealthProviderRow,
-  type HealthTranslationBackend,
-  type HealthTranslationError,
-} from '@/api/system/healthLibrary';
+import { useInfiniteChunk } from '@/components/shared/useInfiniteChunk';
+import { useLibraryHealth } from '@/hooks/useApi';
+import { type HealthPipelineError, type HealthProblemRow, type HealthProviderRow, type HealthTranslationBackend, type HealthTranslationError } from '@/api/system/healthLibrary';
+import { problemBadgeSpec, TIER_COLOR } from '@/lib/healthProblems';
 import { formatRelativeTime, formatProviderName } from '@/lib/utils';
+
+type T = (key: string) => string;
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -69,35 +68,79 @@ function EmptyState({ label }: { label: string }) {
   );
 }
 
-function FailureKindBadge({
-  kind,
-  status,
+/** Scroll sentinel that reveals the next chunk of a list. */
+function SentinelRow({
+  list,
+  colSpan,
   t,
 }: {
-  kind: string | null;
-  status: string;
-  t: (key: string) => string;
+  list: { hasMore: boolean; sentinelRef: Ref<HTMLTableRowElement> };
+  colSpan: number;
+  t: T;
 }) {
-  const key = kind ?? status;
-  const label = t(`failure.${key}`) === `failure.${key}` ? key : t(`failure.${key}`);
-  const isHard = kind === 'unsourceable' || status === 'failed';
+  if (!list.hasMore) return null;
   return (
-    <span
-      className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase"
-      style={{
-        backgroundColor: isHard
-          ? 'color-mix(in srgb, var(--error) 12%, transparent)'
-          : 'color-mix(in srgb, var(--warning) 12%, transparent)',
-        color: isHard ? 'var(--error)' : 'var(--warning)',
-        fontFamily: 'var(--font-mono)',
-      }}
-    >
-      {label}
-    </span>
+    <tr ref={list.sentinelRef}>
+      <td colSpan={colSpan} className="px-3 py-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+        {t('more')}
+      </td>
+    </tr>
   );
 }
 
-function ProblemRow({ item, t }: { item: HealthProblemRow; t: (key: string) => string }) {
+/**
+ * The badge every problem row carries: a chip naming the fault, a one-line
+ * explanation beside it, and the whole thing pointing at the setting that
+ * resolves it. Unknown codes still render their raw text under the generic
+ * badge, so a code added server-side never disappears from the page.
+ */
+function ProblemBadge({
+  kind,
+  fallbackLabel,
+  count,
+  showHint = true,
+  t,
+}: {
+  kind: string | null | undefined;
+  fallbackLabel?: string;
+  /** Count of items behind this badge (series rows); omitted for single rows. */
+  count?: number;
+  showHint?: boolean;
+  t: T;
+}) {
+  const spec = problemBadgeSpec(kind);
+  const label = kind && spec.labelKey === 'badges.unknown.label' ? (fallbackLabel ?? kind) : t(spec.labelKey);
+  const hint = t(spec.hintKey);
+  return (
+    <Link
+      to={spec.href}
+      className="inline-flex items-center gap-1.5 group"
+      title={`${hint} — ${spec.href}`}
+    >
+      <span
+        className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase group-hover:underline"
+        style={{
+          backgroundColor: `color-mix(in srgb, ${TIER_COLOR[spec.tier]} 12%, transparent)`,
+          color: TIER_COLOR[spec.tier],
+          fontFamily: 'var(--font-mono)',
+        }}
+      >
+        {label}
+        {count && count > 1 ? ` ×${count}` : ''}
+      </span>
+      {showHint && (
+        <span
+          className="text-[11px] truncate max-w-[220px] hidden lg:inline"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          {hint}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function ProblemRow({ item, t }: { item: HealthProblemRow; t: T }) {
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
       <td className="px-3 py-2">
@@ -123,7 +166,7 @@ function ProblemRow({ item, t }: { item: HealthProblemRow; t: (key: string) => s
         {item.target_language}
       </td>
       <td className="px-3 py-2">
-        <FailureKindBadge kind={item.failure_kind} status={item.status} t={t} />
+        <ProblemBadge kind={item.failure_kind} fallbackLabel={item.status} t={t} />
       </td>
       <td
         className="px-3 py-2 text-xs truncate max-w-[240px] hidden md:table-cell"
@@ -148,7 +191,7 @@ function ProblemRow({ item, t }: { item: HealthProblemRow; t: (key: string) => s
   );
 }
 
-function ProviderRow({ p, t }: { p: HealthProviderRow; t: (key: string) => string }) {
+function ProviderRow({ p, t }: { p: HealthProviderRow; t: T }) {
   const stateColor =
     p.breaker_state === 'closed' && !p.auto_disabled
       ? 'var(--success)'
@@ -169,16 +212,23 @@ function ProviderRow({ p, t }: { p: HealthProviderRow; t: (key: string) => strin
         </div>
       </td>
       <td className="px-3 py-2">
-        <span
-          className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase"
-          style={{
-            backgroundColor: `color-mix(in srgb, ${stateColor} 12%, transparent)`,
-            color: stateColor,
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          {p.auto_disabled ? t('providers.auto_disabled') : t(`providers.state_${p.breaker_state}`)}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase"
+            style={{
+              backgroundColor: `color-mix(in srgb, ${stateColor} 12%, transparent)`,
+              color: stateColor,
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            {p.auto_disabled ? t('providers.auto_disabled') : t(`providers.state_${p.breaker_state}`)}
+          </span>
+          {/* The breaker state says *how* it is off, not *why*. A provider with
+              a blank API key and one whose host is down both read "Open". */}
+          {p.status_reason && p.status_reason !== 'ok' && (
+            <ProblemBadge kind={p.status_reason} t={t} />
+          )}
+        </div>
       </td>
       <td
         className="px-3 py-2 text-xs tabular-nums hidden sm:table-cell"
@@ -211,7 +261,7 @@ function ProviderRow({ p, t }: { p: HealthProviderRow; t: (key: string) => strin
   );
 }
 
-function TranslationBackendRow({ b }: { b: HealthTranslationBackend }) {
+function TranslationBackendRow({ b, t }: { b: HealthTranslationBackend; t: T }) {
   const broken = b.failed > 0 || b.consecutive_failures > 0;
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -250,12 +300,23 @@ function TranslationBackendRow({ b }: { b: HealthTranslationBackend }) {
       >
         {b.consecutive_failures}
       </td>
-      <td
-        className="px-3 py-2 text-xs truncate max-w-[240px] hidden md:table-cell"
-        title={b.last_error}
-        style={{ color: broken ? 'var(--error)' : 'var(--text-secondary)' }}
-      >
-        {b.last_error || '—'}
+      <td className="px-3 py-2">
+        {broken ? (
+          <div className="flex items-center gap-2">
+            <ProblemBadge kind={b.last_error_kind} t={t} />
+            <span
+              className="text-xs truncate max-w-[240px] hidden md:inline"
+              title={b.last_error}
+              style={{ color: 'var(--error)' }}
+            >
+              {b.last_error || '—'}
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            —
+          </span>
+        )}
       </td>
       <td
         className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
@@ -267,7 +328,7 @@ function TranslationBackendRow({ b }: { b: HealthTranslationBackend }) {
   );
 }
 
-function TranslationErrorRow({ e }: { e: HealthTranslationError }) {
+function TranslationErrorRow({ e, t }: { e: HealthTranslationError; t: T }) {
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
       <td
@@ -283,20 +344,11 @@ function TranslationErrorRow({ e }: { e: HealthTranslationError }) {
         {e.source_lang} → {e.target_lang}
       </td>
       <td className="px-3 py-2">
-        <span
-          className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase"
-          style={{
-            backgroundColor: 'color-mix(in srgb, var(--error) 12%, transparent)',
-            color: 'var(--error)',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          {e.error_type || e.status}
-        </span>
+        <ProblemBadge kind={e.error_kind} fallbackLabel={e.error_type || e.status} t={t} />
       </td>
       <td
         className="px-3 py-2 text-xs truncate max-w-[240px] hidden md:table-cell"
-        title={e.error_msg}
+        title={`${e.error_type || e.status}: ${e.error_msg}`}
         style={{ color: 'var(--text-secondary)' }}
       >
         {e.error_msg || '—'}
@@ -317,7 +369,7 @@ function TranslationErrorRow({ e }: { e: HealthTranslationError }) {
   );
 }
 
-function TranslationPipelineErrorRow({ e }: { e: HealthPipelineError }) {
+function TranslationPipelineErrorRow({ e, t }: { e: HealthPipelineError; t: T }) {
   // The path is a media path; the file name is what identifies the item.
   const name = e.file_path.split(/[\\/]/).pop() || e.file_path;
   return (
@@ -335,8 +387,11 @@ function TranslationPipelineErrorRow({ e }: { e: HealthPipelineError }) {
       >
         {e.source_format || '—'}
       </td>
+      <td className="px-3 py-2">
+        <ProblemBadge kind={e.error_kind} t={t} />
+      </td>
       <td
-        className="px-3 py-2 text-xs truncate max-w-[320px]"
+        className="px-3 py-2 text-xs truncate max-w-[320px] hidden md:table-cell"
         title={e.error}
         style={{ color: 'var(--error)' }}
       >
@@ -355,11 +410,20 @@ function TranslationPipelineErrorRow({ e }: { e: HealthPipelineError }) {
 export function HealthPage() {
   const { t } = useTranslation('health');
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['library-health'],
-    queryFn: getLibraryHealth,
-    refetchInterval: 60_000,
-  });
+  const { data, isLoading } = useLibraryHealth();
+
+  // Every list is complete, so paint it in chunks: rows appear as the reader
+  // scrolls to the bottom of the box instead of the page rendering thousands
+  // of rows (or hiding the ones past a cap) up front.
+  const seriesList = useInfiniteChunk(data?.series ?? [], 60);
+  const problemList = useInfiniteChunk(data?.problems ?? [], 60);
+  const providerList = useInfiniteChunk(
+    [...(data?.providers ?? []).filter(p => p.degraded), ...(data?.providers ?? []).filter(p => !p.degraded)],
+    40,
+  );
+  const backendList = useInfiniteChunk(data?.translation?.backends ?? [], 40);
+  const errorList = useInfiniteChunk(data?.translation?.recent_errors ?? [], 40);
+  const pipelineList = useInfiniteChunk(data?.translation?.pipeline_errors ?? [], 40);
 
   if (isLoading) {
     return (
@@ -370,8 +434,6 @@ export function HealthPage() {
   }
 
   const totals = data?.totals;
-  const degradedProviders = (data?.providers ?? []).filter(p => p.degraded);
-  const healthyProviders = (data?.providers ?? []).filter(p => !p.degraded);
 
   return (
     // Data surface — tables of problem items benefit from the full canvas, so
@@ -412,7 +474,7 @@ export function HealthPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.series.map(s => (
+                  {seriesList.visible.map(s => (
                     <tr
                       key={`${s.item_type}:${s.title}`}
                       style={{ borderBottom: '1px solid var(--border)' }}
@@ -432,17 +494,34 @@ export function HealthPage() {
                       >
                         {s.missing}
                       </td>
-                      <td
-                        className="px-3 py-2 text-xs tabular-nums"
-                        style={{
-                          color: s.problems > 0 ? 'var(--error)' : 'var(--text-muted)',
-                          fontFamily: 'var(--font-mono)',
-                        }}
-                      >
-                        {s.problems}
+                      <td className="px-3 py-2">
+                        {s.problems > 0 ? (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {Object.entries(s.problem_kinds)
+                              .sort(([, a], [, b]) => b - a)
+                              .map(([kind, count]) => (
+                                <ProblemBadge key={kind} kind={kind} count={count} showHint={false} t={t} />
+                              ))}
+                            {/* The raw total still reads as a number for scanning. */}
+                            <span
+                              className="text-xs tabular-nums"
+                              style={{ color: 'var(--error)', fontFamily: 'var(--font-mono)' }}
+                            >
+                              {s.problems}
+                            </span>
+                          </div>
+                        ) : (
+                          <span
+                            className="text-xs tabular-nums"
+                            style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+                          >
+                            0
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
+                  <SentinelRow list={seriesList} colSpan={4} t={t} />
                 </tbody>
               </table>
             </div>
@@ -478,9 +557,10 @@ export function HealthPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.problems.map(item => (
+                  {problemList.visible.map(item => (
                     <ProblemRow key={item.id} item={item} t={t} />
                   ))}
+                  <SentinelRow list={problemList} colSpan={6} t={t} />
                 </tbody>
               </table>
             </div>
@@ -510,9 +590,10 @@ export function HealthPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...degradedProviders, ...healthyProviders].map(p => (
+                  {providerList.visible.map(p => (
                     <ProviderRow key={p.provider} p={p} t={t} />
                   ))}
+                  <SentinelRow list={providerList} colSpan={6} t={t} />
                 </tbody>
               </table>
             </div>
@@ -542,9 +623,10 @@ export function HealthPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.translation.backends.map(b => (
-                    <TranslationBackendRow key={b.backend} b={b} />
+                  {backendList.visible.map(b => (
+                    <TranslationBackendRow key={b.backend} b={b} t={t} />
                   ))}
+                  <SentinelRow list={backendList} colSpan={6} t={t} />
                 </tbody>
               </table>
             </div>
@@ -566,14 +648,16 @@ export function HealthPage() {
                     <tr style={{ borderBottom: '1px solid var(--border)' }}>
                       <Th>{t('translation.col_file')}</Th>
                       <Th className="hidden sm:table-cell">{t('translation.col_format')}</Th>
-                      <Th>{t('translation.col_error')}</Th>
+                      <Th>{t('translation.col_reason')}</Th>
+                      <Th className="hidden md:table-cell">{t('translation.col_error')}</Th>
                       <Th className="hidden lg:table-cell">{t('translation.col_when')}</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.translation.pipeline_errors.map((e, i) => (
-                      <TranslationPipelineErrorRow key={`${e.job_id}:${i}`} e={e} />
+                    {pipelineList.visible.map((e, i) => (
+                      <TranslationPipelineErrorRow key={`${e.job_id}:${i}`} e={e} t={t} />
                     ))}
+                    <SentinelRow list={pipelineList} colSpan={5} t={t} />
                   </tbody>
                 </table>
               </div>
@@ -588,16 +672,17 @@ export function HealthPage() {
                     <tr style={{ borderBottom: '1px solid var(--border)' }}>
                       <Th>{t('translation.col_backend')}</Th>
                       <Th className="hidden sm:table-cell">{t('translation.col_langs')}</Th>
-                      <Th>{t('translation.col_error')}</Th>
+                      <Th>{t('translation.col_reason')}</Th>
                       <Th className="hidden md:table-cell">{t('translation.col_message')}</Th>
                       <Th className="hidden sm:table-cell">{t('translation.col_lines')}</Th>
                       <Th className="hidden lg:table-cell">{t('translation.col_when')}</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.translation.recent_errors.map((e, i) => (
-                      <TranslationErrorRow key={`${e.backend}:${e.started_at}:${i}`} e={e} />
+                    {errorList.visible.map((e, i) => (
+                      <TranslationErrorRow key={`${e.backend}:${e.started_at}:${i}`} e={e} t={t} />
                     ))}
+                    <SentinelRow list={errorList} colSpan={6} t={t} />
                   </tbody>
                 </table>
               </div>
