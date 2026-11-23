@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 # Supported presets for get_items_for_scheduled_search
 _SCHEDULED_SEARCH_ORDERS = ("fair", "newest_first", "weighted")
+# Rows a failed series re-scan must not charge: settled work, not work the scan
+# was holding up. Mirrors the status filter the standalone scan fallback uses.
+_SCAN_FAILURE_EXCLUDED_STATUSES = ("downloaded", "blacklisted", "ignored")
 # Boundary between "recent" (bucket 0) and "older" (bucket 1) items for the
 # 'weighted' preset. Kept local to the repository so the scheduler can stay
 # preset-based and not need to pass a window parameter.
@@ -672,6 +675,46 @@ class WantedRepository(BaseRepository, _WantedUpsertMixin, _WantedUpdatesMixin):
                 error_count=0,
                 last_error_at=None,
                 error="",
+                updated_at=self._now(),
+            )
+        )
+        result = self.session.execute(stmt)
+        self._commit()
+        return result.rowcount
+
+    def record_series_scan_failure(
+        self, series_key: int, *, standalone: bool, message: str
+    ) -> int:
+        """Charge a failed series re-scan to the items that scan was meant to update.
+
+        A re-scan that broke left every episode of the series wearing the state the
+        last successful scan wrote: nothing on the item side said the scan had
+        failed, so /health "Failed & unmatched items" stayed empty while the
+        operator's button had errored. ``services.health_overview._is_problem_clause``
+        reads exactly this error side (``failure_kind`` / ``error_count`` /
+        ``last_error_at`` / ``error``), so one charge per open row makes the outage
+        visible without touching ``status`` — the items keep their retry behaviour.
+
+        ``series_key`` is the id the rows are keyed by: the ``standalone_series``
+        row id (positive) when ``standalone`` is set, the Sonarr series id
+        otherwise — i.e. ``MediaRef.id``, not the signed wire id. Settled rows
+        (``downloaded``/``blacklisted``/``ignored``) are skipped — the failed scan
+        was not holding them up. Returns the number of rows charged.
+        """
+        id_column = (
+            WantedItem.standalone_series_id if standalone else WantedItem.sonarr_series_id
+        )
+        stmt = (
+            update(WantedItem)
+            .where(
+                id_column == series_key,
+                WantedItem.status.notin_(_SCAN_FAILURE_EXCLUDED_STATUSES),
+            )
+            .values(
+                failure_kind="scan_failed",
+                error_count=func.coalesce(WantedItem.error_count, 0) + 1,
+                last_error_at=self._now(),
+                error=message[:500],
                 updated_at=self._now(),
             )
         )

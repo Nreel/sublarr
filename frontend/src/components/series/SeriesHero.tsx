@@ -207,6 +207,7 @@ export function SeriesHero({
           <div className="flex flex-wrap gap-2">
             <button
               onClick={onSearchAllMissing}
+              title={t('series_detail.hint_search_all_missing')}
               disabled={isMissingSearchPending || missingSearchStarted || missingCount === 0}
               style={{
                 display: 'inline-flex',
@@ -237,6 +238,7 @@ export function SeriesHero({
 
             <button
               onClick={onRescan}
+              title={t('series_detail.hint_rescan_series')}
               disabled={isRescanning}
               style={{
                 display: 'inline-flex',
@@ -264,6 +266,7 @@ export function SeriesHero({
             {onNfoExport && (
               <button
                 onClick={onNfoExport}
+                title={t('series_detail.hint_nfo_export')}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -285,6 +288,7 @@ export function SeriesHero({
 
             <button
               onClick={onSeriesSettings}
+              title={t('series_detail.hint_series_settings')}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',

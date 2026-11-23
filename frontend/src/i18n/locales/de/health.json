@@ -41,6 +41,10 @@
       "label": "Übersetzungsfehler",
       "hint": "Gefunden, aber das Übersetzungs-Backend konnte nicht fertig werden."
     },
+    "scan_failed": {
+      "label": "Scan fehlgeschlagen",
+      "hint": "Der Serie-Scan brach — kein Episode dieser Serie wurde aktualisiert. Prüfe Medienpfad und Sonarr."
+    },
     "unsourceable": {
       "label": "Nicht gematcht",
       "hint": "Aufgegeben: kein Provider konnte diesen Eintrag beschaffen."

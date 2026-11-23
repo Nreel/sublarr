@@ -55,6 +55,12 @@ const SPEC: Record<string, ProblemBadgeSpec> = {
     href: TRANSLATION_BACKENDS,
     tier: 'error',
   },
+  scan_failed: {
+    labelKey: 'badges.scan_failed.label',
+    hintKey: 'badges.scan_failed.hint',
+    href: GENERAL_PATHS,
+    tier: 'error',
+  },
   unsourceable: {
     labelKey: 'badges.unsourceable.label',
     hintKey: 'badges.unsourceable.hint',

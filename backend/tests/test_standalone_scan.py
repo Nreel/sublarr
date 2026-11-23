@@ -18,6 +18,10 @@ def test_scan_series_ok(client, mocker):
     }
     # Patch the local import inside the route function
     mocker.patch("db.standalone.get_standalone_series", return_value=mock_series)
+    # The scanner is unavailable here, so scan_series_or_fallback takes its
+    # DB-status fallback and returns None — which is a completed scan. A summary
+    # carrying an "error" key is answered 502 (tests/test_series_scan_failure_surfaces.py).
+    mocker.patch("standalone.scanner.get_scanner", side_effect=ImportError("watchdog missing"))
     # Mock db.get_db to avoid actual DB operations
     mock_db = mocker.MagicMock()
     mock_db.execute.return_value = None

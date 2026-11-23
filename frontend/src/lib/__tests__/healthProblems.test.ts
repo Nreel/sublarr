@@ -6,7 +6,7 @@ import de from '@/i18n/locales/de/health.json'
 /** Every code the backend can emit on /api/v1/health/library. A code missing
  *  here (or lacking locale strings) would show a raw key instead of a badge. */
 const CODES = [
-  'no_result', 'no_result_slow', 'provider_error', 'file_missing', 'translation_error', 'unsourceable', 'failed',
+  'no_result', 'no_result_slow', 'provider_error', 'file_missing', 'translation_error', 'scan_failed', 'unsourceable', 'failed',
   'auto_disabled', 'circuit_open', 'credentials_rejected', 'host_unreachable', 'consecutive_failures',
   'no_results', 'no_credentials', 'not_initialized', 'low_hit_rate', 'no_activity',
   'timeout', 'line_mismatch', 'backend_auth', 'backend_quota', 'backend_unreachable', 'backend_error',

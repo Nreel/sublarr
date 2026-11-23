@@ -161,6 +161,16 @@ def update_wanted_search_outcome(item_id: int, **fields) -> bool:
     return _get_repo().update_wanted_search_outcome(item_id, **fields)
 
 
+def record_series_scan_failure(series_key: int, *, standalone: bool, message: str) -> int:
+    """Charge a failed series re-scan to that series' open wanted items.
+
+    See ``WantedRepository.record_series_scan_failure`` for full contract.
+    """
+    return _get_repo().record_series_scan_failure(
+        series_key, standalone=standalone, message=message
+    )
+
+
 def update_wanted_search(item_id: int):
     """Increment search_count and set last_search_at."""
     return _get_repo().mark_search_attempted(item_id)

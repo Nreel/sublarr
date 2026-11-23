@@ -91,5 +91,29 @@ def test_a_backslash_in_a_posix_file_name_is_kept():
     assert _mapped("/data/tv=/mnt/tv", "/data/tv/Show/a\\b.mkv") == "/mnt/tv/Show/a\\b.mkv"
 
 
+# Mapping is idempotent: the scanner resolves a Sonarr path once, and the editor /
+# HI tools hand that local path back in. A pair whose local prefix sits inside its
+# remote prefix ("/media=/media/library") used to rewrite it again into
+# "/media/library/library/...", so GET /tools/content answered 404 — "Subtitle file
+# not found" — for a sidecar the listing had just found (2026-11-23).
+def test_a_nested_pair_does_not_remap_an_already_mapped_path():
+    assert _mapped("/media=/media/library", "/media/library/Season/[Judas] Erased - 01.ru.srt") == (
+        "/media/library/Season/[Judas] Erased - 01.ru.srt"
+    )
+    assert _mapped("/media=/media/library", "/media/library") == "/media/library"
+
+
+def test_a_nested_pair_still_maps_a_remote_path():
+    assert _mapped("/media=/media/library", "/media/Season/[Judas] Erased - 01.ru.srt") == (
+        "/media/library/Season/[Judas] Erased - 01.ru.srt"
+    )
+
+
+def test_a_mapped_windows_path_is_not_remapped():
+    assert _mapped("D:\\TV=D:\\TV\\anime", UNC_FILE.replace("\\\\192.168.1.198\\kuf", "D:\\TV\\anime")) == (
+        "D:\\TV\\anime\\Anime Season\\Show\\Staffel 02\\Show.S02E01.mkv"
+    )
+
+
 def test_a_windows_local_prefix_keeps_backslashes():
     assert _mapped("\\\\nas\\tv=T:\\", "\\\\nas\\tv\\Show\\ep.mkv") == "T:\\Show\\ep.mkv"

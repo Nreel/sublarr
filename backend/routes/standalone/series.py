@@ -198,25 +198,61 @@ def scan_series(series_id):
                     type: integer
         404:
           description: Series not found
+        409:
+          description: Scan already running
         500:
           description: Scan failed
+        502:
+          description: Scan broke (bad Sonarr response, folder unreadable)
     """
     from db.standalone import get_standalone_series
+    from db.wanted import record_series_scan_failure
+    from services.media_ids import resolve_series_ref
     from services.standalone_manager import scan_series_or_fallback
 
-    series = get_standalone_series(series_id)
-    if not series:
-        return jsonify({"error": "Series not found"}), 404
+    ref = resolve_series_ref(series_id)
 
     try:
-        summary = scan_series_or_fallback(series_id)
-        response = {"message": "Scan completed", "series_id": series_id}
-        if summary:
-            response["summary"] = summary
-        return jsonify(response)
+        if ref.is_standalone:
+            if not get_standalone_series(ref.id):
+                return jsonify({"error": "Series not found"}), 404
+            summary = scan_series_or_fallback(ref.id)
+        else:
+            # A positive id here is a Sonarr series. The standalone scanner keys its
+            # rows by positive DB ids, so this route used to look the request id up
+            # in standalone_series and 404 every Sonarr re-scan (and every negative
+            # wire id, whose row is -id). The signed-aware scanner handles both.
+            from services.wanted_scanner import get_scanner
+
+            scanner = get_scanner()
+            if scanner.is_scanning:
+                return jsonify({"error": "Scan already running"}), 409
+            summary = scanner.scan_series(series_id)
     except Exception as e:
-        logger.exception("Failed to scan series %d: %s", series_id, e)
+        logger.exception("Failed to scan series %s: %s", series_id, e)
+        record_series_scan_failure(
+            ref.id, standalone=ref.is_standalone, message=f"scan crashed: {e}"
+        )
         return jsonify({"error": "Internal server error"}), 500
+
+    scan_error = (summary or {}).get("error")
+    if scan_error:
+        # The scanner swallows failures into a summary dict, which used to be
+        # answered 200: the UI said "Re-scan started" while nothing had run, and
+        # /health stayed silent because no item carried an error. Charge the
+        # series' open items so the failure lands under "Failed & unmatched items".
+        # ``ref.id`` is the id the wanted rows are keyed by: the standalone row id
+        # (positive) or the Sonarr series id.
+        record_series_scan_failure(
+            ref.id, standalone=ref.is_standalone, message=str(scan_error)
+        )
+        logger.warning("Series re-scan %s failed: %s", series_id, scan_error)
+        return jsonify({"error": str(scan_error), "series_id": series_id}), 502
+
+    response = {"message": "Scan completed", "series_id": series_id}
+    if summary:
+        response["summary"] = summary
+    return jsonify(response), 200
 
 
 @bp.route("/series/<int(signed=True):series_id>/refresh-metadata", methods=["POST"])

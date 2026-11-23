@@ -14,8 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   along with the *Series affected* tile and `GET /api/v1/health/library`'s
   `series` / `totals.series_affected`. The page keeps *Failed & unmatched
   items*, *Provider health* and *Translation health*.
+- **Hero actions explain themselves** — *Search All Missing*, *Re-scan Series*,
+  *NFO Export* and *Series Settings* on `/library/series/<id>` only showed a
+  label; each button now carries a hover description (what it does, and what it
+  does *not* — re-scan reads existing subtitle files, it does not download or
+  translate).
 
 ### Fixed
+- **Subtitle Preview/Editor stopped answering 404 for files that exist** — a
+  path mapping whose local folder sits *inside* its remote prefix
+  (`/media=/media/library`) rewrote an already-resolved path to
+  `/media/library/library/Season/…`, so *Preview* and *Editor* reported
+  "Subtitle file not found" for sidecars the series listing had just found.
+  `map_path()` now leaves a path that already sits under the local prefix
+  untouched; the same idempotence applies to Windows drive mappings.
+- **Re-scan errors are reported, not swallowed** — the standalone
+  `POST /series/<id>/scan` route ignored the scan summary, so a failed scan
+  (`folder does not exist`, `scan failed: …`) still returned *Re-scan completed*,
+  and `/health` listed nothing. A summary carrying an error now answers
+  **502** with that message, and the failure is recorded on the series' wanted
+  items as a new `scan_failed` kind — which *Failed & unmatched items* shows as
+  a badge linking to `/settings/subtitles/scanning`.
 - **Failed & unmatched items covers every error signal** — the list asked only
   for `status == "failed"` or a recorded `failure_kind`, so an item requeued to
   `wanted` (status changed, kind cleared) that still carried an error message,

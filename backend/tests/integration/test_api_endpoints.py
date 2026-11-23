@@ -140,6 +140,30 @@ class TestToolsValidation:
         response = client.get(f"/api/v1/tools/content?file_path={remote}/episode.de.srt")
         assert response.status_code == 404
 
+    def test_already_mapped_path_is_not_mapped_again(self, client, tmp_path, monkeypatch):
+        """A nested pair must not rewrite a path the scan already resolved.
+
+        Sonarr's library ("/media") mapped to a folder inside it ("/media/library")
+        rewrote "/media/library/Season/[Judas] Erased - 01.ru.srt" into
+        "/media/library/library/Season/…", so Preview and Editor answered 404 —
+        "Subtitle file not found" — for a sidecar the series listing had just found
+        (2026-11-23).
+        """
+        media = tmp_path / "media"
+        nested = media / "library"
+        (nested / "Season").mkdir(parents=True)
+        sidecar = nested / "Season" / "[Judas] Erased - 01.ru.srt"
+        sidecar.write_text("1\n00:00:01,000 --> 00:00:02,000\nhallo\n")
+
+        monkeypatch.setenv("SUBLARR_MEDIA_PATH", str(media))
+        from config import reload_settings
+
+        reload_settings(overrides={"path_mapping": f"{media}={nested}"})
+
+        response = client.get(f"/api/v1/tools/content?file_path={sidecar}")
+        assert response.status_code == 200
+        assert "hallo" in json.loads(response.data)["content"]
+
 
 class TestHistoryEndpoints:
     """Tests for history endpoints."""

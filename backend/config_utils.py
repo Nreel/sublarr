@@ -21,6 +21,21 @@ def is_under_folder(path: str, folder: str) -> bool:
     return not rest or folder.endswith(("/", "\\")) or rest.startswith(("/", "\\"))
 
 
+def _under_folder(path: str, folder: str, ignore_case: bool) -> bool:
+    """Whole-folder containment, optionally case-insensitive.
+
+    Lowering is applied only where it keeps the string length, so a caller that
+    slices ``path`` at ``len(prefix)`` stays aligned with the original.
+    """
+    if (
+        ignore_case
+        and len(path.lower()) == len(path)
+        and len(folder.lower()) == len(folder)
+    ):
+        return is_under_folder(path.lower(), folder.lower())
+    return is_under_folder(path, folder)
+
+
 def map_path(path: str) -> str:
     """Map a remote file path to a local path using configured path mappings.
 
@@ -63,24 +78,26 @@ def map_path(path: str) -> str:
         local_prefix = local_prefix.strip()
         if not remote_prefix or not local_prefix:
             continue
+        # Windows paths ignore case: Sonarr may report d:\tv for D:\TV.
         if windows:
             remote_prefix = remote_prefix.replace("\\", "/")
-            # Windows paths ignore case: Sonarr may report d:\tv for D:\TV.
-            # Compared lowered only where lowering keeps the length, so the
-            # slice below still cuts the original at the same place.
-            if len(probe.lower()) == len(probe) and len(remote_prefix.lower()) == len(
-                remote_prefix
-            ):
-                if not is_under_folder(probe.lower(), remote_prefix.lower()):
-                    continue
-            elif not is_under_folder(probe, remote_prefix):
+            if not _under_folder(probe, remote_prefix, True):
                 continue
-        elif not is_under_folder(probe, remote_prefix):
+        elif not _under_folder(probe, remote_prefix, False):
             continue
         if best is None or len(remote_prefix) > len(best[0]):
             best = (remote_prefix, local_prefix)
 
     if best is None:
+        return path
+
+    # Idempotent: a path already sitting under the winning local prefix is a
+    # result of this mapping, not a remote path still waiting for it. Nested
+    # pairs ("/media=/media/library") otherwise rewrite an already-resolved
+    # path into "/media/library/library/...", so every second hop through a
+    # path the scanner had mapped once — the editor's GET /tools/content, the
+    # HI/modifier tools — reported "File not found" for a file that exists.
+    if _under_folder(probe, best[1].replace("\\", "/"), windows):
         return path
     remote_prefix, local_prefix = best
     # Join at the folder boundary whichever side spells the trailing separator.

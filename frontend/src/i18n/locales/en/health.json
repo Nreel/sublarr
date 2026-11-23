@@ -41,6 +41,10 @@
       "label": "Translation error",
       "hint": "Found, but the translation backend could not finish it."
     },
+    "scan_failed": {
+      "label": "Scan failed",
+      "hint": "The series re-scan broke — no episode of this series was updated. Check the media path and Sonarr."
+    },
     "unsourceable": {
       "label": "Unmatched",
       "hint": "Given up on: no provider could source this item."
