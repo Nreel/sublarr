@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Onboarding mirrors Settings, and re-runs show what is set** — the wizard
+  steps now render the same surfaces as the settings pages: step 3 takes any
+  number of Sonarr/Radarr instances (`sonarr_instances_json` /
+  `radarr_instances_json`, masked keys round-trip), step 4 any number of path
+  mapping rows, step 8 any number of Jellyfin/Emby/Plex/Kodi/Shoko instances,
+  and step 5 gains a *Subtitle language profiles* block that creates a profile
+  and makes it the library default. Re-running the wizard from Settings →
+  General preselects every previous choice (mode, library type, automation,
+  performance preset) and shows stored servers, mappings and profiles; each
+  step has a *Reset to defaults* button. Step 10 is *Run Scan* — "Step 10 of
+  10 — Run your wanted scan to find missing subtitles." with a *Start Scan*
+  button.
 - **The Health page lists problems, not titles** — *Series & movies with
   missing subtitles* duplicated what `/wanted` already shows (per-title
   wanted items with filters, search and download actions), so it is gone,
@@ -21,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   translate).
 
 ### Fixed
+- **Onboarding step 1 offered *Finish Setup*** — before a setup mode is
+  chosen the wizard shows only the mode step, and the footer treated it as the
+  last step: *Finish Setup* completed onboarding from step 1. The footer now
+  counts steps of the full flow while the mode is undecided and shows a
+  disabled *Next* until a mode is picked.
 - **Subtitle Preview/Editor stopped answering 404 for files that exist** — a
   path mapping whose local folder sits *inside* its remote prefix
   (`/media=/media/library`) rewrote an already-resolved path to

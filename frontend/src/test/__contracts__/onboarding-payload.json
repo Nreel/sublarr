@@ -1,15 +1,11 @@
 {
   "arr": {
-    "sonarr_url": "http://192.168.10.40:8989",
-    "sonarr_api_key": "abc",
-    "radarr_url": "http://192.168.10.40:7878",
-    "radarr_api_key": "abc",
-    "path_mapping": "/data/media=/media",
     "opensubtitles_api_key": "k",
     "jimaku_api_key": "k",
     "subdl_api_key": "k",
     "interface_language": "en",
     "upgrade_enabled": "true",
+    "path_mapping": "/data/media=/media",
     "wanted_search_interval_hours": "6"
   },
   "standalone": {
@@ -20,11 +16,9 @@
     "wanted_search_interval_hours": "6"
   },
   "automation_off": {
-    "sonarr_url": "http://192.168.10.40:8989",
-    "sonarr_api_key": "abc",
-    "path_mapping": "/data/media=/media",
     "interface_language": "en",
     "upgrade_enabled": "true",
+    "path_mapping": "/data/media=/media",
     "wanted_search_interval_hours": "0"
   }
 }

@@ -11,13 +11,14 @@
     "pathmapping": "Path Mapping",
     "providers": "Providers",
     "mediaservers": "Media Servers (Optional)",
-    "scan": "First Scan",
+    "scan": "Run Scan",
     "library": "Library type",
     "performance": "Performance",
     "language": "Languages",
     "automation": "Automation"
   },
   "step_info": "Step {{step}} of {{total}}",
+  "rerun_banner": "Re-running setup — every step shows your current settings; change them here to update.",
   "mode_step": {
     "description": "Choose how you want to use Sublarr.",
     "arr_title": "Sonarr / Radarr Mode",
@@ -27,12 +28,15 @@
   },
   "arr_step": {
     "description": "Connect your *arr instances to detect missing subtitles.",
-    "sonarr_url": "Sonarr URL",
-    "sonarr_api_key": "Sonarr API Key",
-    "radarr_url": "Radarr URL (optional)",
-    "radarr_api_key": "Radarr API Key (optional)",
-    "test_sonarr": "Test Sonarr connection",
-    "test_radarr": "Test Radarr connection"
+    "sonarr_heading": "Sonarr servers",
+    "radarr_heading": "Radarr servers",
+    "url_label": "URL",
+    "api_key_label": "API key",
+    "sonarr_name_placeholder": "Sonarr 1",
+    "radarr_name_placeholder": "Radarr 1",
+    "add_sonarr": "Add Sonarr server",
+    "add_radarr": "Add Radarr server",
+    "remove_instance": "Remove instance"
   },
   "standalone_step": {
     "description": "Point Sublarr at your media folders directly.",
@@ -45,9 +49,11 @@
   },
   "pathmapping_step": {
     "description": "Map remote paths to local paths (if *arr runs on a different host).",
-    "label": "Path Mapping",
-    "placeholder": "/data/media=/mnt/media;/anime=/share/anime",
-    "help": "Format: remote_prefix=local_prefix (semicolon-separated for multiple). Leave empty if Sublarr runs on the same host as Sonarr/Radarr."
+    "remote_placeholder": "Remote path, e.g. /data/media",
+    "local_placeholder": "Local path, e.g. /mnt/media",
+    "add_rule": "Add mapping",
+    "remove_rule": "Remove mapping",
+    "help": "Each row maps a remote prefix to a local prefix. Leave empty if Sublarr runs on the same host as Sonarr/Radarr."
   },
   "providers_step": {
     "description": "Configure subtitle provider API keys for searching.",
@@ -59,8 +65,20 @@
   "language_step": {
     "interface_language": "Interface language",
     "interface_language_hint": "The language the UI is shown in — the wizard switches as soon as you pick one. Changeable later under Settings → General.",
-    "help": "Which languages Sublarr searches subtitles in, and translates between, is set up in Settings → Languages & Profiles (language profiles).",
-    "description": "Choose the interface language. Search and translation languages are configured in Settings → Languages & Profiles."
+    "description": "Choose the interface language and set up your subtitle language profile.",
+    "profile_heading": "Subtitle language profiles",
+    "profile_none": "No language profiles yet — create one so Sublarr knows which languages to search subtitles in.",
+    "profile_default_badge": "Default",
+    "profile_set_default": "Set as default",
+    "profile_name_label": "Profile name",
+    "profile_name_placeholder": "e.g. English & German",
+    "profile_target_label": "Target languages",
+    "profile_create": "Create profile & set as default",
+    "profile_invalid": "A profile needs a name and at least one target language.",
+    "profile_created": "Language profile created and set as default.",
+    "profile_create_failed": "Could not create the language profile.",
+    "profile_default_set": "Profile set as default for all media.",
+    "profile_set_default_failed": "Could not set the profile as default."
   },
   "automation_step": {
     "auto_search_label": "Search for missing subtitles automatically",
@@ -87,9 +105,9 @@
     "optional": "Optional"
   },
   "scan_step": {
-    "description": "Run your first wanted scan to find missing subtitles.",
+    "description": "Run your wanted scan to find missing subtitles.",
     "info": "Run a scan to find episodes and movies missing subtitles.",
-    "start_scan": "Start First Scan",
+    "start_scan": "Start Scan",
     "scan_started": "Scan started! Check the Wanted page for results.",
     "standalone_scan_started": "Standalone scan started!",
     "wanted_scan_started": "Wanted scan started!",
@@ -101,7 +119,8 @@
     "skip_setup": "Skip Setup",
     "skip": "Skip",
     "save_next": "Save & Next",
-    "finish": "Finish Setup"
+    "finish": "Finish Setup",
+    "reset": "Reset to defaults"
   },
   "errors": {
     "save_failed": "Failed to save settings",

@@ -11,13 +11,14 @@
     "pathmapping": "Pfad-Zuordnung",
     "providers": "Provider",
     "mediaservers": "Medienserver (Optional)",
-    "scan": "Erster Scan",
+    "scan": "Scan ausführen",
     "library": "Bibliothekstyp",
     "performance": "Performance",
     "language": "Sprachen",
     "automation": "Automatisierung"
   },
   "step_info": "Schritt {{step}} von {{total}}",
+  "rerun_banner": "Einrichtung wird erneut durchlaufen — jeder Schritt zeigt deine aktuellen Einstellungen; ändere sie hier, um sie zu aktualisieren.",
   "mode_step": {
     "description": "Wähle, wie du Sublarr verwenden möchtest.",
     "arr_title": "Sonarr / Radarr Modus",
@@ -27,12 +28,15 @@
   },
   "arr_step": {
     "description": "Verbinde deine *arr-Instanzen, um fehlende Untertitel zu erkennen.",
-    "sonarr_url": "Sonarr URL",
-    "sonarr_api_key": "Sonarr API Key",
-    "radarr_url": "Radarr URL (optional)",
-    "radarr_api_key": "Radarr API Key (optional)",
-    "test_sonarr": "Sonarr-Verbindung testen",
-    "test_radarr": "Radarr-Verbindung testen"
+    "sonarr_heading": "Sonarr-Server",
+    "radarr_heading": "Radarr-Server",
+    "url_label": "URL",
+    "api_key_label": "API-Key",
+    "sonarr_name_placeholder": "Sonarr 1",
+    "radarr_name_placeholder": "Radarr 1",
+    "add_sonarr": "Sonarr-Server hinzufügen",
+    "add_radarr": "Radarr-Server hinzufügen",
+    "remove_instance": "Instanz entfernen"
   },
   "standalone_step": {
     "description": "Zeige Sublarr direkt auf deine Medienordner.",
@@ -45,9 +49,11 @@
   },
   "pathmapping_step": {
     "description": "Ordne entfernte Pfade lokalen Pfaden zu (wenn *arr auf einem anderen Host läuft).",
-    "label": "Pfad-Zuordnung",
-    "placeholder": "/data/media=/mnt/media;/anime=/share/anime",
-    "help": "Format: entfernter_Prefix=lokaler_Prefix (Semikolon-getrennt für mehrere). Leer lassen, wenn Sublarr auf demselben Host wie Sonarr/Radarr läuft."
+    "remote_placeholder": "Entfernter Pfad, z. B. /data/media",
+    "local_placeholder": "Lokaler Pfad, z. B. /mnt/media",
+    "add_rule": "Zuordnung hinzufügen",
+    "remove_rule": "Zuordnung entfernen",
+    "help": "Jede Zeile ordnet einen entfernten Prefix einem lokalen Prefix zu. Leer lassen, wenn Sublarr auf demselben Host wie Sonarr/Radarr läuft."
   },
   "providers_step": {
     "description": "Konfiguriere API-Schlüssel der Untertitel-Provider für die Suche.",
@@ -59,8 +65,20 @@
   "language_step": {
     "interface_language": "Oberflächensprache",
     "interface_language_hint": "Die Sprache der Benutzeroberfläche — der Wizard wechselt sofort nach der Auswahl. Später änderbar unter Einstellungen → Allgemein.",
-    "help": "Die Sprachen, in denen Sublarr Untertitel sucht und übersetzt, werden in Einstellungen → Sprachen & Profile (Sprachprofile) eingerichtet.",
-    "description": "Wähle die Oberflächensprache. Such- und Übersetzungssprachen werden in Einstellungen → Sprachen & Profile eingerichtet."
+    "description": "Wähle die Oberflächensprache und richt dein Untertitel-Sprachprofil ein.",
+    "profile_heading": "Untertitel-Sprachprofile",
+    "profile_none": "Noch keine Sprachprofile — erstelle eines, damit Sublarr weiß, in welchen Sprachen Untertitel gesucht werden.",
+    "profile_default_badge": "Standard",
+    "profile_set_default": "Als Standard setzen",
+    "profile_name_label": "Profilname",
+    "profile_name_placeholder": "z. B. Englisch & Deutsch",
+    "profile_target_label": "Zielsprachen",
+    "profile_create": "Profil erstellen & als Standard setzen",
+    "profile_invalid": "Ein Profil braucht einen Namen und mindestens eine Zielsprache.",
+    "profile_created": "Sprachprofil erstellt und als Standard gesetzt.",
+    "profile_create_failed": "Sprachprofil konnte nicht erstellt werden.",
+    "profile_default_set": "Profil als Standard für alle Medien gesetzt.",
+    "profile_set_default_failed": "Profil konnte nicht als Standard gesetzt werden."
   },
   "automation_step": {
     "auto_search_label": "Automatisch nach fehlenden Untertiteln suchen",
@@ -87,9 +105,9 @@
     "optional": "Optional"
   },
   "scan_step": {
-    "description": "Führe deinen ersten Scan aus, um fehlende Untertitel zu finden.",
+    "description": "Führe den Wanted-Scan aus, um fehlende Untertitel zu finden.",
     "info": "Starte einen Scan, um Episoden und Filme mit fehlenden Untertiteln zu finden.",
-    "start_scan": "Ersten Scan starten",
+    "start_scan": "Scan starten",
     "scan_started": "Scan gestartet! Prüfe die Gesucht-Seite für Ergebnisse.",
     "standalone_scan_started": "Standalone-Scan gestartet!",
     "wanted_scan_started": "Gesucht-Scan gestartet!",
@@ -101,7 +119,8 @@
     "skip_setup": "Einrichtung überspringen",
     "skip": "Überspringen",
     "save_next": "Speichern & Weiter",
-    "finish": "Einrichtung abschließen"
+    "finish": "Einrichtung abschließen",
+    "reset": "Auf Standardwerte zurücksetzen"
   },
   "errors": {
     "save_failed": "Einstellungen konnten nicht gespeichert werden",

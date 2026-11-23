@@ -5,6 +5,7 @@ import {
   updateConfig,
   completeOnboarding,
   getMediaServerTypes,
+  getMediaServerInstances,
   saveMediaServerInstances,
   testMediaServer,
   saveWatchedFolder,
@@ -13,6 +14,11 @@ import {
   importScoringPreset,
   getSetupStatus,
   completeSetup,
+  getConfig,
+  getOnboardingStatus,
+  getLanguageProfiles,
+  createLanguageProfile,
+  setProfileAsDefaultForAll,
 } from '@/api/client';
 import type { SetupBenchmark, SetupProfile } from '@/api/health';
 import { testSonarrInstance, testRadarrInstance, testApiKey } from '@/api/settings';
@@ -29,6 +35,7 @@ import {
   Play,
   Monitor,
   Plus,
+  RotateCcw,
   TestTube,
   Trash2,
   Eye,
@@ -42,7 +49,14 @@ import {
   Library,
   Gauge,
 } from 'lucide-react';
-import { INTERFACE_LANGUAGE_OPTIONS } from '@/styles/settingsShared';
+import { INTERFACE_LANGUAGE_OPTIONS, LANGUAGE_OPTIONS } from '@/styles/settingsShared';
+import {
+  parseInstances,
+  serializeInstances,
+  generateId,
+  type ServiceInstance,
+} from '@/pages/Settings/connections/ConnectionsMediaServers';
+import type { LanguageProfile } from '@/types/settings';
 import type { MediaServerType, MediaServerInstance, MediaServerTestResult } from '@/lib/types';
 
 export const ALL_STEPS = [
@@ -138,6 +152,41 @@ export const LIBRARY_TYPE_PRESET: Record<LibraryType, string | null> = {
   mixed: null,
 };
 
+export interface MappingRow {
+  remote: string;
+  local: string;
+}
+
+/** `remote=local` pairs separated by `;` (same format Settings uses). */
+export function parseMappings(raw: string): MappingRow[] {
+  return raw
+    .split(';')
+    .map(part => {
+      const i = part.indexOf('=');
+      if (i < 0) return null;
+      return { remote: part.slice(0, i).trim(), local: part.slice(i + 1).trim() };
+    })
+    .filter((row): row is MappingRow => row !== null && row.remote !== '' && row.local !== '');
+}
+
+export function serializeMappings(rows: MappingRow[]): string {
+  return rows
+    .filter(r => r.remote.trim() && r.local.trim())
+    .map(r => `${r.remote.trim()}=${r.local.trim()}`)
+    .join(';');
+}
+
+const INTERVAL_OPTIONS = ['1', '3', '6', '12', '24'];
+/** Nearest wizard interval option for a stored interval outside the presets. */
+export function nearestInterval(value: unknown): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '6';
+  return INTERVAL_OPTIONS.reduce(
+    (best, opt) => (Math.abs(Number(opt) - n) < Math.abs(Number(best) - n) ? opt : best),
+    INTERVAL_OPTIONS[0]
+  );
+}
+
 export type OnboardingValues = Record<string, string>;
 
 // Keys of `values` that only drive the wizard's own controls. The backend
@@ -145,10 +194,8 @@ export type OnboardingValues = Record<string, string>;
 // left every wizard step at "Failed to save settings" from 1.14.0 to 1.18.3.
 const UI_ONLY_KEYS = ['automation_enabled', 'search_interval_hours'] as const;
 export const ARR_ONLY_KEYS = [
-  'sonarr_url',
-  'sonarr_api_key',
-  'radarr_url',
-  'radarr_api_key',
+  'sonarr_instances_json',
+  'radarr_instances_json',
   'path_mapping',
 ] as const;
 export const STANDALONE_ONLY_KEYS = ['tmdb_api_key', 'tvdb_api_key'] as const;
@@ -236,6 +283,31 @@ export default function Onboarding() {
   const [setupMode, setSetupMode] = useState<'arr' | 'standalone' | null>(null);
   const [libraryType, setLibraryType] = useState<LibraryType | null>(null);
 
+  // Re-run (Settings → General → "Re-run onboarding"): the wizard preloads the
+  // current settings so every step shows what is already configured. A fresh
+  // install keeps the wizard defaults.
+  const [rerun, setRerun] = useState(false);
+
+  // Sonarr/Radarr multi-instance rows — same shape and storage as Settings
+  // (sonarr_instances_json / radarr_instances_json; masked secrets are
+  // restored server-side by deep_unmask_blob on save).
+  const [sonarrInsts, setSonarrInsts] = useState<ServiceInstance[]>([]);
+  const [radarrInsts, setRadarrInsts] = useState<ServiceInstance[]>([]);
+  const [instStatus, setInstStatus] = useState<
+    Record<string, { testing: boolean; healthy: boolean | null; message: string }>
+  >({});
+
+  // Path mapping rows — serialized to the `path_mapping` string on save.
+  const [mappingRows, setMappingRows] = useState<MappingRow[]>([]);
+
+  // Language profiles (Step 5): existing profiles prefilled on re-run, plus a
+  // draft form that creates one and makes it default for the whole library.
+  const [profiles, setProfiles] = useState<LanguageProfile[]>([]);
+  const [profileDraft, setProfileDraft] = useState({
+    name: '',
+    targetLanguages: [] as string[],
+  });
+
   // Performance profile step (consolidates the former FirstRunWizard modal)
   const [benchmark, setBenchmark] = useState<SetupBenchmark | null>(null);
   const [perfProfile, setPerfProfile] = useState<SetupProfile | null>(null);
@@ -248,11 +320,6 @@ export default function Onboarding() {
   const [newFolderPath, setNewFolderPath] = useState('');
 
   const [values, setValues] = useState({
-    sonarr_url: '',
-    sonarr_api_key: '',
-    radarr_url: '',
-    radarr_api_key: '',
-    path_mapping: '',
     opensubtitles_api_key: '',
     jimaku_api_key: '',
     subdl_api_key: '',
@@ -311,6 +378,64 @@ export default function Onboarding() {
     }
   }, [currentStepDef.id, benchmark]);
 
+  // Re-run prefill: mirror the stored settings into the wizard state so each
+  // step shows the current configuration (mirrors Settings pages).
+  useEffect(() => {
+    let cancelled = false;
+    getOnboardingStatus()
+      .then(status => {
+        if (!status.completed || cancelled) return;
+        setRerun(true);
+        getConfig()
+          .then(cfg => {
+            if (cancelled) return;
+            const c = cfg as Record<string, unknown>;
+            setSetupMode(String(c.standalone_enabled ?? '') === 'true' ? 'standalone' : 'arr');
+            const lt = String(c.library_type ?? '');
+            if (lt === 'anime' || lt === 'movies' || lt === 'mixed') {
+              setLibraryType(lt as LibraryType);
+            }
+            setSonarrInsts(parseInstances(c.sonarr_instances_json));
+            setRadarrInsts(parseInstances(c.radarr_instances_json));
+            setMappingRows(parseMappings(String(c.path_mapping ?? '')));
+            setValues(v => ({
+              ...v,
+              interface_language:
+                typeof c.interface_language === 'string' ? c.interface_language : v.interface_language,
+              automation_enabled:
+                String(c.wanted_search_interval_hours ?? '') === '0' ? 'false' : 'true',
+              search_interval_hours: nearestInterval(c.wanted_search_interval_hours),
+              upgrade_enabled: String(c.upgrade_enabled ?? 'true') === 'false' ? 'false' : 'true',
+            }));
+            const sp = String(c.scheduler_profile ?? '');
+            if (sp === 'light' || sp === 'balanced' || sp === 'aggressive') {
+              setPerfProfile(prev => prev ?? (sp as SetupProfile));
+            }
+          })
+          .catch(() => {});
+        getMediaServerInstances()
+          .then(insts => {
+            if (cancelled) return;
+            setMsInstances(insts);
+            msInstanceIds.current = insts.map(() => nextUid());
+          })
+          .catch(() => {});
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Language profiles load when the step is reached (list + default badge).
+  useEffect(() => {
+    if (currentStepDef.id === 'language' && profiles.length === 0) {
+      getLanguageProfiles()
+        .then(setProfiles)
+        .catch(() => {});
+    }
+  }, [currentStepDef.id, profiles.length]);
+
   const set = (key: string, val: string) => setValues(v => ({ ...v, [key]: val }));
 
   // Keys that only apply to one setup mode (ARR_ONLY_KEYS /
@@ -321,9 +446,10 @@ export default function Onboarding() {
   const saveAndNext = async () => {
     setSaving(true);
     try {
-      // Library-type step: apply the matching bundled scoring preset (if any)
-      // and advance. Nothing from `values` needs persisting here.
+      // Library-type step: persist the choice (so a wizard re-run preselects
+      // it) and apply the matching bundled scoring preset (if any).
       if (currentStepDef.id === 'library') {
+        await updateConfig({ library_type: libraryType ?? 'mixed' });
         const presetName = libraryType ? LIBRARY_TYPE_PRESET[libraryType] : null;
         if (presetName) {
           try {
@@ -381,11 +507,28 @@ export default function Onboarding() {
             'error'
           );
         }
+      } else if (currentStepDef.id === 'arr') {
+        // Multi-instance blobs like Settings → Connections; rows with no url
+        // and no key are dropped. A masked key round-trips via deep_unmask_blob.
+        await updateConfig({
+          ...toSave,
+          sonarr_instances_json: serializeInstances(
+            sonarrInsts.filter(i => i.url.trim() || i.api_key.trim())
+          ),
+          radarr_instances_json: serializeInstances(
+            radarrInsts.filter(i => i.url.trim() || i.api_key.trim())
+          ),
+        });
+      } else if (currentStepDef.id === 'pathmapping') {
+        await updateConfig({ ...toSave, path_mapping: serializeMappings(mappingRows) });
       } else {
         await updateConfig(toSave);
       }
 
-      if (currentStepDef.id === 'mediaservers' && msInstances.length > 0) {
+      // Save the full instance list — empty means "remove all", matching
+      // Settings; skip if the type catalog failed to load so we don't wipe
+      // stored servers we couldn't render.
+      if (currentStepDef.id === 'mediaservers' && msTypes.length > 0) {
         await saveMediaServerInstances(msInstances);
       }
 
@@ -398,27 +541,61 @@ export default function Onboarding() {
     }
   };
 
-  // Inline connection test for arr-step credentials. Sonarr/Radarr have a
-  // dedicated `/instances/test` endpoint that accepts {url, api_key} so we can
-  // validate without persisting the value first.
-  const runConnectionTest = async (which: 'sonarr' | 'radarr') => {
-    const url = which === 'sonarr' ? values.sonarr_url : values.radarr_url;
-    const api_key = which === 'sonarr' ? values.sonarr_api_key : values.radarr_api_key;
-    if (!url || !api_key) return;
-    setTesting(which);
+  // Inline connection test for arr-step instance rows. Sonarr/Radarr have a
+  // dedicated `/instances/test` endpoint that accepts {url, api_key} — masked
+  // stored keys resolve server-side — so we validate without persisting first.
+  const testInstanceConnection = async (which: 'sonarr' | 'radarr', inst: ServiceInstance) => {
+    if (!inst.url.trim()) return;
+    setInstStatus(s => ({ ...s, [inst.id]: { testing: true, healthy: null, message: '' } }));
     try {
       const fn = which === 'sonarr' ? testSonarrInstance : testRadarrInstance;
-      const result = await fn({ url, api_key });
-      toast(
-        `${which}: ${result.message || (result.healthy ? 'OK' : 'Error')}`,
-        result.healthy ? 'success' : 'error'
-      );
+      const result = await fn({ url: inst.url.trim(), api_key: inst.api_key.trim() });
+      setInstStatus(s => ({
+        ...s,
+        [inst.id]: {
+          testing: false,
+          healthy: result.healthy,
+          message: result.message || (result.healthy ? 'OK' : 'Error'),
+        },
+      }));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      toast(`${which}: ${msg}`, 'error');
-    } finally {
-      setTesting(null);
+      setInstStatus(s => ({
+        ...s,
+        [inst.id]: { testing: false, healthy: false, message: msg },
+      }));
     }
+  };
+
+  const addInstance = (which: 'sonarr' | 'radarr') => {
+    const prefix = which === 'sonarr' ? 'Sonarr' : 'Radarr';
+    const newInst: ServiceInstance = {
+      id: generateId(),
+      name: `${prefix} ${(which === 'sonarr' ? sonarrInsts : radarrInsts).length + 1}`,
+      url: '',
+      api_key: '',
+    };
+    if (which === 'sonarr') setSonarrInsts(prev => [...prev, newInst]);
+    else setRadarrInsts(prev => [...prev, newInst]);
+  };
+
+  const updateInstance = (
+    which: 'sonarr' | 'radarr',
+    id: string,
+    patch: Partial<ServiceInstance>
+  ) => {
+    const setter = which === 'sonarr' ? setSonarrInsts : setRadarrInsts;
+    setter(prev => prev.map(i => (i.id === id ? { ...i, ...patch } : i)));
+  };
+
+  const removeInstance = (which: 'sonarr' | 'radarr', id: string) => {
+    const setter = which === 'sonarr' ? setSonarrInsts : setRadarrInsts;
+    setter(prev => prev.filter(i => i.id !== id));
+    setInstStatus(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   // TMDB/TVDB tests require the key to be persisted first (the backend test_fn
@@ -478,18 +655,125 @@ export default function Onboarding() {
     navigate('/');
   };
 
-  // Switching setup mode mid-flow used to leave stale credentials in `values`
-  // that would later be POSTed by saveAndNext (B16). Clear keys that no longer
-  // apply when the user picks a different mode card.
+  // Switching setup mode mid-flow must not POST the other mode's keys (B16).
+  // ARR credentials live in instance-row state that only the arr step saves,
+  // so switching to standalone needs no clearing there.
   const chooseSetupMode = (mode: 'arr' | 'standalone') => {
     setSetupMode(mode);
     setStep(1);
-    setValues(v => {
-      const next = { ...v };
-      const clearKeys = mode === 'arr' ? STANDALONE_ONLY_KEYS : ARR_ONLY_KEYS;
-      for (const k of clearKeys) next[k as keyof typeof next] = '';
-      return next;
-    });
+    if (mode === 'arr') {
+      setValues(v => {
+        const next = { ...v };
+        for (const k of STANDALONE_ONLY_KEYS) next[k] = '';
+        return next;
+      });
+    }
+  };
+
+  // "Reset to defaults" reverts this step's controls to the wizard defaults;
+  // it reaches the backend only when the user advances with Next. Language
+  // profiles are database records managed under Settings — the reset clears
+  // the wizard's draft form but never deletes existing profiles.
+  const resetStep = () => {
+    switch (currentStepDef.id) {
+      case 'mode':
+        setSetupMode(null);
+        break;
+      case 'library':
+        setLibraryType(null);
+        break;
+      case 'arr':
+        setSonarrInsts([]);
+        setRadarrInsts([]);
+        setInstStatus({});
+        break;
+      case 'standalone':
+        setValues(v => ({ ...v, tmdb_api_key: '', tvdb_api_key: '' }));
+        setStandaloneFolders([]);
+        setNewFolderPath('');
+        break;
+      case 'pathmapping':
+        setMappingRows([]);
+        break;
+      case 'language':
+        setValues(v => ({
+          ...v,
+          interface_language: i18n.language?.startsWith('en') ? 'en' : 'de',
+        }));
+        setProfileDraft({ name: '', targetLanguages: [] });
+        break;
+      case 'automation':
+        setValues(v => ({
+          ...v,
+          automation_enabled: 'true',
+          search_interval_hours: '6',
+          upgrade_enabled: 'true',
+        }));
+        break;
+      case 'mediaservers':
+        setMsInstances([]);
+        msInstanceIds.current = [];
+        setMsTestResults({});
+        setMsShowPasswords({});
+        break;
+      case 'performance':
+        setPerfProfile(benchmark?.recommended_profile ?? 'balanced');
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Language profile draft: create a minimal profile (Settings defaults for
+  // everything else) and make it the default for the whole library.
+  const createDefaultProfile = async () => {
+    if (!profileDraft.name.trim() || profileDraft.targetLanguages.length === 0) {
+      toast(t('language_step.profile_invalid'), 'error');
+      return;
+    }
+    try {
+      const created = await createLanguageProfile({
+        name: profileDraft.name.trim(),
+        source_languages: [],
+        target_languages: profileDraft.targetLanguages,
+        target_language_names: profileDraft.targetLanguages.map(
+          code => LANGUAGE_OPTIONS.find(o => o.value === code)?.label ?? code
+        ),
+        forced_preference: 'disabled',
+        forced_scoring: 'include',
+        prefer_signs: false,
+        download_full: true,
+        hi_preference: 'include',
+        cutoff_language: '',
+        translation_backend: '',
+        fallback_chain: [],
+        mt_keep_seeking_original: false,
+        mt_on_original_found: 'notify',
+        mt_min_original_score: 1,
+        combine_enabled: false,
+        combine_format: 'ass',
+        combine_languages: [],
+        combine_position: { primary: 'bottom', secondary: 'top' },
+        enabled_providers: [],
+        scoring_preset: '',
+      });
+      await setProfileAsDefaultForAll(created.id);
+      setProfiles(await getLanguageProfiles());
+      setProfileDraft({ name: '', targetLanguages: [] });
+      toast(t('language_step.profile_created'));
+    } catch (err: unknown) {
+      toast(apiErrorMessage(err, t('language_step.profile_create_failed')), 'error');
+    }
+  };
+
+  const setDefaultProfile = async (id: number) => {
+    try {
+      await setProfileAsDefaultForAll(id);
+      setProfiles(await getLanguageProfiles());
+      toast(t('language_step.profile_default_set'));
+    } catch (err: unknown) {
+      toast(apiErrorMessage(err, t('language_step.profile_set_default_failed')), 'error');
+    }
   };
 
   // Media server helpers
@@ -610,21 +894,45 @@ export default function Onboarding() {
           className="rounded-lg p-6 space-y-5"
           style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
         >
-          <div className="flex items-center gap-3">
-            {(() => {
-              const Icon = currentStepDef.icon;
-              return <Icon size={20} style={{ color: 'var(--accent)' }} />;
-            })()}
-            <div>
-              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {t(currentStepDef.titleKey)}
-              </h2>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                {t('step_info', { step: step + 1, total: visibleSteps.length })} &mdash;{' '}
-                {t(currentStepDef.descKey)}
-              </p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {(() => {
+                const Icon = currentStepDef.icon;
+                return <Icon size={20} style={{ color: 'var(--accent)' }} />;
+              })()}
+              <div>
+                <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  {t(currentStepDef.titleKey)}
+                </h2>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {t('step_info', { step: step + 1, total: visibleSteps.length })} &mdash;{' '}
+                  {t(currentStepDef.descKey)}
+                </p>
+              </div>
             </div>
+            {currentStepDef.id !== 'scan' && (
+              <button
+                type="button"
+                data-testid="onboarding-reset-step"
+                onClick={resetStep}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium shrink-0"
+                style={{
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'var(--bg-primary)',
+                }}
+              >
+                <RotateCcw size={12} />
+                {t('navigation.reset')}
+              </button>
+            )}
           </div>
+
+          {rerun && (
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {t('rerun_banner')}
+            </p>
+          )}
 
           {currentStepDef.id === 'mode' && (
             <div className="space-y-4">
@@ -794,63 +1102,108 @@ export default function Onboarding() {
           )}
 
           {currentStepDef.id === 'arr' && (
-            <div className="space-y-4">
-              <Field
-                label={t('arr_step.sonarr_url')}
-                placeholder="http://localhost:8989"
-                {...fieldFor('sonarr_url')}
-              />
-              <Field
-                label={t('arr_step.sonarr_api_key')}
-                type="password"
-                {...fieldFor('sonarr_api_key')}
-              />
-              <button
-                type="button"
-                onClick={() => runConnectionTest('sonarr')}
-                disabled={!values.sonarr_url || !values.sonarr_api_key || testing === 'sonarr'}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all duration-150 disabled:opacity-50"
-                style={{
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-secondary)',
-                  backgroundColor: 'var(--bg-primary)',
-                }}
-              >
-                {testing === 'sonarr' ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <TestTube size={12} />
-                )}
-                {t('arr_step.test_sonarr')}
-              </button>
-              <Field
-                label={t('arr_step.radarr_url')}
-                placeholder="http://localhost:7878"
-                {...fieldFor('radarr_url')}
-              />
-              <Field
-                label={t('arr_step.radarr_api_key')}
-                type="password"
-                {...fieldFor('radarr_api_key')}
-              />
-              <button
-                type="button"
-                onClick={() => runConnectionTest('radarr')}
-                disabled={!values.radarr_url || !values.radarr_api_key || testing === 'radarr'}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all duration-150 disabled:opacity-50"
-                style={{
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-secondary)',
-                  backgroundColor: 'var(--bg-primary)',
-                }}
-              >
-                {testing === 'radarr' ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <TestTube size={12} />
-                )}
-                {t('arr_step.test_radarr')}
-              </button>
+            <div className="space-y-5">
+              {(['sonarr', 'radarr'] as const).map(which => {
+                const insts = which === 'sonarr' ? sonarrInsts : radarrInsts;
+                return (
+                  <div key={which} className="space-y-3">
+                    <h3
+                      className="text-sm font-semibold"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {t(`arr_step.${which}_heading`)}
+                    </h3>
+                    {insts.map(inst => {
+                      const status = instStatus[inst.id];
+                      return (
+                        <div
+                          key={inst.id}
+                          data-testid={`onboarding-${which}-instance`}
+                          className="rounded-lg p-4 space-y-3"
+                          style={{
+                            backgroundColor: 'var(--bg-primary)',
+                            border: '1px solid var(--border)',
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <input
+                              type="text"
+                              value={inst.name}
+                              onChange={e => updateInstance(which, inst.id, { name: e.target.value })}
+                              placeholder={t(`arr_step.${which}_name_placeholder`)}
+                              className="text-sm font-semibold focus:outline-none bg-transparent"
+                              style={{ color: 'var(--text-primary)' }}
+                            />
+                            <button
+                              onClick={() => removeInstance(which, inst.id)}
+                              className="p-1 rounded transition-colors"
+                              style={{ color: 'var(--text-muted)' }}
+                              aria-label={t('arr_step.remove_instance')}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                          <Field
+                            label={t('arr_step.url_label')}
+                            placeholder={which === 'sonarr' ? 'http://localhost:8989' : 'http://localhost:7878'}
+                            value={inst.url}
+                            onChange={v => updateInstance(which, inst.id, { url: v })}
+                          />
+                          <Field
+                            label={t('arr_step.api_key_label')}
+                            type="password"
+                            value={inst.api_key}
+                            onChange={v => updateInstance(which, inst.id, { api_key: v })}
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => testInstanceConnection(which, inst)}
+                              disabled={!inst.url.trim() || status?.testing}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all duration-150 disabled:opacity-50"
+                              style={{
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-secondary)',
+                                backgroundColor: 'var(--bg-surface)',
+                              }}
+                            >
+                              {status?.testing ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <TestTube size={12} />
+                              )}
+                              {t('common:actions.test')}
+                            </button>
+                            {status && !status.testing && status.message && (
+                              <span
+                                className="text-xs"
+                                style={{
+                                  color: status.healthy ? 'var(--success)' : 'var(--error)',
+                                }}
+                              >
+                                {status.healthy ? 'OK' : 'Error'}: {status.message}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      data-testid={`onboarding-add-${which}`}
+                      onClick={() => addInstance(which)}
+                      className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium"
+                      style={{
+                        border: '1px dashed var(--border)',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      <Plus size={12} />
+                      {t(`arr_step.add_${which}`)}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -976,11 +1329,57 @@ export default function Onboarding() {
 
           {currentStepDef.id === 'pathmapping' && (
             <div className="space-y-4">
-              <Field
-                label={t('pathmapping_step.label')}
-                placeholder={t('pathmapping_step.placeholder')}
-                {...fieldFor('path_mapping')}
-              />
+              {mappingRows.map((row, idx) => (
+                <div
+                  key={idx}
+                  data-testid="onboarding-mapping-row"
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    value={row.remote}
+                    onChange={e =>
+                      setMappingRows(prev =>
+                        prev.map((r, i) => (i === idx ? { ...r, remote: e.target.value } : r))
+                      )
+                    }
+                    placeholder={t('pathmapping_step.remote_placeholder')}
+                    className="flex-1 px-3 py-2 rounded-md text-sm focus:outline-none"
+                    style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                  />
+                  <span style={{ color: 'var(--text-muted)' }}>=</span>
+                  <input
+                    type="text"
+                    value={row.local}
+                    onChange={e =>
+                      setMappingRows(prev =>
+                        prev.map((r, i) => (i === idx ? { ...r, local: e.target.value } : r))
+                      )
+                    }
+                    placeholder={t('pathmapping_step.local_placeholder')}
+                    className="flex-1 px-3 py-2 rounded-md text-sm focus:outline-none"
+                    style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                  />
+                  <button
+                    onClick={() => setMappingRows(prev => prev.filter((_, i) => i !== idx))}
+                    className="p-1.5 rounded transition-colors"
+                    style={{ color: 'var(--text-muted)' }}
+                    aria-label={t('pathmapping_step.remove_rule')}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                data-testid="onboarding-add-mapping"
+                onClick={() => setMappingRows(prev => [...prev, { remote: '', local: '' }])}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150"
+                style={{ color: 'var(--accent)', border: '1px solid var(--accent-dim)' }}
+              >
+                <Plus size={14} />
+                {t('pathmapping_step.add_rule')}
+              </button>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 {t('pathmapping_step.help')}
               </p>
@@ -1024,9 +1423,123 @@ export default function Onboarding() {
                   {t('language_step.interface_language_hint')}
                 </p>
               </div>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                {t('language_step.help')}
-              </p>
+
+              {/* Language profiles: existing ones prefilled on re-run, plus a
+                  draft that creates a profile and makes it the default. */}
+              <div className="space-y-3">
+                <label
+                  className="block text-sm font-medium"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {t('language_step.profile_heading')}
+                </label>
+                {profiles.length === 0 ? (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {t('language_step.profile_none')}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {profiles.map(p => (
+                      <div
+                        key={p.id}
+                        data-testid="onboarding-profile-row"
+                        className="flex items-center gap-2 rounded-lg p-3"
+                        style={{
+                          backgroundColor: 'var(--bg-primary)',
+                          border: '1px solid var(--border)',
+                        }}
+                      >
+                        <span
+                          className="text-sm font-medium flex-1"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {p.name}
+                        </span>
+                        <span
+                          className="text-xs"
+                          style={{ color: 'var(--text-secondary)' }}
+                        >
+                          {p.target_language_names.join(', ')}
+                        </span>
+                        {p.is_default && (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                            style={{ backgroundColor: 'var(--accent-bg)', color: 'var(--accent)' }}
+                          >
+                            {t('language_step.profile_default_badge')}
+                          </span>
+                        )}
+                        {!p.is_default && (
+                          <button
+                            type="button"
+                            onClick={() => setDefaultProfile(p.id)}
+                            className="px-2 py-1 rounded text-xs"
+                            style={{
+                              border: '1px solid var(--border)',
+                              color: 'var(--text-secondary)',
+                            }}
+                          >
+                            {t('language_step.profile_set_default')}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Field
+                    label={t('language_step.profile_name_label')}
+                    placeholder={t('language_step.profile_name_placeholder')}
+                    value={profileDraft.name}
+                    onChange={v => setProfileDraft(d => ({ ...d, name: v }))}
+                  />
+                  <label
+                    className="block text-sm font-medium"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {t('language_step.profile_target_label')}
+                  </label>
+                  <div
+                    className="max-h-40 overflow-y-auto rounded-md p-2 grid grid-cols-2 sm:grid-cols-3 gap-1"
+                    style={{ border: '1px solid var(--border)', backgroundColor: 'var(--bg-primary)' }}
+                  >
+                    {LANGUAGE_OPTIONS.map(o => (
+                      <label
+                        key={o.value}
+                        className="flex items-center gap-1.5 text-xs cursor-pointer"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={profileDraft.targetLanguages.includes(o.value)}
+                          onChange={e =>
+                            setProfileDraft(d => ({
+                              ...d,
+                              targetLanguages: e.target.checked
+                                ? [...d.targetLanguages, o.value]
+                                : d.targetLanguages.filter(c => c !== o.value),
+                            }))
+                          }
+                          className="h-3.5 w-3.5 rounded"
+                          style={{ accentColor: 'var(--accent)' }}
+                        />
+                        {o.label}
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="onboarding-create-profile"
+                    onClick={createDefaultProfile}
+                    disabled={!profileDraft.name.trim() || profileDraft.targetLanguages.length === 0}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 disabled:opacity-50"
+                    style={{ color: 'var(--accent)', border: '1px solid var(--accent-dim)' }}
+                  >
+                    <Languages size={14} />
+                    {t('language_step.profile_create')}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1381,18 +1894,22 @@ export default function Onboarding() {
             {step > 0 ? t('navigation.back') : t('navigation.skip_setup')}
           </button>
 
-          {step < visibleSteps.length - 1 ? (
+          {/* "Finish" belongs to the final scan step only — before the setup
+              mode is picked `visibleSteps` holds just the mode step, which
+              used to render "Finish Setup" as the button of step 1. */}
+          {currentStepDef.id !== 'scan' ? (
             <button
               onClick={saveAndNext}
               disabled={
                 saving ||
-                currentStepDef.id === 'mode' ||
+                (currentStepDef.id === 'mode' && !setupMode) ||
                 (currentStepDef.id === 'library' && !libraryType)
               }
               className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium text-white"
               style={{
                 backgroundColor:
-                  currentStepDef.id === 'mode' || (currentStepDef.id === 'library' && !libraryType)
+                  (currentStepDef.id === 'mode' && !setupMode) ||
+                  (currentStepDef.id === 'library' && !libraryType)
                     ? 'var(--text-muted)'
                     : 'var(--accent)',
               }}

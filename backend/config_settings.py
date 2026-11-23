@@ -733,6 +733,11 @@ class UISettings(BaseModel):
     tvdb_pin: str = ""  # TVDB PIN (optional)
     metadata_cache_ttl_days: int = 30
 
+    # Library type chosen in the setup wizard (drives the bundled scoring
+    # preset applied at the Library step; persisted so a wizard re-run can
+    # re-select the previous choice).
+    library_type: Literal["anime", "movies", "mixed"] = "mixed"
+
     # Sidecar Auto-Cleanup
     auto_cleanup_after_extract: bool = False
     auto_cleanup_keep_languages: str = ""  # Comma-separated ISO-639-1 codes to keep
