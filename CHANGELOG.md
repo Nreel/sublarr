@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.2] - 2026-11-23
+
 ### Fixed
 - **Activity badge counts the scan that is running** — the sidebar *Activity*
   chip stayed empty while the Wanted header showed *Scanning…*: the badge
