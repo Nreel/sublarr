@@ -93,7 +93,7 @@ def warn_if_slow_storage(engine) -> float | None:
             "SQLite write latency is %.0f ms/commit — this storage is slow "
             "(SSD/NVMe is <5 ms). If Sublarr feels sluggish, move the /config "
             "volume off a microSD card or network share (NFS/SMB) onto an SSD, "
-            "or switch to PostgreSQL. Docs: https://sublarr.de/docs/getting-started/installation/",
+            "or switch to PostgreSQL.",
             latency,
         )
     else:

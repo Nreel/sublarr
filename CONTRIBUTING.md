@@ -2,7 +2,6 @@
 
 Solo project workflow. Pragmatic, but with enough discipline to maintain a clean
 Git history and avoid broken builds on `master`.
-Full contributing guidelines: [sublarr.de/docs/development/contributing](https://sublarr.de/docs/development/contributing/).
 
 ---
 

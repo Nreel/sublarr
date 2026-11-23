@@ -13,7 +13,7 @@ opposite directions from that same empty set:
 
 The real set cannot be the model fields alone: 15 of the 73 config keys on the
 reference install are not settings fields (``ui_password_hash``,
-``translation_quality_threshold``, ``usage_stats_consent``, the
+``translation_quality_threshold``, the
 ``cleanup_*_seeded`` markers …). Validating against the models alone would stop
 the UI from saving them, so a key already present in ``config_entries`` counts
 as valid too, alongside the dotted extension keys that were always allowed.

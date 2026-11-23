@@ -2,8 +2,6 @@
 import { useTranslation } from 'react-i18next'
 import { Sparkles, X } from 'lucide-react'
 import { WHATS_NEW } from '@/content/whatsNew'
-import { useUsageStatsConsent } from '@/hooks/useUsageStatsConsent'
-import { UsageStatsConsentCard } from '@/components/usage-stats/UsageStatsConsentCard'
 
 interface Props {
   open: boolean
@@ -13,7 +11,6 @@ interface Props {
 
 export function WhatsNewModal({ open, version, onDismiss }: Props) {
   const { t } = useTranslation('common')
-  const { consent } = useUsageStatsConsent()
   if (!open || !version) return null
   const items = WHATS_NEW[version] ?? []
 
@@ -57,10 +54,6 @@ export function WhatsNewModal({ open, version, onDismiss }: Props) {
               </div>
             )
           })}
-
-          {/* Existing installs are asked for usage-stats consent here, once,
-              at the next update — only while the choice is still unset. */}
-          {consent === 'unset' && <UsageStatsConsentCard />}
         </div>
 
         <div className="flex justify-end px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>

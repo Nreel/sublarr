@@ -68,9 +68,9 @@ _ALLOWED_BOOT_FIELDS: frozenset[str] = frozenset(
         "log_format",
         "cors_origins",
         "redis_url",
-        # Anonymous-stats kill-switch/redirect — must be env-overridable
-        # pre-DB so self-hosters can disable sending before first boot.
-        "stats_endpoint",
+        # Update-check repo — env-overridable pre-DB so a fork deployment can
+        # point the check at its own releases before first boot.
+        "update_repo",
     }
 )
 
@@ -125,9 +125,8 @@ class BootSettings(BaseSettings):
     db_path: str = "/config/sublarr.db"
     database_url: str = ""
 
-    # Anonymous usage statistics (opt-in). Empty string disables sending entirely,
-    # regardless of the in-app consent toggle (self-hoster kill-switch / redirect).
-    stats_endpoint: str = "https://stats.sublarr.de/v1/ping"
+    # GitHub repo the update check polls; env SUBLARR_UPDATE_REPO.
+    update_repo: str = "Nreel/sublarr"
 
     # Redis (optional cache + queue backend)
     redis_url: str = ""

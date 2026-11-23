@@ -6,7 +6,7 @@ same error until someone calls ``rollback()``. The session is per thread and
 outlives a single item, so without that call the first failure is inherited by
 every item after it.
 
-Prod 2026-09-27 22:30 measured the shape. Unraid's appdata backup restarted
+Prod 2026-09-27 22:30 measured the shape. An appdata backup restarted
 Postgres under a running tick, and the one lost connection became 98 identical
 
     Wanted N: Process failed: This Session's transaction has been rolled back

@@ -241,8 +241,8 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ─── 3b. Docker Hub mirror ────────────────────────────────────────────────
-  # Copies the pushed GHCR manifests to Docker Hub, which Unraid CA, Synology
-  # and Portainer default to. A separate job so a Docker Hub hiccup never
+  # Copies the pushed GHCR manifests to Docker Hub for consumers that resolve
+  # the image by Docker Hub name. A separate job so a Docker Hub hiccup never
   # blocks the GitHub release; rerun just this job if it fails.
   dockerhub:
     name: Mirror to Docker Hub

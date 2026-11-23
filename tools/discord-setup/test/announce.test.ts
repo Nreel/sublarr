@@ -30,7 +30,7 @@ describe("buildAnnounceEmbed", () => {
   it("links the vX.Y.Z GitHub tag", () => {
     const data = buildAnnounceEmbed("release", "1.10.0", null).toJSON();
     expect(data.description).toContain(
-      "https://github.com/abrechen2/sublarr/releases/tag/v1.10.0",
+      "https://github.com/Nreel/sublarr/releases/tag/v1.10.0",
     );
   });
 

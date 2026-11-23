@@ -8,7 +8,7 @@ existing third-party REST API using the mapping settings.
 Because it only sends configured HTTP requests and never executes
 third-party code, it is the safest way to integrate a custom source.
 For anything the mapping can't express (multi-step flows, login sessions,
-HTML scraping), write a [plugin](https://sublarr.de/docs/development/plugin-development/) instead.
+HTML scraping), write a [plugin](API.md) instead.
 
 ## Quick start (private server)
 

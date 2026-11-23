@@ -18,7 +18,7 @@
 
 ---
 
-**[Quick Start](#-quick-start)** · **[Configuration](#️-configuration)** · **[Integrations](#-integrations)** · **[Limitations](#️-known-limitations)** · **[Website](https://sublarr.de)** · **[Docs](https://sublarr.de/docs/)**
+**[Quick Start](#-quick-start)** · **[Configuration](#️-configuration)** · **[Integrations](#-integrations)** · **[Limitations](#️-known-limitations)**
 
 </div>
 
@@ -54,11 +54,10 @@ services:
 docker compose up -d
 ```
 
-Open **http://localhost:5765**. The onboarding wizard walks you through languages, providers and automation. Next step: [First 10 minutes](https://sublarr.de/docs/getting-started/first-10-minutes/).
+Open **http://localhost:5765**. The onboarding wizard walks you through languages, providers and automation.
 
-- **Unraid:** search for **Sublarr** in Community Applications (template: [unraid/README.md](unraid/README.md)).
-- **PUID / PGID:** the container starts as root, remaps its `sublarr` user to `PUID`/`PGID`, makes `/config` owned by that user, then drops privileges with `gosu` and runs the app as `PUID:PGID`. `/media` is left untouched — its permissions must already allow that user to read and write. Use `id $USER` on the host to find the right IDs (Unraid uses `99`/`100`).
-- More setups (PostgreSQL, Redis, reverse proxy, resource limits): [Installation](https://sublarr.de/docs/getting-started/installation/).
+- **PUID / PGID:** the container starts as root, remaps its `sublarr` user to `PUID`/`PGID`, makes `/config` owned by that user, then drops privileges with `gosu` and runs the app as `PUID:PGID`. `/media` is left untouched — its permissions must already allow that user to read and write. Use `id $USER` on the host to find the right IDs.
+- More setups (PostgreSQL, Redis, reverse proxy, resource limits): [docker-compose.yml](docker-compose.yml), [docker-compose.postgres.yml](docker-compose.postgres.yml), [docker-compose.redis.yml](docker-compose.redis.yml).
 
 ---
 
@@ -81,12 +80,12 @@ Only these bootstrap variables are read from the environment (`backend/config_se
 | `SUBLARR_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `SUBLARR_LOG_FILE` | `/config/sublarr.log` (image) | Log file path |
 | `SUBLARR_LOG_FORMAT` | `text` | `text` or `json` |
-| `SUBLARR_STATS_ENDPOINT` | `https://stats.sublarr.de/v1/ping` | Opt-in usage statistics target; empty disables sending |
+| `SUBLARR_UPDATE_REPO` | `Nreel/sublarr` | GitHub repo the update check polls (`/api/v1/update`) |
 | `SUBLARR_SCHEDULER_ROLE` | `primary` | `disabled` on extra replicas so recurring jobs do not run twice |
 | `PUID` / `PGID` | `1000` | User/group the app runs as (see [Quick Start](#-quick-start)) |
 | `UMASK` | `022` | umask for files written into `/media` |
 
-Full reference: [Environment variables](https://sublarr.de/docs/getting-started/environment-variables/) · [Settings](https://sublarr.de/docs/user-guide/settings/).
+The Settings UI is the full configuration reference; the bootstrap variables above are the only ones read from the environment.
 
 > **Hardlinks:** most Sonarr/Radarr setups hardlink the library to the download folder. A container remux (foreign-track cleanup, signs removal, stream removal) rewrites the file and breaks that hardlink. The default hardlink policy `skip` refuses to remux hardlinked files.
 
@@ -97,9 +96,7 @@ Full reference: [Environment variables](https://sublarr.de/docs/getting-started/
 - **Sonarr & Radarr** — add the connection in *Settings → Connections*, then in Sonarr/Radarr add a webhook (*Settings → Connect → Webhook*) to `http://sublarr:5765/api/v1/webhook/sonarr` (or `/radarr`) for *On Import* and *On Upgrade*.
 - **Jellyfin / Emby / Plex / Kodi / Shoko** — add the server in *Settings → Connections*; Sublarr triggers a rescan after each subtitle download. Shoko additionally supplies authoritative AniDB IDs and absolute episode numbers.
 - **Standalone** — point Sublarr at your media folders; new video files are added to the wanted list.
-- **Remote *arr hosts** — when paths differ between hosts, set a [path mapping](https://sublarr.de/docs/user-guide/path-mapping/) in *Settings → Connections*.
-
-Walkthroughs: [Integrations](https://sublarr.de/docs/user-guide/integrations/) · [AniDB](https://sublarr.de/docs/user-guide/anidb/) · [Reverse proxy](https://sublarr.de/docs/troubleshooting/reverse-proxy/).
+- **Remote *arr hosts** — when paths differ between hosts, set a path mapping in *Settings → Connections*.
 
 ---
 
@@ -112,7 +109,7 @@ Walkthroughs: [Integrations](https://sublarr.de/docs/user-guide/integrations/) �
 - **Provider coverage depends on your accounts.** Several providers need credentials or an API key; without them you run a smaller subset.
 - **Anime-first defaults.** ASS gets a large scoring bonus over SRT — deliberate for anime, less relevant for English live-action.
 - **Solo-maintained.** Bug reports get read; response time varies.
-- **Docs can drift.** If [the documentation](https://sublarr.de/docs/) and the running app disagree, trust the app and [open an issue](https://github.com/Abrechen2/sublarr/issues).
+- **Docs can drift.** If [the documentation in this repo](README.md) and the running app disagree, trust the app and [open an issue](https://github.com/Nreel/sublarr/issues).
 
 Keep backups of your subtitle files before enabling automation.
 
@@ -148,6 +145,6 @@ cd backend && ruff check . && ruff format --check .
 cd frontend && npm run lint && npx tsc --noEmit
 ```
 
-Every instance serves its own API reference at `/api/docs` (Swagger UI) and `/api/v1/openapi.json`. Further reading: [Architecture](https://sublarr.de/docs/development/architecture/) · [API reference](https://sublarr.de/docs/development/api-reference/) · [Plugin development](https://sublarr.de/docs/development/plugin-development/) · [Database schema](https://sublarr.de/docs/development/database-schema/) · [ROADMAP.md](ROADMAP.md).
+Every instance serves its own API reference at `/api/docs` (Swagger UI) and `/api/v1/openapi.json`. Further reading: [docs/API.md](docs/API.md) · [docs/CUSTOM_PROVIDER_API.md](docs/CUSTOM_PROVIDER_API.md) · [docs/THIRD-PARTY-LICENSES.md](docs/THIRD-PARTY-LICENSES.md) · [ROADMAP.md](ROADMAP.md).
 
 AI was used as a coding assistant during development (scaffolding, test drafting, refactoring sweeps, documentation drafts); architecture, scoring, provider integrations and release decisions were made and debugged by hand.

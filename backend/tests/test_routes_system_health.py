@@ -449,7 +449,7 @@ class TestUpdateEndpoint:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
             "tag_name": "v99.0.0",
-            "html_url": "https://github.com/Abrechen2/sublarr/releases/tag/v99.0.0",
+            "html_url": "https://github.com/Nreel/sublarr/releases/tag/v99.0.0",
             "prerelease": False,
         }
         mock_get.return_value = mock_resp
@@ -468,7 +468,7 @@ class TestUpdateEndpoint:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
             "tag_name": "v0.0.1",
-            "html_url": "https://github.com/Abrechen2/sublarr/releases/tag/v0.0.1",
+            "html_url": "https://github.com/Nreel/sublarr/releases/tag/v0.0.1",
             "prerelease": False,
         }
         mock_get.return_value = mock_resp
@@ -508,7 +508,7 @@ class TestUpdateEndpoint:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
             "tag_name": "v99.0.0-rc1",
-            "html_url": "https://github.com/Abrechen2/sublarr/releases/tag/v99.0.0-rc1",
+            "html_url": "https://github.com/Nreel/sublarr/releases/tag/v99.0.0-rc1",
             "prerelease": True,
         }
         mock_get.return_value = mock_resp
@@ -563,6 +563,45 @@ class TestUpdateEndpoint:
         # Second call — should hit GitHub again
         client.get("/api/v1/update")
         assert mock_get.call_count == 2
+
+    @patch("requests.get")
+    def test_update_checks_fork_repo(self, mock_get, client):
+        """Without an override, the check targets the fork's releases."""
+        # The autouse _clear_cache fixture resets _update_cache before each
+        # test, so a cached result cannot mask the URL assertion.
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "tag_name": "v99.0.0",
+            "html_url": "https://github.com/Nreel/sublarr/releases/tag/v99.0.0",
+            "prerelease": False,
+        }
+        mock_get.return_value = mock_resp
+
+        resp = client.get("/api/v1/update")
+        assert resp.status_code == 200
+        assert "api.github.com/repos/Nreel/sublarr/releases/latest" in mock_get.call_args[0][0]
+
+    @patch("requests.get")
+    def test_update_repo_env_override(self, mock_get, client, monkeypatch):
+        """SUBLARR_UPDATE_REPO redirects the check to that repo."""
+        from config import reload_settings
+
+        monkeypatch.setenv("SUBLARR_UPDATE_REPO", "someone-else/fork")
+        reload_settings()  # boot fields are read from the env on reload
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "tag_name": "v99.0.0",
+            "html_url": "https://github.com/someone-else/fork/releases/tag/v99.0.0",
+            "prerelease": False,
+        }
+        mock_get.return_value = mock_resp
+
+        resp = client.get("/api/v1/update")
+        assert resp.status_code == 200
+        assert "api.github.com/repos/someone-else/fork/releases/latest" in mock_get.call_args[0][0]
 
 
 # ───────────────────────────────────────────────────────────────────────────────

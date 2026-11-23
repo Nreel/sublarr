@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next'
 
 export interface ApiKeyTestResult {
   readonly ok: boolean
-  /** Short human message, e.g. "Authenticated as abrechen2" or "403 — invalid key". */
+  /** Short human message, e.g. "Authenticated as nreel" or "403 — invalid key". */
   readonly detail?: string
   /** Scopes/permissions detected by the provider when the test succeeded. */
   readonly scopes?: readonly string[]

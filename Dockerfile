@@ -32,7 +32,7 @@ FROM python:3.12-slim
 ARG VERSION=
 LABEL org.opencontainers.image.title="Sublarr"
 LABEL org.opencontainers.image.description="Standalone Subtitle Manager & Translator for Anime/Media"
-LABEL org.opencontainers.image.source="https://github.com/Abrechen2/sublarr"
+LABEL org.opencontainers.image.source="https://github.com/Nreel/sublarr"
 LABEL org.opencontainers.image.licenses="GPL-3.0"
 LABEL org.opencontainers.image.version="${VERSION}"
 # Also expose it to the running app (backend/version.py) so an RC-tagged

@@ -9,7 +9,7 @@ or ...`` and therefore validated nothing at all.
 
 The models alone are not the answer either. On the reference install 15 of 73
 stored keys are not settings fields — ``ui_password_hash``,
-``translation_quality_threshold``, ``usage_stats_consent``, the
+``translation_quality_threshold``, the
 ``cleanup_*_seeded`` markers and the dotted backend keys. Validating against
 the models would have stopped the UI from saving them, turning a missing check
 into a visible outage. So a key that is already in ``config_entries`` counts as

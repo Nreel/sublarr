@@ -18,7 +18,6 @@ from routes.system import (  # noqa: E402, F401
     statistics,
     support,
     tasks,
-    usage_stats,
     webhook_secret,
 )
 

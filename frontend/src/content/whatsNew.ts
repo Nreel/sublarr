@@ -156,7 +156,6 @@ export const WHATS_NEW: Record<string, WhatsNewItem[]> = {
     { icon: Zap, titleKey: 'whatsnew.v194.speed_title', descKey: 'whatsnew.v194.speed_desc' },
     { icon: Rocket, titleKey: 'whatsnew.v194.load_title', descKey: 'whatsnew.v194.load_desc' },
     { icon: Activity, titleKey: 'whatsnew.v194.load2_title', descKey: 'whatsnew.v194.load2_desc' },
-    { icon: BarChart3, titleKey: 'whatsnew.v194.stats_title', descKey: 'whatsnew.v194.stats_desc' },
   ],
   '1.6.0': [
     { icon: Layers, titleKey: 'whatsnew.v160.combined_title', descKey: 'whatsnew.v160.combined_desc' },

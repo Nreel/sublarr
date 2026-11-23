@@ -836,7 +836,7 @@ class StandaloneScanner(_StandaloneProcessMixin):
 
         If ANY watched folder fails ``os.stat`` we treat the entire cleanup
         pass as unsafe and abort. This catches the NFS-disconnect /
-        Unraid-share-reload class of failure where ``os.path.isdir`` /
+        share-reload class of failure where ``os.path.isdir`` /
         ``os.path.exists`` would return False for files that are merely
         temporarily unreachable, leading to mass-delete of correct rows.
 

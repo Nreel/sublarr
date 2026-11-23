@@ -27,9 +27,25 @@ _HEALTH_LIVENESS_BUDGET_S = 3.0
 
 # ─── Update check (GitHub releases) ──────────────────────────────────────────
 
-_GITHUB_REPO = "Abrechen2/sublarr"
+_DEFAULT_UPDATE_REPO = "Nreel/sublarr"
 _UPDATE_CACHE_TTL = 6 * 60 * 60  # 6 hours
 _update_cache: dict = {"result": None, "checked_at": None}
+
+
+def _update_repo() -> str:
+    """Repo the update check polls.
+
+    ``BootSettings.update_repo`` (env ``SUBLARR_UPDATE_REPO``) wins; missing
+    settings — e.g. outside an app context — or an empty value fall back to
+    the fork default.
+    """
+    try:
+        from config import get_settings
+
+        repo = getattr(get_settings(), "update_repo", None)
+    except Exception:
+        return _DEFAULT_UPDATE_REPO
+    return repo or _DEFAULT_UPDATE_REPO
 
 
 def _is_newer_version(tag: str, current: str) -> bool:
@@ -279,7 +295,7 @@ def check_update():
       tags:
         - System
       summary: Check for updates
-      description: Checks GitHub releases for a newer stable version. Cached for 6 hours.
+      description: Checks the configured GitHub releases repo (``update_repo``, fork default ``Nreel/sublarr``) for a newer stable version. Cached for 6 hours.
       responses:
         200:
           description: Update check result
@@ -315,7 +331,7 @@ def check_update():
         import requests as _req
 
         resp = _req.get(
-            f"https://api.github.com/repos/{_GITHUB_REPO}/releases/latest",
+            f"https://api.github.com/repos/{_update_repo()}/releases/latest",
             timeout=5,
             headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
         )

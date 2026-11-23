@@ -157,7 +157,7 @@ describe('IconSidebar', () => {
 
   it('shows update dot on settings icon when update available', () => {
     vi.mocked(useUpdateInfo).mockReturnValue({
-      data: { available: true, latest: '0.42.0', current: '0.41.8', url: 'https://github.com/abrechen2/sublarr/releases/tag/v0.42.0' },
+      data: { available: true, latest: '0.42.0', current: '0.41.8', url: 'https://github.com/Nreel/sublarr/releases/tag/v0.42.0' },
     })
     renderWithRouter(<IconSidebar />)
     expect(screen.getByTestId('settings-update-dot')).toBeInTheDocument()
@@ -170,7 +170,7 @@ describe('IconSidebar', () => {
 
   it('shows update chip next to version when update available', () => {
     vi.mocked(useUpdateInfo).mockReturnValue({
-      data: { available: true, latest: 'v0.42.0', current: '0.41.8', url: 'https://github.com/abrechen2/sublarr/releases/tag/v0.42.0' },
+      data: { available: true, latest: 'v0.42.0', current: '0.41.8', url: 'https://github.com/Nreel/sublarr/releases/tag/v0.42.0' },
     })
     renderWithRouter(<IconSidebar />)
     expect(screen.getByTestId('sidebar-update-chip')).toBeInTheDocument()

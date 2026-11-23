@@ -2,7 +2,7 @@
 
 Subtitle manager for Sonarr and Radarr. It finds, checks and repairs subtitles for your library, with a focus on anime and on getting the right subtitle for the right episode.
 
-![Sublarr tour](https://raw.githubusercontent.com/Abrechen2/sublarr/master/assets/screenshots/tour.gif)
+![Sublarr tour](https://raw.githubusercontent.com/Nreel/sublarr/master/assets/screenshots/tour.gif)
 
 ## Features
 
@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
 ```
 
-Then open `http://<host>:5765`. New here? [Your first 10 minutes](https://sublarr.de/docs/getting-started/first-10-minutes/).
+Then open `http://<host>:5765`.
 
 ## Tags
 
@@ -49,9 +49,7 @@ The same images are on GHCR: `ghcr.io/nreel/sublarr`.
 
 ## Links
 
-- Website and docs: https://sublarr.de
-- Source and issues: https://github.com/Abrechen2/sublarr
-- Changelog: https://github.com/Abrechen2/sublarr/blob/master/CHANGELOG.md
-- Discord: https://discord.gg/WjatsKzHXz
+- Source and issues: https://github.com/Nreel/sublarr
+- Changelog: https://github.com/Nreel/sublarr/blob/master/CHANGELOG.md
 
-License: GPL-3.0 · A project by [`<abrechen2 />`](https://www.abrechen2.de/)
+License: GPL-3.0

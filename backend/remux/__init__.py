@@ -49,7 +49,7 @@ def _try_reflink(src: str, dst: str) -> bool:
     """Attempt `cp --reflink=always -- src dst`. Returns True on success.
 
     ``always``, not ``auto``: ``auto`` falls back to a full copy inside cp, so
-    on a filesystem without CoW (Unraid's shfs) this was a plain copy under a
+    on a filesystem without CoW (shfs-backed shares) this was a plain copy under a
     120 s timeout — killed half-way for any large video, then repeated by
     ``shutil.copy2``, and logged as a reflink when it did finish. ``always``
     fails at once where there is no CoW and leaves the copy to the caller.
@@ -230,7 +230,7 @@ def _make_backup(video_path: str, use_reflink: bool, trash_dir: str = "") -> str
     only a backup because every caller swaps the new file in by rename
     (``os.replace``), leaving the original inode untouched — never write into
     ``video_path`` in place after calling this. Before, every backup was a
-    full copy: 26 minutes for one two-hour film on Unraid, enough to push a
+    full copy: 26 minutes for one two-hour film on a shfs-backed share, enough to push a
     subtitle_automation tick past its abandon limit (prod 2026-10-02).
     Where linking fails the backup falls back to a reflink, then a copy.
 

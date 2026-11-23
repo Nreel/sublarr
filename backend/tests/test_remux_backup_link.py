@@ -3,7 +3,7 @@
 Prod 2026-10-02: a subtitle_automation tick was abandoned while
 ``_make_backup`` was copying a two-hour film into the trash — 26 minutes of
 ``shutil.copy2`` after a 15-minute mkvmerge, and 120 s before that wasted on
-``cp --reflink=auto``, which on Unraid's shfs silently does a full copy too
+``cp --reflink=auto``, which on shfs silently does a full copy too
 and was killed by its timeout. Every remux backup there was a full copy (and
 was logged as "reflink backup"), ~300 GB a day while the foreign-track sweep
 runs.

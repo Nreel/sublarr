@@ -62,7 +62,6 @@ body:
       description: How are you running Sublarr?
       options:
         - Docker (ghcr.io image)
-        - Unraid (Community Applications)
         - docker compose (with Postgres / Redis)
         - Other / bare metal
     validations:

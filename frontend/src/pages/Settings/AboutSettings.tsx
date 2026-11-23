@@ -1,8 +1,6 @@
-import { Info, Sparkles, BarChart3 } from 'lucide-react'
+import { Info, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useUsageStatsConsent } from '@/hooks/useUsageStatsConsent'
-import { UsageStatsLegalNote } from '@/components/usage-stats/UsageStatsLegalNote'
 import { WhatsNewModal } from '@/components/layout/WhatsNewModal'
 import { WHATS_NEW, versionKey } from '@/content/whatsNew'
 import { useTranslation } from 'react-i18next'
@@ -11,7 +9,6 @@ import { SettingsSection } from '@/components/settings/SettingsSection'
 import { FormLayout } from '@/components/settings/layouts'
 import type { FormSectionDef } from '@/components/settings/layouts'
 import { getHealth } from '@/api/client'
-import { AbrechenCredit } from '@/components/brand/AbrechenCredit'
 
 // Settings Template B (FormLayout) — Codex-named reference for an info-heavy
 // page. titleKeys reuse the existing about_page.*_title strings (the
@@ -32,7 +29,6 @@ export function AboutSettings() {
   })
 
   const version = health?.version ?? '—'
-  const { consent: usageConsent, setConsent: setUsageConsent } = useUsageStatsConsent()
   const [showWhatsNew, setShowWhatsNew] = useState(false)
   const wnVersion = versionKey(health?.version) ?? Object.keys(WHATS_NEW).slice(-1)[0] ?? null
 
@@ -83,36 +79,6 @@ export function AboutSettings() {
               >
                 <Sparkles size={13} /> {tc('whatsnew.title', { version: wnVersion ?? version })}
               </button>
-            </div>
-            <div className="mt-3">
-              <AbrechenCredit />
-            </div>
-          </SettingsSection>
-
-          {/* ── Usage statistics (opt-in, pseudonymous) ─────────────────── */}
-          <SettingsSection
-            title={tc('usageStats.settingLabel')}
-            description={tc('usageStats.body')}
-            icon={<BarChart3 size={16} style={{ color: 'var(--accent)' }} />}
-          >
-            <label
-              className="flex items-center gap-3 cursor-pointer"
-              style={{ width: 'fit-content' }}
-            >
-              <input
-                type="checkbox"
-                data-testid="usage-stats-toggle"
-                checked={usageConsent === 'granted'}
-                onChange={(e) => setUsageConsent(e.target.checked ? 'granted' : 'denied')}
-                className="h-4 w-4 rounded"
-                style={{ accentColor: 'var(--accent)' }}
-              />
-              <span className="text-sm" style={{ color: 'var(--text-primary)' }}>
-                {tc('usageStats.settingLabel')}
-              </span>
-            </label>
-            <div className="mt-2">
-              <UsageStatsLegalNote />
             </div>
           </SettingsSection>
         </div>

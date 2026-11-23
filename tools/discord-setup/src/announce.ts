@@ -13,7 +13,7 @@ import { log } from "./log.js";
 //   release — promoted `X.Y.Z` on prod, port 5765
 export type AnnounceType = "beta" | "rc" | "release";
 
-const REPO_URL = "https://github.com/abrechen2/sublarr";
+const REPO_URL = "https://github.com/Nreel/sublarr";
 const MAX_NOTES = 3500; // a Discord embed description caps at 4096
 
 interface AnnounceStyle {

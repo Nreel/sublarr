@@ -195,17 +195,17 @@ ever touching files or scores on its own.
 - **Quality-of-life UI** — accessibility, mobile, waveform-editor polish,
   organic migration of legacy styles to the design-token system.
 - **Community-requested features** — prioritised from GitHub
-  Issues/Discussions and Discord feedback.
+  Issues and Discussions.
 
 Have an idea? Open a
-[Discussion](https://github.com/Abrechen2/sublarr/discussions) or
-[Issue](https://github.com/Abrechen2/sublarr/issues).
+[Discussion](https://github.com/Nreel/sublarr/discussions) or
+[Issue](https://github.com/Nreel/sublarr/issues).
 
 ---
 
 ## How to Contribute
 
-See [sublarr.de/docs/development/contributing](https://sublarr.de/docs/development/contributing/)
+See [CONTRIBUTING.md](CONTRIBUTING.md)
 for how to submit features, bug reports, and pull requests.
 
 - **Trusted hosts (DNS-rebinding hardening)** — optional `SUBLARR_ALLOWED_HOSTS`: reject requests whose `Host` is not listed (HTTP and Socket.IO). Matters for installs without a password, whose API is otherwise reachable from a rebinding page. Raised by the security review of the Socket.IO same-origin fix (Forgejo #60).

@@ -8,7 +8,7 @@ export const BLUESKY_LIMIT = 300; // graphemes
 export const MAX_HIGHLIGHTS = 4;
 const MIN_TRUNCATED = 15;
 
-const REPO_URL = "https://github.com/abrechen2/sublarr";
+const REPO_URL = "https://github.com/Nreel/sublarr";
 
 export const MASTODON_HASHTAGS = [
   "#selfhosted",

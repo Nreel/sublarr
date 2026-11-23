@@ -52,7 +52,7 @@ describe('StatusBar', () => {
 
   it('renders version as button when update available', () => {
     vi.mocked(useUpdateInfo).mockReturnValue({
-      data: { available: true, latest: '0.42.0', current: '0.41.8', url: 'https://github.com/abrechen2/sublarr/releases/tag/v0.42.0' },
+      data: { available: true, latest: '0.42.0', current: '0.41.8', url: 'https://github.com/Nreel/sublarr/releases/tag/v0.42.0' },
     })
     render(<StatusBar />)
     const version = screen.getByTestId('status-bar-version')
@@ -61,7 +61,7 @@ describe('StatusBar', () => {
 
   it('shows update dot when update available', () => {
     vi.mocked(useUpdateInfo).mockReturnValue({
-      data: { available: true, latest: '0.42.0', current: '0.41.8', url: 'https://github.com/abrechen2/sublarr/releases/tag/v0.42.0' },
+      data: { available: true, latest: '0.42.0', current: '0.41.8', url: 'https://github.com/Nreel/sublarr/releases/tag/v0.42.0' },
     })
     render(<StatusBar />)
     expect(screen.getByTestId('status-bar-update-dot')).toBeInTheDocument()
@@ -74,7 +74,7 @@ describe('StatusBar', () => {
 
   it('opens popover when version button is clicked', () => {
     vi.mocked(useUpdateInfo).mockReturnValue({
-      data: { available: true, latest: '0.42.0', current: '0.41.8', url: 'https://github.com/abrechen2/sublarr/releases/tag/v0.42.0' },
+      data: { available: true, latest: '0.42.0', current: '0.41.8', url: 'https://github.com/Nreel/sublarr/releases/tag/v0.42.0' },
     })
     render(<StatusBar />)
     expect(screen.queryByTestId('status-bar-update-popover')).not.toBeInTheDocument()
@@ -85,12 +85,12 @@ describe('StatusBar', () => {
 
   it('popover contains GitHub link', () => {
     vi.mocked(useUpdateInfo).mockReturnValue({
-      data: { available: true, latest: '0.42.0', current: '0.41.8', url: 'https://github.com/abrechen2/sublarr/releases/tag/v0.42.0' },
+      data: { available: true, latest: '0.42.0', current: '0.41.8', url: 'https://github.com/Nreel/sublarr/releases/tag/v0.42.0' },
     })
     render(<StatusBar />)
     fireEvent.click(screen.getByTestId('status-bar-version'))
     const link = screen.getByRole('link')
-    expect(link).toHaveAttribute('href', 'https://github.com/abrechen2/sublarr/releases/tag/v0.42.0')
+    expect(link).toHaveAttribute('href', 'https://github.com/Nreel/sublarr/releases/tag/v0.42.0')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
