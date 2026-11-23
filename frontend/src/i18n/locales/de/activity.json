@@ -217,7 +217,6 @@
     "total_wanted": "{{count}} insgesamt gesucht",
     "sortBy": "Sortieren nach",
     "sort_desc": "Absteigend",
-    "upgrades_only": "Nur Upgrades",
     "srt_upgradeable": "SRT-upgradebar",
     "search_started": "Suche gestartet…",
     "extract_success": "{{format}}-Untertitel nach {{path}} extrahiert",

@@ -4,6 +4,15 @@ import { FilterBar } from '@/components/filters/FilterBar'
 import type { FilterDef, ActiveFilter } from '@/components/filters/FilterBar'
 import type { FilterCondition } from '@/lib/types'
 
+/** Tri-state upgrade filter: show everything, only upgrade candidates, or hide them. */
+export type UpgradeFilterMode = 'all' | 'only' | 'hidden'
+
+const NEXT_UPGRADE_FILTER: Record<UpgradeFilterMode, UpgradeFilterMode> = {
+  all: 'only',
+  only: 'hidden',
+  hidden: 'all',
+}
+
 const STATUS_FILTERS = ['all', 'wanted', 'extracted', 'failed', 'ignored'] as const
 const TYPE_FILTERS = ['all', 'episode', 'movie'] as const
 const SUBTITLE_TYPE_FILTERS = ['all', 'full', 'forced'] as const
@@ -73,7 +82,7 @@ export interface WantedFilterPanelProps {
   statusFilter: string | undefined
   typeFilter: string | undefined
   subtitleTypeFilter: string | undefined
-  upgradeFilter: boolean
+  upgradeFilter: UpgradeFilterMode
   languageFilter: string | undefined
   availableLanguages: string[]
   // FilterBar state
@@ -85,7 +94,7 @@ export interface WantedFilterPanelProps {
   onStatusFilter: (val: string | undefined) => void
   onTypeFilter: (val: string | undefined) => void
   onSubtitleTypeFilter: (val: string | undefined) => void
-  onUpgradeFilter: (val: boolean) => void
+  onUpgradeFilter: (val: UpgradeFilterMode) => void
   onLanguageFilter: (val: string | undefined) => void
   onFiltersChange: (filters: ActiveFilter[]) => void
   onSortBy: (val: string) => void
@@ -252,15 +261,16 @@ export function WantedFilterPanel({
         )}
         {upgradeable > 0 && (
           <button
-            onClick={() => { onUpgradeFilter(!upgradeFilter) }}
+            onClick={() => { onUpgradeFilter(NEXT_UPGRADE_FILTER[upgradeFilter]) }}
             className="px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150"
             style={{
-              backgroundColor: upgradeFilter ? 'rgba(16,185,129,0.1)' : 'var(--bg-surface)',
-              color: upgradeFilter ? 'var(--success)' : 'var(--text-secondary)',
-              border: `1px solid ${upgradeFilter ? 'var(--success)' : 'var(--border)'}`,
+              backgroundColor: upgradeFilter === 'only' ? 'rgba(16,185,129,0.1)' : upgradeFilter === 'hidden' ? 'rgba(245,158,11,0.1)' : 'var(--bg-surface)',
+              color: upgradeFilter === 'only' ? 'var(--success)' : upgradeFilter === 'hidden' ? 'var(--warning)' : 'var(--text-secondary)',
+              border: `1px solid ${upgradeFilter === 'only' ? 'var(--success)' : upgradeFilter === 'hidden' ? 'var(--warning)' : 'var(--border)'}`,
             }}
+            title={t(`wanted.upgrades_tooltip_${upgradeFilter}`, { count: upgradeable })}
           >
-            {t('wanted.upgrades_only', { count: upgradeable })}
+            {t(`wanted.upgrades_${upgradeFilter}`, { count: upgradeable })}
           </button>
         )}
       </div>

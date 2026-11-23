@@ -1,6 +1,16 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
+
+// jsdom lacks IntersectionObserver, which Wanted's infinite-scroll sentinel uses.
+class FakeIntersectionObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+beforeAll(() => {
+  globalThis.IntersectionObserver = FakeIntersectionObserver as unknown as typeof IntersectionObserver
+})
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -9,6 +19,9 @@ const mockRefreshMutate = vi.fn()
 const mockCleanupMutate = vi.fn()
 let mockMtPendingTotal = 0
 let mockProfiles: unknown = undefined
+let mockUpgradeable = 0
+let mockWantedItems: unknown[] = []
+const mockSelectAll = vi.fn()
 
 vi.mock('@/hooks/useTranslationApi', () => ({
   useBatchTranslate: () => ({ mutate: mockBatchTranslateMutate, isPending: false }),
@@ -16,7 +29,7 @@ vi.mock('@/hooks/useTranslationApi', () => ({
 
 vi.mock('@/hooks/useApi', () => ({
   useWantedItems: () => ({ data: { data: [], total: 0 }, isLoading: false }),
-  useWantedSummary: () => ({ data: { total: 0, by_status: {}, by_type: {}, upgradeable: 0, by_subtitle_type: {} } }),
+  useWantedSummary: () => ({ data: { total: 0, by_status: {}, by_type: {}, upgradeable: mockUpgradeable, by_subtitle_type: {} } }),
   useRefreshWanted: () => ({ mutate: mockRefreshMutate, isPending: false }),
   useUpdateWantedStatus: () => ({ mutate: vi.fn() }),
   useSearchWantedItem: () => ({ mutate: vi.fn() }),
@@ -32,7 +45,14 @@ vi.mock('@/hooks/useApi', () => ({
   useCleanupSidecars: () => ({ mutate: mockCleanupMutate, isPending: false }),
   useTranslationEnabled: () => true,
   useLanguageProfiles: () => ({ data: mockProfiles }),
-  useInfiniteWantedItems: () => ({ data: undefined, fetchNextPage: vi.fn(), hasNextPage: false, isFetchingNextPage: false }),
+  useInfiniteWantedItems: () => ({
+    data: mockWantedItems.length
+      ? { pages: [{ data: mockWantedItems, page: 1, per_page: 50, total: mockWantedItems.length, total_pages: 1 }] }
+      : undefined,
+    fetchNextPage: vi.fn(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+  }),
   useMtPendingItems: () => ({ data: { data: [], total: mockMtPendingTotal }, isLoading: false, isError: false }),
   useApproveMtPending: () => ({ mutate: vi.fn(), isPending: false }),
   useApproveMtPendingBatch: () => ({ mutate: vi.fn(), isPending: false }),
@@ -44,7 +64,7 @@ vi.mock('@/stores/selectionStore', () => ({
     selector({
       selections: {},
       toggleItem: vi.fn(),
-      selectAll: vi.fn(),
+      selectAll: mockSelectAll,
       clearSelection: vi.fn(),
     }),
 }))
@@ -206,5 +226,57 @@ describe('Wanted toolbar buttons (Steps 56 & 57)', () => {
     await renderWanted()
     fireEvent.click(screen.getByTestId('mt-pending-toolbar-btn'))
     expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+})
+
+function mkItem(id: number, upgrade: number) {
+  return {
+    id, item_type: 'movie', sonarr_series_id: null, sonarr_episode_id: null, radarr_movie_id: null,
+    title: `Movie ${id}`, season_episode: '', file_path: `/movies/${id}`, existing_sub: 'srt',
+    embedded_languages: [], missing_languages: ['en'], target_language: 'en', status: 'wanted',
+    last_search_at: '', search_count: 0, error: '', retry_after: null, added_at: '', updated_at: '',
+    upgrade_candidate: upgrade, current_score: 0, subtitle_type: 'full',
+  }
+}
+
+describe('wanted upgrades filter (tri-state toggle)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockMtPendingTotal = 0
+    mockProfiles = undefined
+    mockUpgradeable = 2
+    mockWantedItems = [mkItem(1, 1), mkItem(2, 0), mkItem(3, 1)]
+  })
+
+  it('default state shows all items and the tooltip describes the cycle', async () => {
+    await renderWanted()
+    const btn = screen.getByRole('button', { name: 'wanted.upgrades_all' })
+    expect(btn.getAttribute('title')).toBe('wanted.upgrades_tooltip_all')
+  })
+
+  it('cycles all → only → hidden → all with matching labels and tooltips', async () => {
+    await renderWanted()
+    fireEvent.click(screen.getByRole('button', { name: 'wanted.upgrades_all' }))
+    expect(screen.getByRole('button', { name: 'wanted.upgrades_only' }).getAttribute('title')).toBe('wanted.upgrades_tooltip_only')
+    fireEvent.click(screen.getByRole('button', { name: 'wanted.upgrades_only' }))
+    expect(screen.getByRole('button', { name: 'wanted.upgrades_hidden' }).getAttribute('title')).toBe('wanted.upgrades_tooltip_hidden')
+    fireEvent.click(screen.getByRole('button', { name: 'wanted.upgrades_hidden' }))
+    expect(screen.getByRole('button', { name: 'wanted.upgrades_all' }).getAttribute('title')).toBe('wanted.upgrades_tooltip_all')
+  })
+
+  it('"only" keeps upgrade candidates, "hidden" keeps everything else', async () => {
+    await renderWanted()
+    fireEvent.click(screen.getByRole('button', { name: 'wanted.upgrades_all' }))
+    fireEvent.click(screen.getByTestId('wanted-select-all'))
+    expect(mockSelectAll).toHaveBeenCalledWith('wanted', [1, 3])
+    fireEvent.click(screen.getByRole('button', { name: 'wanted.upgrades_only' }))
+    fireEvent.click(screen.getByTestId('wanted-select-all'))
+    expect(mockSelectAll).toHaveBeenLastCalledWith('wanted', [2])
+  })
+
+  it('button stays hidden when there are no upgrade candidates', async () => {
+    mockUpgradeable = 0
+    await renderWanted()
+    expect(screen.queryByRole('button', { name: /wanted\.upgrades_/ })).toBeNull()
   })
 })

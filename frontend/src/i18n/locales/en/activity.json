@@ -217,7 +217,6 @@
     "total_wanted": "{{count}} total wanted",
     "sortBy": "Sort by",
     "sort_desc": "Descending",
-    "upgrades_only": "Upgrades only",
     "srt_upgradeable": "SRT upgradeable",
     "search_started": "Search started…",
     "extract_success": "Extracted {{format}} subtitle to {{path}}",

@@ -27,7 +27,7 @@ import { getConfig } from '@/api/settings'
 import { exportWantedItems } from '@/api/wanted'
 import { WantedToolbar } from './wanted/WantedToolbar'
 import { MtPendingModal } from './wanted/MtPendingModal'
-import { WantedFilterPanel } from './wanted/WantedFilterPanel'
+import { WantedFilterPanel, type UpgradeFilterMode } from './wanted/WantedFilterPanel'
 import { WantedGroupedRow } from './wanted/WantedGroupedRow'
 import type { WantedGroup } from '@/types/wanted'
 // Re-exported for backward compat — existing tests import from here.
@@ -88,7 +88,7 @@ export function WantedPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
   const [typeFilter, setTypeFilter] = useState<string | undefined>()
   const [subtitleTypeFilter, setSubtitleTypeFilter] = useState<string | undefined>()
-  const [upgradeFilter, setUpgradeFilter] = useState(false)
+  const [upgradeFilter, setUpgradeFilter] = useState<UpgradeFilterMode>('all')
   const [languageFilter, setLanguageFilter] = useState<string | undefined>()
   const [expandedItem, setExpandedItem] = useState<number | null>(null)
   const [searchResults, setSearchResults] = useState<Record<number, WantedSearchResponse>>({})
@@ -229,8 +229,10 @@ export function WantedPage() {
   // Client-side post-filters (upgrade + language have no server-side param)
   const filteredData = useMemo(() => {
     let data = wantedData
-    if (upgradeFilter) {
+    if (upgradeFilter === 'only') {
       data = data.filter((item) => item.upgrade_candidate === 1)
+    } else if (upgradeFilter === 'hidden') {
+      data = data.filter((item) => item.upgrade_candidate !== 1)
     }
     if (languageFilter) {
       data = data.filter((item) => item.target_language === languageFilter)
@@ -538,7 +540,7 @@ export function WantedPage() {
             <thead className="bg-elevated" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <th scope="col" className="text-left px-3 py-2.5 w-8">
-                  <button onClick={toggleSelectAll} className="p-0.5 text-muted">
+                  <button onClick={toggleSelectAll} className="p-0.5 text-muted" data-testid="wanted-select-all">
                     {allSelected ? (
                       <CheckSquare size={14} className="text-accent" />
                     ) : someSelected ? (
