@@ -602,6 +602,11 @@
     "series": "Serien",
     "batch_translate_downloaded": "Heruntergeladene Untertitel als Batch übersetzen",
     "scan_embedded": "In allen ungelösten Einträgen nach eingebetteten Untertiteln scannen",
+    "export_wanted": "Die Wanted-Liste als CSV oder JSON herunterladen",
+    "cleanup_sidecars": "Verwaiste Sidecar-Untertitel-Dateien aus der Bibliothek löschen",
+    "search_all": "Untertitel-Anbieter für alle gelisteten Wanted-Einträge durchsuchen",
+    "refresh_wanted": "Die Bibliothek erneut scannen und die Wanted-Liste neu aufbauen",
+    "refresh_needs_profile": "Mindestens ein Sprachprofil in den Einstellungen festlegen, bevor aktualisiert wird",
     "last": "Zuletzt"
   },
   "subtitle_actions": {

@@ -602,6 +602,11 @@
     "series": "Series",
     "batch_translate_downloaded": "Batch translate downloaded subtitles",
     "scan_embedded": "Scan for embedded subtitles in all unresolved items",
+    "export_wanted": "Download the wanted list as CSV or JSON",
+    "cleanup_sidecars": "Delete orphaned sidecar subtitle files from the library",
+    "search_all": "Search subtitle providers for every listed wanted item",
+    "refresh_wanted": "Rescan the library and rebuild the wanted list",
+    "refresh_needs_profile": "Set at least one language profile in Settings before refreshing",
     "last": "Last"
   },
   "subtitle_actions": {

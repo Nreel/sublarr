@@ -62,6 +62,7 @@
     "searching": "Suche...",
     "scanning": "Scanne...",
     "refresh": "Aktualisieren",
+    "refresh_failed": "Scan konnte nicht gestartet werden — möglicherweise läuft bereits ein anderer Scan",
     "total_wanted": "Gesamt gesucht",
     "episodes": "Episoden",
     "movies": "Filme",

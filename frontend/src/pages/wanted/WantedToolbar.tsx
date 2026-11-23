@@ -13,6 +13,8 @@ export interface WantedToolbarProps {
   cleanupPending: boolean
   batchTranslatePending: boolean
   translationEnabled: boolean
+  /** Language profiles are loaded but none is configured; Refresh needs one. */
+  profilesMissing?: boolean
   /** Count of provisional-MT items with a pending-original notification (feature #8b). */
   mtPendingCount?: number
   onRefresh: () => void
@@ -37,6 +39,7 @@ export function WantedToolbar({
   cleanupPending,
   batchTranslatePending,
   translationEnabled,
+  profilesMissing = false,
   mtPendingCount = 0,
   onRefresh,
   onBatchSearch,
@@ -106,7 +109,7 @@ export function WantedToolbar({
           <button
             onClick={() => setExportOpen((v) => !v)}
             className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
-            title={t('wanted.export')}
+            title={tc('ui.export_wanted')}
             data-testid="wanted-export-btn"
             style={{
               backgroundColor: 'var(--bg-surface)',
@@ -142,7 +145,7 @@ export function WantedToolbar({
           onClick={onShowCleanupConfirm}
           disabled={cleanupPending}
           className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
-          title={t('wanted.cleanup')}
+          title={tc('ui.cleanup_sidecars')}
           data-testid="wanted-cleanup-btn"
           style={{
             backgroundColor: 'var(--bg-surface)',
@@ -174,6 +177,8 @@ export function WantedToolbar({
           onClick={onBatchSearch}
           disabled={startBatchPending || batchRunning}
           className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
+          title={tc('ui.search_all')}
+          data-testid="wanted-search-all-btn"
           style={{
             backgroundColor: 'var(--bg-surface)',
             color: 'var(--text-primary)',
@@ -185,9 +190,10 @@ export function WantedToolbar({
         </button>
         <button
           onClick={onRefresh}
-          disabled={refreshPending || scanRunning}
+          disabled={refreshPending || scanRunning || profilesMissing}
           className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium text-white hover:opacity-90"
           data-testid="wanted-refresh-btn"
+          title={profilesMissing ? tc('ui.refresh_needs_profile') : tc('ui.refresh_wanted')}
           style={{ backgroundColor: 'var(--accent)' }}
         >
           <RefreshCw

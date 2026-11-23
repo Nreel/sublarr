@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Activity badge counts the scan that is running** — the sidebar *Activity*
+  chip stayed empty while the Wanted header showed *Scanning…*: the badge
+  figure (`useQueueTaskCount`) polled `/wanted/scanner/status` on a slow idle
+  interval and never read `wanted/summary`'s `scan_running` (the same state the
+  header shows) or the standalone/embedded folder scan's `scanner_scanning`,
+  so a freshly started scan left the badge at zero for up to 30 s. The badge
+  now counts all three sources, the *Refresh* mutation flips the badge keys
+  immediately, WebSocket progress refreshes the summary too, and a polling
+  `scan_running` true→false transition clears the badge if the socket dropped.
+- **Wanted *Refresh* reports failures and waits for a language profile** — a
+  rejected scan (409 "Scan already running") was silently swallowed; it now
+  shows an error toast. The button is disabled when no language profile is
+  configured (the scan cannot resolve target languages without one), with a
+  tooltip naming the missing setting.
+
+### Added
+- **Every Wanted header button describes its action** — *Scan Embedded*,
+  *Export*, *Cleanup Sidecars*, *Search All* and *Refresh* now carry tooltips
+  explaining what they do (English and German), replacing bare-label titles.
+
 ## [1.23.1] - 2026-11-23
 
 ### Fixed

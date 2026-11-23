@@ -8,6 +8,7 @@ const mockBatchTranslateMutate = vi.fn()
 const mockRefreshMutate = vi.fn()
 const mockCleanupMutate = vi.fn()
 let mockMtPendingTotal = 0
+let mockProfiles: unknown = undefined
 
 vi.mock('@/hooks/useTranslationApi', () => ({
   useBatchTranslate: () => ({ mutate: mockBatchTranslateMutate, isPending: false }),
@@ -30,7 +31,7 @@ vi.mock('@/hooks/useApi', () => ({
   useAddToBlacklist: () => ({ mutate: vi.fn() }),
   useCleanupSidecars: () => ({ mutate: mockCleanupMutate, isPending: false }),
   useTranslationEnabled: () => true,
-  useLanguageProfiles: () => ({ data: undefined }),
+  useLanguageProfiles: () => ({ data: mockProfiles }),
   useInfiniteWantedItems: () => ({ data: undefined, fetchNextPage: vi.fn(), hasNextPage: false, isFetchingNextPage: false }),
   useMtPendingItems: () => ({ data: { data: [], total: mockMtPendingTotal }, isLoading: false, isError: false }),
   useApproveMtPending: () => ({ mutate: vi.fn(), isPending: false }),
@@ -127,6 +128,7 @@ describe('Wanted toolbar buttons (Steps 56 & 57)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockMtPendingTotal = 0
+    mockProfiles = undefined
   })
 
   it('renders batch-translate-btn', async () => {
@@ -149,6 +151,37 @@ describe('Wanted toolbar buttons (Steps 56 & 57)', () => {
     await renderWanted()
     fireEvent.click(screen.getByTestId('wanted-refresh-btn'))
     expect(mockRefreshMutate).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables Refresh when language profiles are loaded but none is configured', async () => {
+    mockProfiles = []
+    await renderWanted()
+    const btn = screen.getByTestId('wanted-refresh-btn')
+    expect(btn).toBeDisabled()
+    fireEvent.click(btn)
+    expect(mockRefreshMutate).not.toHaveBeenCalled()
+    expect(btn.getAttribute('title')).toBe('ui.refresh_needs_profile')
+  })
+
+  it('enables Refresh and describes its action once a profile exists', async () => {
+    mockProfiles = [{ id: 1, target_language: 'de', source_languages: ['en'], is_default: true }]
+    await renderWanted()
+    const btn = screen.getByTestId('wanted-refresh-btn')
+    expect(btn).not.toBeDisabled()
+    expect(btn.getAttribute('title')).toBe('ui.refresh_wanted')
+  })
+
+  it('every toolbar button carries a tooltip describing its action', async () => {
+    mockProfiles = [{ id: 1, target_language: 'de', source_languages: ['en'], is_default: true }]
+    await renderWanted()
+    expect(screen.getByTestId('wanted-export-btn').getAttribute('title')).toBe('ui.export_wanted')
+    expect(screen.getByTestId('wanted-cleanup-btn').getAttribute('title')).toBe('ui.cleanup_sidecars')
+    expect(screen.getByTestId('wanted-search-all-btn').getAttribute('title')).toBe('ui.search_all')
+    expect(screen.getByTestId('batch-translate-btn').getAttribute('title')).toBe('ui.batch_translate_downloaded')
+    expect(screen.getByTestId('wanted-refresh-btn').getAttribute('title')).toBe('ui.refresh_wanted')
+    // Scan Embedded renders without a testid; match by its label key.
+    const scanBtn = screen.getByRole('button', { name: /wanted.scan_embedded/ })
+    expect(scanBtn.getAttribute('title')).toBe('ui.scan_embedded')
   })
 
   it('renders wanted-cleanup-btn', async () => {

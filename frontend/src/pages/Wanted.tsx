@@ -119,6 +119,9 @@ export function WantedPage() {
     profiles?.find((p) => p.is_default)?.source_languages?.[0] ??
     (config?.source_language as string | undefined) ??
     'en'
+  // Refresh rebuilds the wanted list against the configured target languages;
+  // with no profile loaded yet it cannot resolve them, so the button waits.
+  const profilesMissing = profiles !== undefined && profiles.length === 0
   const { data: summary } = useWantedSummary()
   const {
     data: wanted,
@@ -189,6 +192,17 @@ export function WantedPage() {
     }
     prevProbeRunning.current = probeStatus?.running
   }, [probeStatus?.running, queryClient])
+
+  // Same fallback for the wanted scan: when polling sees scan_running go
+  // false, refresh the badge key too — a dropped socket would otherwise
+  // leave the Activity badge counting the finished scan until the idle poll.
+  const prevScanRunning = useRef<boolean | undefined>(undefined)
+  useEffect(() => {
+    if (prevScanRunning.current === true && summary?.scan_running === false) {
+      queryClient.invalidateQueries({ queryKey: ['scanner-status'] })
+    }
+    prevScanRunning.current = summary?.scan_running
+  }, [summary?.scan_running, queryClient])
 
   const totalWanted = summary?.by_status?.wanted ?? 0
   const totalEpisodes = summary?.by_type?.episode ?? 0
@@ -460,6 +474,7 @@ export function WantedPage() {
         cleanupPending={cleanupSidecars.isPending}
         batchTranslatePending={batchTranslate.isPending}
         translationEnabled={!!translationEnabled}
+        profilesMissing={profilesMissing}
         mtPendingCount={mtPending?.total ?? 0}
         onRefresh={() => refreshWanted.mutate(undefined)}
         onBatchSearch={handleBatchSearch}

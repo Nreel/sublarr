@@ -117,6 +117,7 @@ function GlobalWebSocketListener() {
     void queryClient.invalidateQueries({ queryKey: ['wanted-batch-probe-status'] })
     void queryClient.invalidateQueries({ queryKey: ['wanted-batch-extract-status'] })
     void queryClient.invalidateQueries({ queryKey: ['scanner-status'] })
+    void queryClient.invalidateQueries({ queryKey: ['wanted-summary'] })
   }
 
   useWebSocket({

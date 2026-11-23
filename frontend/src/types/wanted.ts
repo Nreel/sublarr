@@ -66,6 +66,8 @@ export interface WantedSummary {
   exhausted: number
   scan_running: boolean
   last_scan_at: string
+  /** Live scanner counters, mirrored from GET /wanted/scanner/status. */
+  scan_progress?: { current: number; total: number; phase?: string }
 }
 
 export interface SearchResult {

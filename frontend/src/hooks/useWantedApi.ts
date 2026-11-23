@@ -1,4 +1,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import { toast } from '@/components/shared/Toast'
+import { useStandaloneStatus } from './system/standalone'
 import {
   getWantedItems, getWantedSummary, refreshWanted,
   updateWantedItemStatus,
@@ -57,11 +60,20 @@ export function useWantedSummary() {
 
 export function useRefreshWanted() {
   const queryClient = useQueryClient()
+  const { t } = useTranslation('library')
   return useMutation({
     mutationFn: (seriesId?: number) => refreshWanted(seriesId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wanted'] })
       queryClient.invalidateQueries({ queryKey: ['wanted-summary'] })
+      // The nav Activity badge polls scanner-status with a slow idle
+      // interval; flip it here so the badge shows the scan right away
+      // instead of sitting at zero until a socket event or the next poll.
+      queryClient.invalidateQueries({ queryKey: ['scanner-status'] })
+    },
+    onError: () => {
+      // A 409 ("Scan already running") used to be swallowed silently.
+      toast(t('wanted.refresh_failed'), 'error')
     },
   })
 }
@@ -168,16 +180,25 @@ export function useQueueTaskCount(idleRefetchMs = 30000): number {
   const { data: probe } = useWantedBatchProbeStatus(idleRefetchMs)
   const { data: extract } = useWantedBatchExtractStatus(idleRefetchMs)
   const { data: scanner } = useScannerStatus(idleRefetchMs)
+  const { data: summary } = useWantedSummary()
+  const { data: standalone } = useStandaloneStatus()
 
   const pending = (run?: { running: boolean; total: number; processed: number }) =>
     run?.running ? Math.max(run.total - run.processed, 1) : 0
 
-  const scanPending =
-    scanner?.is_scanning || scanner?.is_searching
-      ? Math.max((scanner.progress.total ?? 0) - (scanner.progress.current ?? 0), 1)
-      : 0
+  // The Wanted header's "Scanning…" pill is driven by `wanted-summary.scan_running`,
+  // so the badge reads the same state: a scan the slow scanner-status poll has not
+  // picked up yet still counts. The standalone/embedded folder scan reports only
+  // `scanner_scanning` on /standalone/status, so it contributes the in-flight scan
+  // as one item — a scan is always at least one pending task while running.
+  const scanRunning = scanner?.is_scanning || scanner?.is_searching || summary?.scan_running
+  const progress =
+    scanner?.is_scanning || scanner?.is_searching ? scanner.progress : summary?.scan_progress
+  const scanPending = scanRunning
+    ? Math.max((progress?.total ?? 0) - (progress?.current ?? 0), 1)
+    : 0
 
-  return pending(batch) + pending(probe) + pending(extract) + scanPending
+  return pending(batch) + pending(probe) + pending(extract) + scanPending + (standalone?.scanner_scanning ? 1 : 0)
 }
 
 export function useStartBatchProbe() {
