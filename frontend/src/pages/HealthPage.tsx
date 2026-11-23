@@ -1,12 +1,14 @@
 /**
  * Health page — "where does it hurt" overview of the library.
  *
- * Four views from GET /api/v1/health/library: series with missing subtitles,
- * wanted items stuck in a failure state (unmatched episodes), per-provider
- * health (circuit breaker ⋈ provider stats), and translation health (backend
- * failure counters, recent failed translation calls, and failed translation
- * jobs — before this block those errors were only visible behind one
- * episode's History button). Every row carries a badge naming its problem and
+ * Three views from GET /api/v1/health/library: wanted items carrying an error
+ * (failed outright, classified with a failure kind, or holding a recorded
+ * error note — unmatched episodes included), per-provider health (circuit
+ * breaker ⋈ provider stats), and translation health (backend failure counters,
+ * recent failed translation calls, and failed translation jobs — before this
+ * block those errors were only visible behind one episode's History button).
+ * Which titles are missing subtitles is /wanted's job, so this page lists
+ * items rather than titles. Every row carries a badge naming its problem and
  * linking to the setting that fixes it (see lib/healthProblems); lists are
  * complete and paint in chunks as the reader scrolls.
  */
@@ -192,12 +194,12 @@ function ProblemRow({ item, t }: { item: HealthProblemRow; t: T }) {
 }
 
 function ProviderRow({ p, t }: { p: HealthProviderRow; t: T }) {
+  // The chip is the breaker state; the badge is the reason. Auto-disabling is
+  // itself the verdict, so it renders once — as the badge, which carries the
+  // explanation and the settings link — instead of a chip repeating the chip.
   const stateColor =
-    p.breaker_state === 'closed' && !p.auto_disabled
-      ? 'var(--success)'
-      : p.breaker_state === 'half_open'
-        ? 'var(--warning)'
-        : 'var(--error)';
+    p.degraded ? 'var(--error)' : p.breaker_state === 'half_open' ? 'var(--warning)' : 'var(--success)';
+  const badgeKind = p.status_reason && p.status_reason !== 'ok' ? p.status_reason : null;
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
       <td className="px-3 py-2">
@@ -213,21 +215,21 @@ function ProviderRow({ p, t }: { p: HealthProviderRow; t: T }) {
       </td>
       <td className="px-3 py-2">
         <div className="flex items-center gap-2">
-          <span
-            className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase"
-            style={{
-              backgroundColor: `color-mix(in srgb, ${stateColor} 12%, transparent)`,
-              color: stateColor,
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            {p.auto_disabled ? t('providers.auto_disabled') : t(`providers.state_${p.breaker_state}`)}
-          </span>
+          {!p.auto_disabled && (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase"
+              style={{
+                backgroundColor: `color-mix(in srgb, ${stateColor} 12%, transparent)`,
+                color: stateColor,
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {t(`providers.state_${p.breaker_state}`)}
+            </span>
+          )}
           {/* The breaker state says *how* it is off, not *why*. A provider with
               a blank API key and one whose host is down both read "Open". */}
-          {p.status_reason && p.status_reason !== 'ok' && (
-            <ProblemBadge kind={p.status_reason} t={t} />
-          )}
+          {badgeKind && <ProblemBadge kind={badgeKind} t={t} />}
         </div>
       </td>
       <td
@@ -415,7 +417,6 @@ export function HealthPage() {
   // Every list is complete, so paint it in chunks: rows appear as the reader
   // scrolls to the bottom of the box instead of the page rendering thousands
   // of rows (or hiding the ones past a cap) up front.
-  const seriesList = useInfiniteChunk(data?.series ?? [], 60);
   const problemList = useInfiniteChunk(data?.problems ?? [], 60);
   const providerList = useInfiniteChunk(
     [...(data?.providers ?? []).filter(p => p.degraded), ...(data?.providers ?? []).filter(p => !p.degraded)],
@@ -442,11 +443,10 @@ export function HealthPage() {
       <PageHeader title={t('title')} subtitle={t('subtitle')} className="mb-0" />
 
       {/* Totals */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <StatTile label={t('totals.wanted')} value={totals?.wanted ?? 0} />
         <StatTile label={t('totals.problems')} value={totals?.problems ?? 0} />
         <StatTile label={t('totals.unmatched')} value={totals?.unmatched ?? 0} />
-        <StatTile label={t('totals.series_affected')} value={totals?.series_affected ?? 0} />
         <StatTile label={t('totals.providers_degraded')} value={totals?.providers_degraded ?? 0} />
         {/* Sat next to a reassuring zero before: "0 degraded" and "no provider
             activity recorded yet" are different statements (forgejo #17). */}
@@ -455,87 +455,6 @@ export function HealthPage() {
           value={totals?.providers_no_activity ?? 0}
         />
       </div>
-
-      {/* Series with missing subtitles */}
-      <Section title={t('series.title')}>
-        <div
-          className="rounded-lg overflow-hidden"
-          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
-        >
-          {data?.series.length ? (
-            <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
-              <table className="w-full min-w-[420px]">
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <Th>{t('series.col_title')}</Th>
-                    <Th>{t('series.col_type')}</Th>
-                    <Th>{t('series.col_missing')}</Th>
-                    <Th>{t('series.col_problems')}</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {seriesList.visible.map(s => (
-                    <tr
-                      key={`${s.item_type}:${s.title}`}
-                      style={{ borderBottom: '1px solid var(--border)' }}
-                    >
-                      <td
-                        className="px-3 py-2 text-sm font-medium truncate max-w-xs"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {s.title}
-                      </td>
-                      <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {t(`series.type_${s.item_type}`)}
-                      </td>
-                      <td
-                        className="px-3 py-2 text-xs tabular-nums"
-                        style={{ color: 'var(--warning)', fontFamily: 'var(--font-mono)' }}
-                      >
-                        {s.missing}
-                      </td>
-                      <td className="px-3 py-2">
-                        {s.problems > 0 ? (
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {Object.entries(s.problem_kinds)
-                              .sort(([, a], [, b]) => b - a)
-                              .map(([kind, count]) => (
-                                <ProblemBadge key={kind} kind={kind} count={count} showHint={false} t={t} />
-                              ))}
-                            {/* The raw total still reads as a number for scanning. */}
-                            <span
-                              className="text-xs tabular-nums"
-                              style={{ color: 'var(--error)', fontFamily: 'var(--font-mono)' }}
-                            >
-                              {s.problems}
-                            </span>
-                          </div>
-                        ) : (
-                          <span
-                            className="text-xs tabular-nums"
-                            style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
-                          >
-                            0
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  <SentinelRow list={seriesList} colSpan={4} t={t} />
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState label={t('series.empty')} />
-          )}
-        </div>
-        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-          {t('series.hint')}{' '}
-          <Link to="/wanted" className="underline" style={{ color: 'var(--accent)' }}>
-            {t('series.wanted_link')}
-          </Link>
-        </p>
-      </Section>
 
       {/* Problem items (failed / unmatched) */}
       <Section title={t('problems.title')}>

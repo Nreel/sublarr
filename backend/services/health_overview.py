@@ -2,12 +2,11 @@
 
 Aggregates three "where does it hurt" views from data that already exists:
 
-  * ``series``   — which series/movies have missing subtitles, and how many
-                   of their wanted items are stuck in a failure state.
-  * ``problems`` — the concrete wanted items that failed or were classified
-                   with a ``failure_kind`` (no_result, provider_error,
-                   unsourceable, ...), i.e. episodes the pipeline could not
-                   satisfy or match.
+  * ``problems`` — the concrete wanted items carrying an error: failed outright,
+                   classified with a ``failure_kind`` (no_result, provider_error,
+                   unsourceable, ...), or holding a recorded error message /
+                   error count. Per-title roll-ups live on /wanted, so this page
+                   lists items rather than titles.
   * ``providers``— per-provider health: circuit-breaker state merged with
                    the hit/failure counters from provider_stats.
   * ``translation``— translation-pipeline health: per-backend failure counters
@@ -28,15 +27,15 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import case, func, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from providers.manager_status_mixin import _classify_health
 
 logger = logging.getLogger(__name__)
 
-# No row caps. The page exists to be trusted: a list truncated at 50 series
-# hides the series that hurt most when there are 51, and the reader cannot
+# No row caps. The page exists to be trusted: a list truncated at 50 items
+# hides the items that hurt most when there are 51, and the reader cannot
 # tell "no more problems" from "not shown". The frontend renders in chunks
 # (see ScrollList-style infinite scroll in HealthPage) instead of trimming
 # the payload.
@@ -53,8 +52,23 @@ _FAILED_JOB_STATUS = "failed"
 
 
 def _is_problem_clause(wanted_model):
-    """Filter: item is stuck — failed outright or classified with a failure kind."""
-    return (wanted_model.status == "failed") | (wanted_model.failure_kind.isnot(None))
+    """Filter: item carries an error.
+
+    Three signals, because the scheduler records failures in three places:
+    ``status == "failed"`` (set by status changes, e.g. the bulk status API),
+    ``failure_kind`` (set by every scheduler outcome), and the error side
+    (``error_count`` / ``last_error_at`` / a non-empty ``error`` note) which
+    can outlive a kind — an item put back to ``wanted`` with an error message
+    keeps the note while losing its kind, and a row that only ever got a
+    provider fault without a kind would otherwise show nowhere.
+    """
+    return (
+        (wanted_model.status == "failed")
+        | (wanted_model.failure_kind.isnot(None))
+        | (wanted_model.error_count > 0)
+        | (wanted_model.last_error_at.isnot(None))
+        | (wanted_model.error.isnot(None) & (wanted_model.error != ""))
+    )
 
 
 # Job failures that broke before a backend was ever reached. The Health page
@@ -125,53 +139,6 @@ def get_library_health() -> dict:
     from extensions import db
 
     session = db.session
-
-    # ── series/movies with missing subtitles ────────────────────────────────
-    problem_case = case((_is_problem_clause(WantedItem), 1), else_=0)
-    # Per-series breakdown of WHY the stuck items are stuck. The Problems
-    # column used to be a bare number: three episodes failing because the
-    # media file vanished and three because no provider matched looked
-    # identical, and only one of those has a setting to fix it. Rows whose
-    # status is 'failed' with no recorded kind share the 'failed' bucket.
-    kind_case = case((WantedItem.failure_kind.is_(None), "failed"), else_=WantedItem.failure_kind)
-    kind_counts: dict[tuple[str, str], dict[str, int]] = {}
-    for row in session.execute(
-        select(
-            WantedItem.title,
-            WantedItem.item_type,
-            kind_case.label("kind"),
-            func.count(WantedItem.id).label("count"),
-        )
-        .where(_is_problem_clause(WantedItem))
-        .where(WantedItem.status.notin_(_EXCLUDED_STATUSES))
-        .group_by(WantedItem.title, WantedItem.item_type, kind_case)
-    ).all():
-        kinds = kind_counts.setdefault((row[0] or "?", row[1]), {})
-        kinds[row[2]] = int(row[3] or 0)
-    series_rows = session.execute(
-        select(
-            WantedItem.title,
-            WantedItem.item_type,
-            func.count(WantedItem.id).label("missing"),
-            func.sum(problem_case).label("problems"),
-        )
-        .where(WantedItem.status.notin_(_EXCLUDED_STATUSES))
-        .group_by(WantedItem.title, WantedItem.item_type)
-        # Stuck items first: the table answers "where does it hurt", and a
-        # series with 40 missing-but-searchable episodes is not more urgent
-        # than one with 5 episodes that no provider can source.
-        .order_by(func.sum(problem_case).desc(), func.count(WantedItem.id).desc(), WantedItem.title)
-    ).all()
-    series = [
-        {
-            "title": row[0] or "?",
-            "item_type": row[1],
-            "missing": int(row[2] or 0),
-            "problems": int(row[3] or 0),
-            "problem_kinds": kind_counts.get((row[0] or "?", row[1]), {}),
-        }
-        for row in series_rows
-    ]
 
     # ── concrete problem items (failed / unmatched episodes) ────────────────
     problem_rows = (
@@ -426,7 +393,11 @@ def get_library_health() -> dict:
     )
     unmatched_total = (
         session.execute(
-            select(func.count(WantedItem.id)).where(WantedItem.failure_kind == "unsourceable")
+            select(func.count(WantedItem.id))
+            .where(WantedItem.failure_kind == "unsourceable")
+            # Same exclusion as the list below: an ignored item is not a
+            # problem the page can show, so the tile must not count it.
+            .where(WantedItem.status.notin_(_EXCLUDED_STATUSES))
         ).scalar_one()
         or 0
     )
@@ -436,7 +407,6 @@ def get_library_health() -> dict:
             "wanted": int(wanted_total),
             "problems": int(problems_total),
             "unmatched": int(unmatched_total),
-            "series_affected": len(series),
             "providers_degraded": sum(1 for p in providers if p["degraded"]),
             # Reported apart from health on purpose: an install that has not
             # searched yet says nothing about whether its providers work.
@@ -444,7 +414,6 @@ def get_library_health() -> dict:
                 1 for p in providers if p["status_reason"] == "no_activity"
             ),
         },
-        "series": series,
         "problems": problems,
         "providers": providers,
         "translation": translation,

@@ -20,12 +20,13 @@ def health_library():
         - System
       summary: Library health overview
       description: >
-        Aggregated "where does it hurt" view: series/movies with missing
-        subtitles, wanted items stuck in a failure state (including
-        unmatched/unsourceable episodes), per-provider health derived
-        from circuit-breaker states and provider statistics, and
-        translation-pipeline health (per-backend failure counters and the
-        most recent failed translation calls).
+        Aggregated "where does it hurt" view: wanted items carrying an error
+        (failed outright, classified with a failure kind, or holding a
+        recorded error note — including unmatched/unsourceable episodes),
+        per-provider health derived from circuit-breaker states and provider
+        statistics, and translation-pipeline health (per-backend failure
+        counters and the most recent failed translation calls). Per-title
+        roll-ups live on /wanted.
       security:
         - apiKeyAuth: []
       responses:
@@ -40,10 +41,6 @@ def health_library():
                     type: object
                     additionalProperties:
                       type: integer
-                  series:
-                    type: array
-                    items:
-                      type: object
                   problems:
                     type: array
                     items:

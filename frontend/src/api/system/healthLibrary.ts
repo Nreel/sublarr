@@ -1,16 +1,6 @@
 /** Library health overview — GET /api/v1/health/library (Health page). */
 import { api } from '../core';
 
-export interface HealthSeriesRow {
-  title: string;
-  item_type: string;
-  missing: number;
-  problems: number;
-  /** Per failure kind behind `problems` (kind -> count); `failed` holds rows
-   *  with no recorded kind. Sorted by nothing server-side — sort by count. */
-  problem_kinds: Record<string, number>;
-}
-
 export interface HealthProblemRow {
   id: number;
   title: string;
@@ -94,13 +84,12 @@ export interface LibraryHealth {
     wanted: number;
     problems: number;
     unmatched: number;
-    series_affected: number;
     providers_degraded: number;
     /** Providers nothing has asked yet — reported apart from health, because
      *  an install that has not searched says nothing about whether they work. */
     providers_no_activity: number;
   };
-  series: HealthSeriesRow[];
+  /** Wanted items carrying an error, newest first; complete, painted in chunks. */
   problems: HealthProblemRow[];
   providers: HealthProviderRow[];
   translation: HealthTranslation;

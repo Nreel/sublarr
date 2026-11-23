@@ -7,21 +7,8 @@
     "wanted": "Missing subtitles",
     "problems": "Problem items",
     "unmatched": "Unmatched",
-    "series_affected": "Series affected",
     "providers_degraded": "Providers degraded",
     "providers_no_activity": "Providers not yet asked"
-  },
-  "series": {
-    "title": "Series & movies with missing subtitles",
-    "col_title": "Title",
-    "col_type": "Type",
-    "col_missing": "Missing",
-    "col_problems": "Problems",
-    "type_episode": "Series",
-    "type_movie": "Movie",
-    "empty": "No missing subtitles — everything is covered.",
-    "hint": "Details and actions per episode live on the",
-    "wanted_link": "Wanted page"
   },
   "problems": {
     "title": "Failed & unmatched items",
@@ -162,7 +149,6 @@
     "state_closed": "OK",
     "state_open": "Open",
     "state_half_open": "Half-open",
-    "auto_disabled": "Auto-disabled",
     "empty": "No provider activity recorded yet."
   },
   "translation": {

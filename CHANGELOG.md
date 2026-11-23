@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The Health page lists problems, not titles** — *Series & movies with
+  missing subtitles* duplicated what `/wanted` already shows (per-title
+  wanted items with filters, search and download actions), so it is gone,
+  along with the *Series affected* tile and `GET /api/v1/health/library`'s
+  `series` / `totals.series_affected`. The page keeps *Failed & unmatched
+  items*, *Provider health* and *Translation health*.
+
+### Fixed
+- **Failed & unmatched items covers every error signal** — the list asked only
+  for `status == "failed"` or a recorded `failure_kind`, so an item requeued to
+  `wanted` (status changed, kind cleared) that still carried an error message,
+  an `error_count`, or a `last_error_at` showed nowhere. The filter now matches
+  the error side too; the payload is still complete (no row cap) and paints in
+  chunks as you scroll.
+- **The *Unmatched* tile matches the list** — it counted `unsourceable` rows
+  including ignored ones, so the figure could exceed what the page listed.
+- **Provider health says each verdict once** — an auto-disabled provider
+  rendered "Auto-disabled" twice in the *State* column, once as the breaker
+  chip and once as the reason badge. The chip is now the breaker state alone;
+  auto-disabling renders once, as the badge that carries the explanation and
+  the link to the provider settings.
+
 ## [1.23.2] - 2026-11-23
 
 ### Fixed

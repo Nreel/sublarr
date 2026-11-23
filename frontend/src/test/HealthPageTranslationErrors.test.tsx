@@ -18,11 +18,9 @@ const health: LibraryHealth = {
     wanted: 1,
     problems: 0,
     unmatched: 0,
-    series_affected: 1,
     providers_degraded: 0,
     providers_no_activity: 0,
   },
-  series: [],
   problems: [],
   providers: [],
   translation: {

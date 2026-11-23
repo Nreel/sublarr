@@ -19,6 +19,8 @@ def _add_wanted(app, title, status="wanted", failure_kind=None, item_type="episo
             season_episode=kw.get("season_episode", "S01E01"),
             target_language="de",
             error=kw.get("error", ""),
+            error_count=kw.get("error_count", 0),
+            last_error_at=kw.get("last_error_at"),
             search_count=kw.get("search_count", 0),
             added_at=now,
             updated_at=now,
@@ -133,7 +135,6 @@ class TestLibraryHealthService:
         result = get_library_health()
         assert result["totals"]["wanted"] == 0
         assert result["totals"]["problems"] == 0
-        assert result["series"] == []
         assert result["problems"] == []
         assert result["translation"] == {
             "failures_7d": 0,
@@ -143,31 +144,60 @@ class TestLibraryHealthService:
             "pipeline_errors": [],
         }
 
-    def test_series_aggregation_and_problem_items(self, client):
+    def test_problem_items_cover_every_error_signal(self, client):
         app = client.application
         _add_wanted(app, "Show A", status="wanted", file_path="/m/a1.mkv")
         _add_wanted(app, "Show A", status="failed", error="File not found", file_path="/m/a2.mkv")
         _add_wanted(app, "Show A", failure_kind="unsourceable", file_path="/m/a3.mkv")
+        # Requeued by an operator: status back to 'wanted' and no recorded kind,
+        # but the fault is still on the row. Only the error side carries it, so
+        # a clause that reads status/kind alone would hide it.
+        _add_wanted(app, "Show A", status="wanted", error="Provider returned 500", file_path="/m/a4.mkv")
+        _add_wanted(
+            app,
+            "Show A",
+            status="wanted",
+            error_count=2,
+            last_error_at=datetime.now(UTC),
+            file_path="/m/a5.mkv",
+        )
         _add_wanted(app, "Show B", status="wanted", file_path="/m/b1.mkv")
+        # Ignored rows are never shown, and never counted — not even as unmatched.
         _add_wanted(app, "Show C", status="ignored", file_path="/m/c1.mkv")
+        _add_wanted(app, "Show C", status="ignored", failure_kind="unsourceable", file_path="/m/c2.mkv")
 
         resp = client.get("/api/v1/health/library")
         assert resp.status_code == 200
         body = resp.get_json()
 
-        assert body["totals"]["wanted"] == 4  # ignored excluded
-        assert body["totals"]["problems"] == 2
+        assert body["totals"]["wanted"] == 6  # ignored excluded
+        assert body["totals"]["problems"] == 4
         assert body["totals"]["unmatched"] == 1
 
-        by_title = {s["title"]: s for s in body["series"]}
-        assert by_title["Show A"]["missing"] == 3
-        assert by_title["Show A"]["problems"] == 2
-        assert by_title["Show B"]["missing"] == 1
-        assert "Show C" not in by_title
-
+        paths = {p["title"] for p in body["problems"]}
+        assert paths == {"Show A"}
+        assert len(body["problems"]) == 4
         kinds = {p["failure_kind"] for p in body["problems"]}
         assert "unsourceable" in kinds
+        assert kinds == {None, "unsourceable"}  # error-only rows carry no kind
+        assert {p["status"] for p in body["problems"]} == {"failed", "wanted"}
         assert all(p["status"] != "ignored" for p in body["problems"])
+        assert {p["error"] for p in body["problems"]} == {"File not found", "Provider returned 500", ""}
+        # The per-title roll-up moved to /wanted; the payload no longer carries it.
+        assert "series" not in body
+        assert "series_affected" not in body["totals"]
+
+    def test_problem_list_is_not_truncated(self, client):
+        app = client.application
+        for i in range(120):
+            _add_wanted(app, f"Show {i}", failure_kind="provider_error", file_path=f"/m/{i}.mkv")
+
+        resp = client.get("/api/v1/health/library")
+        assert resp.status_code == 200
+        body = resp.get_json()
+        # The frontend paints in chunks; the payload must never drop rows.
+        assert len(body["problems"]) == 120
+        assert body["totals"]["problems"] == 120
 
     def test_provider_health_merges_breaker_and_stats(self, client):
         app = client.application

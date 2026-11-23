@@ -7,21 +7,8 @@
     "wanted": "Fehlende Untertitel",
     "problems": "Problem-Einträge",
     "unmatched": "Nicht gematcht",
-    "series_affected": "Betroffene Serien",
     "providers_degraded": "Provider beeinträchtigt",
     "providers_no_activity": "Provider ohne Aktivität"
-  },
-  "series": {
-    "title": "Serien & Filme mit fehlenden Untertiteln",
-    "col_title": "Titel",
-    "col_type": "Typ",
-    "col_missing": "Fehlend",
-    "col_problems": "Probleme",
-    "type_episode": "Serie",
-    "type_movie": "Film",
-    "empty": "Keine fehlenden Untertitel — alles abgedeckt.",
-    "hint": "Details und Aktionen pro Episode gibt es auf der",
-    "wanted_link": "Wanted-Seite"
   },
   "problems": {
     "title": "Fehlgeschlagene & nicht gematchte Einträge",
@@ -162,7 +149,6 @@
     "state_closed": "OK",
     "state_open": "Offen",
     "state_half_open": "Halb offen",
-    "auto_disabled": "Auto-deaktiviert",
     "empty": "Noch keine Provider-Aktivität aufgezeichnet."
   },
   "translation": {
