@@ -46,16 +46,21 @@ def get_sonarr_client(instance_name=None):
                 client = SonarrClient(inst["url"], inst["api_key"])
                 _clients_cache[instance_name] = client
                 return client
-        # Name not found — fall back to first available instance
+        # Name not found — fall back to first available instance. Cached under
+        # the instance it actually talks to: caching it under the missing name
+        # labelled rows as one instance while listing another's files, and
+        # survived until the next invalidate_client() even after an instance
+        # with that name was added.
         if instances:
+            real_name = instances[0].get("name")
             logger.warning(
                 "Sonarr instance '%s' not found; falling back to first instance '%s'",
                 instance_name,
-                instances[0].get("name"),
+                real_name,
             )
             inst = instances[0]
-            client = SonarrClient(inst["url"], inst["api_key"])
-            _clients_cache[instance_name] = client
+            client = _clients_cache.get(real_name) or SonarrClient(inst["url"], inst["api_key"])
+            _clients_cache[real_name] = client
             return client
         logger.warning("Sonarr instance '%s' not found and no instances configured", instance_name)
         return None

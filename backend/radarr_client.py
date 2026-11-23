@@ -46,16 +46,18 @@ def get_radarr_client(instance_name=None):
                 client = RadarrClient(inst["url"], inst["api_key"])
                 _clients_cache[instance_name] = client
                 return client
-        # Name not found — fall back to first available instance
+        # Name not found — fall back to first available instance. Cached under
+        # the instance it actually talks to; see the Sonarr twin above.
         if instances:
+            real_name = instances[0].get("name")
             logger.warning(
                 "Radarr instance '%s' not found; falling back to first instance '%s'",
                 instance_name,
-                instances[0].get("name"),
+                real_name,
             )
             inst = instances[0]
-            client = RadarrClient(inst["url"], inst["api_key"])
-            _clients_cache[instance_name] = client
+            client = _clients_cache.get(real_name) or RadarrClient(inst["url"], inst["api_key"])
+            _clients_cache[real_name] = client
             return client
         logger.warning("Radarr instance '%s' not found and no instances configured", instance_name)
         return None

@@ -471,6 +471,38 @@ class WantedRepository(BaseRepository, _WantedUpsertMixin, _WantedUpdatesMixin):
         rows = self.session.execute(stmt).scalars().all()
         return [self._row_to_wanted(r) for r in rows]
 
+    def get_wanted_paths_for_title(
+        self, *, sonarr_series_id: int | None = None, radarr_movie_id: int | None = None
+    ) -> set:
+        """File paths of the wanted rows of ONE title — the paths a failed scan must keep.
+
+        A title whose scan raised contributes no paths to the pass, and the
+        pass-end cleanup deletes every row whose path was not seen. Returning
+        what the database already holds protects those rows until the title
+        scans again. Never raises: a lookup failure returns an empty set and
+        the row is re-created by the next scan instead of the scan dying.
+        """
+        try:
+            if sonarr_series_id is not None:
+                stmt = select(WantedItem.file_path).where(
+                    WantedItem.sonarr_series_id == sonarr_series_id
+                )
+            elif radarr_movie_id is not None:
+                stmt = select(WantedItem.file_path).where(
+                    WantedItem.radarr_movie_id == radarr_movie_id
+                )
+            else:
+                return set()
+            return {row[0] for row in self.session.execute(stmt).all() if row[0]}
+        except Exception:
+            logger.debug(
+                "wanted paths of title %s/%s lookup failed",
+                sonarr_series_id,
+                radarr_movie_id,
+                exc_info=True,
+            )
+            return set()
+
     def get_wanted_by_series(self, sonarr_series_id: int) -> list[dict]:
         """Return all wanted-status items for a Sonarr series id."""
         rows = (

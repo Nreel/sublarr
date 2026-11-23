@@ -22,6 +22,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shows an error toast. The button is disabled when no language profile is
   configured (the scan cannot resolve target languages without one), with a
   tooltip naming the missing setting.
+- **A language profile with more languages than names scans all of them** —
+  the per-title scan paired `target_languages` with `target_language_names`
+  by position, so a profile listing `de, fr, es` with only one display name
+  scanned one language, and the cleanup of languages *not* scanned then
+  deleted the pending rows of the others. `target_language_names` is
+  display-only; the scan loops over the languages, and a profile with no
+  languages at all now falls back to the global target language (as the
+  standalone scanner always did) instead of scanning nothing.
+- **One unreadable title no longer costs the whole scan** — an exception
+  inside a single series/movie scan (a dead database connection, a broken
+  profile row) escaped to the source-level handler, which ended that
+  instance, skipped every later instance and flagged the pass, freezing the
+  incremental watermark. Titles after the failing one were never looked at,
+  and their wanted rows — absent from the paths the pass had collected — were
+  pruned by the cleanup of any pass that did prune. A failing title is now
+  skipped on its own: its existing rows join the pass's path set so they
+  survive, and everything after it is still scanned.
+- **New episodes are noticed by the next incremental scan** — the incremental
+  Sonarr filter compared only the series' `added` date (it read a
+  `lastInfoSync` field Sonarr does not return), so a series that gained
+  episodes, or had them re-imported, looked unchanged and its missing
+  subtitles waited for the periodic full scan — one cycle in six. The filter
+  now also rescans a series whose episode-file count or size on disk changed.
+- **`[Forced]` items with an embedded track are cleared** — the cleanup recheck
+  of a `[Forced]` row probed the file for nothing, while the scan accepts an
+  embedded forced/"Signs & Songs" track. Those rows were never dropped and
+  were searched on every pass, downloading duplicates of a track already in
+  the video.
+- **A stale instance name no longer mislabels rows** — asking for a Sonarr or
+  Radarr instance that is not configured falls back to the first one, but the
+  fallback client was cached under the *missing* name for the rest of the
+  process: rows kept that name while listing another instance's files, and an
+  instance added under that name later was never reached. It is cached under
+  the instance it actually talks to now. Single-title scans (the webhook and
+  `POST /wanted/scan?type=series|movie`) also wrote rows with an empty
+  instance name, which the "source answered empty" guard cannot count — those
+  rows were the ones pruned when a source replied `200 []` while starting.
+- **Standalone subtitles compete on quality** — a standalone title whose only
+  subtitle was an SRT was filed without `upgrade_candidate` or
+  `current_score`, which the *arr scanner files, so the search step treated
+  it as having nothing and replaced a good SRT with any provider result.
 
 ### Added
 - **Every Wanted header button describes its action** — *Scan Embedded*,

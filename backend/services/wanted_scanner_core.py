@@ -62,6 +62,26 @@ def _own_translation_kept_open(item: dict, path: str, target_lang: str, fmt: str
     return _keep_seeking_or_none(item) is not False
 
 
+def _cleanup_probe(path: str, settings):
+    """Cached ffprobe data of a wanted row's file, or None when embedded subs are off.
+
+    The [Forced] recheck in ``_cleanup`` needs it to see an embedded forced or
+    "Signs & Songs" track — the same rule the scans apply. Never raises: a
+    file that cannot be probed just answers "no embedded tracks".
+    """
+    if not getattr(settings, "use_embedded_subs", False) or not str(path).lower().endswith(
+        (".mkv", ".mp4", ".m4v")
+    ):
+        return None
+    try:
+        from ass_utils import get_media_streams
+
+        return get_media_streams(path, use_cache=True)
+    except Exception:
+        logger.debug("cleanup: probe failed for %s", path, exc_info=True)
+        return None
+
+
 def _added_since(added_at, since: datetime) -> bool:
     """Whether a row's ``added_at`` is at or after ``since`` (naive means UTC)."""
     if isinstance(added_at, str):
@@ -104,6 +124,9 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
         # items the running full pass has finished: {(source, instance, id): paths}.
         self._resume = None
         self._pass_done = None
+        # Episode-file statistics per (source, instance, series id): what an
+        # incremental scan compares against (wanted_scanner_sources).
+        self._episode_fingerprints: dict[tuple, tuple] = {}
 
     # ─── Properties ──────────────────────────────────────────────────────
 
@@ -408,7 +431,11 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
                 return {"error": "sonarr_not_configured"}
 
             added, updated, _ = scan_sonarr_series(
-                sonarr, series_id, settings, auto_extract_fn=self._maybe_auto_extract
+                sonarr,
+                series_id,
+                settings,
+                auto_extract_fn=self._maybe_auto_extract,
+                instance_name=self._default_instance_name("sonarr"),
             )
             duration = round(time.time() - start, 1)
 
@@ -450,7 +477,11 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
                 return {"error": f"movie_{movie_id}_not_found"}
 
             added, updated, _ = scan_radarr_movie(
-                radarr, movie, settings, auto_extract_fn=self._maybe_auto_extract
+                radarr,
+                movie,
+                settings,
+                auto_extract_fn=self._maybe_auto_extract,
+                instance_name=self._default_instance_name("radarr"),
             )
             duration = round(time.time() - start, 1)
 
@@ -492,6 +523,8 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
         items = get_wanted_items_for_cleanup()
         to_remove_ids = []
         presence = PathPresence()
+        # Read once, not per row: this loop walks the whole wanted table.
+        settings = get_settings()
 
         for item in items:
             if wanted_item_path_refusal(item):
@@ -509,13 +542,16 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
                 # Unreadable or on a share that is offline: not a deleted file.
                 continue
 
-            settings = get_settings()
             if item.get("subtitle_type") == "forced":
                 # A [Forced] item waits for the forced file, not the full one:
                 # checking the full subtitle removed every [Forced] item of a
-                # library that already had subtitles.
+                # library that already had subtitles. The probe matters too --
+                # the scans accept an embedded forced/"Signs & Songs" track
+                # (``detect_existing_target_for_lang(..., subtitle_type="forced")``),
+                # so without it those rows were never dropped and were searched
+                # on every pass.
                 if target_lang and detect_existing_target_for_lang(
-                    path, target_lang, subtitle_type="forced"
+                    path, target_lang, _cleanup_probe(path, settings), subtitle_type="forced"
                 ):
                     to_remove_ids.append(item["id"])
                     continue

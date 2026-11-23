@@ -245,6 +245,36 @@ def _wanted_kinds(profile: dict) -> tuple[bool, bool]:
     return wants_full, wants_forced
 
 
+def _profile_target_languages(profile: dict, settings) -> list[str]:
+    """Target languages of the governing profile, canonical order, no duplicates.
+
+    ``target_language_names`` is display-only and is NOT used to size the
+    loop: a profile whose names list is shorter than its languages used to
+    scan only the first len(names) languages, and ``_drop_other_languages``
+    then deleted the pending rows of the languages nobody scanned (#234 read
+    backwards). A profile with no target languages at all falls back to the
+    global language — as the standalone scanner's ``_get_target_languages``
+    always did — rather than scanning nothing.
+    """
+    raw = profile.get("target_languages") or []
+    langs: list[str] = []
+    for lang in raw if isinstance(raw, (list, tuple)) else []:
+        if not isinstance(lang, str):
+            continue
+        code = lang.strip()
+        if code and code.lower() not in {c.lower() for c in langs}:
+            langs.append(code)
+    if not langs:
+        logger.warning(
+            "Wanted scan: profile %r has no target languages — falling back to the global "
+            "target language %r. Configure the profile to silence this warning.",
+            profile.get("name", "?"),
+            settings.target_language,
+        )
+        langs = [settings.target_language]
+    return langs
+
+
 def _drop_pending(unwanted: dict[str, set]) -> None:
     """Remove wanted rows of a kind the profile no longer asks for.
 
@@ -336,8 +366,7 @@ def scan_radarr_movie(
     scanned_paths.add(mapped_path)
 
     profile = get_movie_profile(movie_id)
-    target_languages = profile.get("target_languages", [settings.target_language])
-    target_language_names = profile.get("target_language_names", [settings.target_language_name])
+    target_languages = _profile_target_languages(profile, settings)
     keep_seeking_mt = bool(profile.get("mt_keep_seeking_original"))
 
     probe_data = None
@@ -350,7 +379,7 @@ def scan_radarr_movie(
     wants_full, wants_forced = _wanted_kinds(profile)
     unwanted: dict[str, set] = {"full": set(), "forced": set()}
 
-    for target_lang, _target_name in zip(target_languages, target_language_names):
+    for target_lang in target_languages:
         title = movie_title
         if len(target_languages) > 1:
             title = f"{title} [{target_lang.upper()}]"
@@ -452,8 +481,7 @@ def scan_sonarr_series(
         return 0, 0, set()
 
     profile = get_series_profile(series_id)
-    target_languages = profile.get("target_languages", [settings.target_language])
-    target_language_names = profile.get("target_language_names", [settings.target_language_name])
+    target_languages = _profile_target_languages(profile, settings)
     keep_seeking_mt = bool(profile.get("mt_keep_seeking_original"))
 
     added = 0
@@ -525,7 +553,7 @@ def scan_sonarr_series(
             logger.debug("Wanted scan: %s not probed (media gate busy), skipped", mapped_path)
             continue
 
-        for target_lang, _target_name in zip(target_languages, target_language_names):
+        for target_lang in target_languages:
             title = f"{series_title} — {season_episode}"
             if len(target_languages) > 1:
                 title = f"{title} [{target_lang.upper()}]"

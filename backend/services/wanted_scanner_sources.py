@@ -14,7 +14,7 @@ import logging
 import time
 
 from config import get_settings
-from db.wanted import batch_upsert_context
+from db.wanted import batch_upsert_context, get_wanted_paths_for_title
 
 # Aliased import: tests patch "services.wanted_scanner_sources._extract_embedded_sub".
 from services.embedded_extractor import extract_embedded_sub as _extract_embedded_sub
@@ -22,6 +22,16 @@ from services.scheduler.cancellation import abort_requested
 from services.wanted_item_scanner import scan_radarr_movie, scan_sonarr_series
 
 logger = logging.getLogger(__name__)
+
+
+def _episode_file_stats(series: dict) -> tuple:
+    """Sonarr's episode-file fingerprint of a series (count, size on disk).
+
+    Both live in the ``/series`` response, so the incremental scan can see a
+    new or re-imported episode file without asking for the episode files.
+    """
+    stats = series.get("statistics") or {}
+    return (stats.get("episodeFileCount"), stats.get("sizeOnDisk"))
 
 
 def _lookup_target_language(item_id: int) -> str | None:
@@ -59,6 +69,45 @@ def _enqueue_automation(*, wanted_item_id: int, file_path: str, target_language:
 
 class _WantedScanSourcesMixin:
     """Sonarr/Radarr/standalone scan loops composed into WantedScanner."""
+
+    @staticmethod
+    def _default_instance_name(kind: str) -> str:
+        """Name of the instance ``get_sonarr_client()``/``get_radarr_client()`` use.
+
+        A single-title scan (webhook, /wanted/scan?type=series) writes rows
+        through the unnamed client, which is the first instance. Without the
+        name those rows are tagged "" and the empty-source guard — which asks
+        how many rows belong to an instance — cannot see them, so a source
+        answering ``200 []`` while starting pruned exactly those rows.
+        """
+        try:
+            from config import get_radarr_instances, get_sonarr_instances
+
+            instances = get_sonarr_instances() if kind == "sonarr" else get_radarr_instances()
+            if instances:
+                return instances[0].get("name") or "Default"
+        except Exception:
+            logger.debug("%s instance name lookup failed", kind, exc_info=True)
+        return ""
+
+    def _episode_files_changed(self, key, series) -> bool:
+        """True when a series' episode files moved since it was last scanned.
+
+        Sonarr's ``SeriesResource`` has no ``lastInfoSync``: the filter used to
+        read that absent field and fall back to ``added``, so new episodes and
+        re-imports of an already-added series were invisible to every
+        incremental scan and had to wait for the full pass (one scan in six).
+        ``statistics`` moves exactly when files move.
+
+        A series never seen before is NOT rescanned here — the boot scan or the
+        periodic full pass covers it — so the first incremental pass after a
+        restart only records baselines instead of re-walking the library.
+        """
+        stats = series.get("statistics") or {}
+        if not stats:
+            return False
+        previous = self._episode_fingerprints.get(key)
+        return previous is not None and previous != _episode_file_stats(series)
 
     def _resumed(self, key, all_paths) -> bool:
         """True when an earlier, stopped part of this full pass already scanned ``key``.
@@ -150,11 +199,12 @@ class _WantedScanSourcesMixin:
             return 0, 0, set()
 
         if since:
-            since_iso = since.isoformat() + "Z"
+            since_iso = since.strftime("%Y-%m-%dT%H:%M:%S")
             series_list = [
                 s
                 for s in series_list
-                if (s.get("lastInfoSync") or s.get("added") or "") >= since_iso
+                if (s.get("added") or "") >= since_iso
+                or self._episode_files_changed(("sonarr", instance_name, s.get("id")), s)
             ]
             logger.debug(
                 "Incremental Sonarr scan: %d series modified since %s",
@@ -186,19 +236,39 @@ class _WantedScanSourcesMixin:
                 continue
             if abort_requested():
                 break
-            with batch_upsert_context():
-                a, u, paths = scan_sonarr_series(
-                    sonarr,
-                    series_id,
-                    settings,
-                    series,
+            failed = False
+            try:
+                with batch_upsert_context():
+                    a, u, paths = scan_sonarr_series(
+                        sonarr,
+                        series_id,
+                        settings,
+                        series,
+                        instance_name,
+                        auto_extract_fn=self._maybe_auto_extract,
+                    )
+            except Exception as exc:
+                # One title must not cost the rest of the instance — and every
+                # later instance — its scan. The outer try in _scan_all_sonarr
+                # is for source-level failures; a bug or a transient DB error
+                # in a single series would abort the sweep and freeze the
+                # watermark for it. Its rows stay: they are absent from this
+                # pass's path set, so the pass-end cleanup would delete them.
+                failed = True
+                a = u = 0
+                paths = get_wanted_paths_for_title(sonarr_series_id=series_id)
+                logger.warning(
+                    "Wanted scan: %s (%s) failed — %s; skipped, its rows are kept",
+                    series.get("title") or series_id,
                     instance_name,
-                    auto_extract_fn=self._maybe_auto_extract,
+                    exc,
                 )
             total_added += a
             total_updated += u
             all_paths.update(paths)
-            self._mark_done(key, paths)
+            if not failed:
+                self._mark_done(key, paths)
+                self._episode_fingerprints[key] = _episode_file_stats(series)
             self._progress.update({"current": idx, "added": total_added, "updated": total_updated})
             if self._socketio:
                 self._socketio.emit("wanted_scan_progress", dict(self._progress))
@@ -243,7 +313,7 @@ class _WantedScanSourcesMixin:
             return 0, 0, set()
 
         if since:
-            since_iso = since.isoformat() + "Z"
+            since_iso = since.strftime("%Y-%m-%dT%H:%M:%S")
             movies = [
                 m
                 for m in movies
@@ -277,18 +347,34 @@ class _WantedScanSourcesMixin:
                 continue
             if abort_requested():
                 break
-            with batch_upsert_context():
-                a, u, paths = scan_radarr_movie(
-                    radarr,
-                    movie,
-                    settings,
+            failed = False
+            try:
+                with batch_upsert_context():
+                    a, u, paths = scan_radarr_movie(
+                        radarr,
+                        movie,
+                        settings,
+                        instance_name,
+                        auto_extract_fn=self._maybe_auto_extract,
+                    )
+            except Exception as exc:
+                # See the Sonarr twin above: a single movie must not end the
+                # instance sweep, and its rows must survive the pass-end
+                # cleanup that prunes everything this pass did not see.
+                failed = True
+                a = u = 0
+                paths = get_wanted_paths_for_title(radarr_movie_id=movie.get("id"))
+                logger.warning(
+                    "Wanted scan: %s (%s) failed — %s; skipped, its rows are kept",
+                    movie.get("title") or movie.get("id"),
                     instance_name,
-                    auto_extract_fn=self._maybe_auto_extract,
+                    exc,
                 )
             total_added += a
             total_updated += u
             all_paths.update(paths)
-            self._mark_done(key, paths)
+            if not failed:
+                self._mark_done(key, paths)
             self._progress.update({"current": idx, "added": total_added, "updated": total_updated})
             if self._socketio:
                 self._socketio.emit("wanted_scan_progress", dict(self._progress))

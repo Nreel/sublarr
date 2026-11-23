@@ -60,6 +60,35 @@ class _StandaloneProcessMixin:
         # logs it and skips the title).
         return _wanted_kinds(get_profile_for_item(owner) or {})
 
+    def _upgrade_fields(self, file_path: str, target_lang: str, existing: str | None):
+        """``(upgrade_candidate, current_score)`` for a sidecar SRT under upgrades.
+
+        The Sonarr/Radarr scanner files these two fields
+        (``wanted_item_scanner._check_language_for_item``); standalone never
+        did, so a title whose only subtitle was an SRT looked like a plain
+        missing item and any provider result beat the file already on disk
+        whatever its quality. Embedded tracks carry no score to beat --
+        extraction decides those, and their row keeps ``existing_sub``.
+        """
+        if existing != "srt":
+            return False, 0
+        from config import get_settings
+
+        if not get_settings().upgrade_enabled:
+            return False, 0
+        from translator import find_existing_target_file
+        from upgrade_scorer import score_existing_subtitle
+
+        srt_path = find_existing_target_file(file_path, target_lang, "srt")
+        if not srt_path:
+            return False, 0
+        try:
+            _, score = score_existing_subtitle(srt_path)
+        except Exception:
+            logger.debug("standalone: score of %s failed", srt_path, exc_info=True)
+            return False, 0
+        return True, score
+
     def _upsert_wanted_for_language(
         self,
         *,
@@ -90,6 +119,9 @@ class _StandaloneProcessMixin:
             if not (
                 status == "wanted" and self._language_satisfied(file_path, target_lang, existing)
             ):
+                upgrade_candidate, current_score = self._upgrade_fields(
+                    file_path, target_lang, existing
+                )
                 upsert_wanted_item(
                     item_type=item_type,
                     file_path=file_path,
@@ -99,6 +131,8 @@ class _StandaloneProcessMixin:
                     target_language=target_lang,
                     instance_name="standalone",
                     status=status,
+                    upgrade_candidate=upgrade_candidate,
+                    current_score=current_score,
                     **episode,
                     **owner,
                 )

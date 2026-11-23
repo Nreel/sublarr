@@ -268,6 +268,15 @@ def get_wanted_for_series(series_id: int, *, standalone: bool = False) -> list:
     return _get_repo().get_wanted_for_series(series_id, standalone=standalone)
 
 
+def get_wanted_paths_for_title(
+    *, sonarr_series_id: int | None = None, radarr_movie_id: int | None = None
+) -> set:
+    """File paths of the wanted rows of one title; empty set on any failure."""
+    return _get_repo().get_wanted_paths_for_title(
+        sonarr_series_id=sonarr_series_id, radarr_movie_id=radarr_movie_id
+    )
+
+
 def get_wanted_by_subtitle_type() -> dict:
     """Get wanted item counts grouped by subtitle_type."""
     return _get_repo().get_wanted_by_subtitle_type()

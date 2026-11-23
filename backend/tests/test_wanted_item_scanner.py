@@ -718,3 +718,91 @@ def test_two_sonarr_instances_never_drop_rows_by_a_shared_profile_id():
 
     drop_langs.assert_not_called()
     drop_kinds.assert_not_called()
+
+
+def test_a_profile_with_more_languages_than_names_scans_all_of_them(tmp_path):
+    """``target_language_names`` is display-only; pairing it with the codes cut
+    every language past the first missing name, and ``_drop_other_languages``
+    then deleted the pending rows of the languages nobody scanned."""
+    from services.wanted_item_scanner import scan_sonarr_series
+
+    video = tmp_path / "ep01.mkv"
+    video.write_bytes(b"\x00" * 100)
+    mapped = str(video)
+    filed = []
+
+    def _capture(**kwargs):
+        filed.append(kwargs["target_language"])
+        return (1, False)
+
+    sonarr = MagicMock()
+    sonarr.list_episodes.return_value = [
+        {
+            "hasFile": True,
+            "id": 10,
+            "seasonNumber": 1,
+            "episodeNumber": 1,
+            "episodeFile": {"path": mapped},
+        }
+    ]
+    settings = MagicMock(
+        target_language="de",
+        target_language_name="German",
+        use_embedded_subs=False,
+        upgrade_enabled=False,
+    )
+    with (
+        patch("services.wanted_item_scanner.map_path", return_value=mapped),
+        patch(
+            "services.wanted_item_scanner.get_series_profile",
+            return_value={
+                "target_languages": ["de", "fr", "es"],
+                "target_language_names": ["German"],
+                "forced_preference": "disabled",
+            },
+        ),
+        patch("services.wanted_item_scanner.detect_existing_target_for_lang", return_value=None),
+        patch("services.wanted_item_scanner.upsert_wanted_item", side_effect=_capture),
+    ):
+        added, _, _ = scan_sonarr_series(sonarr, 1, settings, series_info={"title": "S"})
+
+    assert added == 3
+    assert filed == ["de", "fr", "es"]
+
+
+def test_a_profile_without_languages_falls_back_to_the_global_language(tmp_path):
+    """The empty profile still asks for ``settings.target_language`` — dropping it
+    here stopped a title from ever becoming wanted."""
+    from services.wanted_item_scanner import scan_radarr_movie
+
+    video = tmp_path / "movie.mkv"
+    video.write_bytes(b"\x00" * 100)
+    mapped = str(video)
+    filed = []
+
+    radarr = MagicMock()
+    settings = MagicMock(
+        target_language="de",
+        target_language_name="German",
+        use_embedded_subs=False,
+        upgrade_enabled=False,
+    )
+    with (
+        patch("services.wanted_item_scanner.map_path", return_value=mapped),
+        patch(
+            "services.wanted_item_scanner.get_movie_profile", return_value={"target_languages": []}
+        ),
+        patch("services.wanted_item_scanner.detect_existing_target_for_lang", return_value=None),
+        patch(
+            "services.wanted_item_scanner.upsert_wanted_item",
+            side_effect=lambda **kwargs: filed.append(kwargs["target_language"]) or (1, False),
+        ),
+    ):
+        added, _, _ = scan_radarr_movie(
+            radarr,
+            {"hasFile": True, "id": 1, "title": "M", "movieFile": {"path": mapped}},
+            settings,
+        )
+
+    assert added == 1
+    assert filed == ["de"]

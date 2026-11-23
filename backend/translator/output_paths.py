@@ -107,14 +107,9 @@ def detect_existing_target_for_lang(
             has_srt = True
             break
 
-    # Also check for .forced. patterns so they are not invisible to scanner
-    for tag in lang_tags:
-        if os.path.exists(f"{base}.{tag}.forced.ass"):
-            # Forced ASS exists but we're looking for full -- don't count it
-            pass
-        if os.path.exists(f"{base}.{tag}.forced.srt"):
-            # Forced SRT exists but we're looking for full -- don't count it
-            pass
+    # Forced sidecars (.de.forced.ass) deliberately do NOT satisfy the full
+    # subtitle, so they are not probed here — the [Forced] row is its own
+    # wanted item and this function's subtitle_type="forced" branch checks it.
 
     # Check embedded subtitle streams for the specific target language
     if probe_data:
