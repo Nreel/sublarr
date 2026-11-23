@@ -152,7 +152,9 @@ class TestLibraryHealthService:
         # Requeued by an operator: status back to 'wanted' and no recorded kind,
         # but the fault is still on the row. Only the error side carries it, so
         # a clause that reads status/kind alone would hide it.
-        _add_wanted(app, "Show A", status="wanted", error="Provider returned 500", file_path="/m/a4.mkv")
+        _add_wanted(
+            app, "Show A", status="wanted", error="Provider returned 500", file_path="/m/a4.mkv"
+        )
         _add_wanted(
             app,
             "Show A",
@@ -164,7 +166,9 @@ class TestLibraryHealthService:
         _add_wanted(app, "Show B", status="wanted", file_path="/m/b1.mkv")
         # Ignored rows are never shown, and never counted — not even as unmatched.
         _add_wanted(app, "Show C", status="ignored", file_path="/m/c1.mkv")
-        _add_wanted(app, "Show C", status="ignored", failure_kind="unsourceable", file_path="/m/c2.mkv")
+        _add_wanted(
+            app, "Show C", status="ignored", failure_kind="unsourceable", file_path="/m/c2.mkv"
+        )
 
         resp = client.get("/api/v1/health/library")
         assert resp.status_code == 200
@@ -182,7 +186,11 @@ class TestLibraryHealthService:
         assert kinds == {None, "unsourceable"}  # error-only rows carry no kind
         assert {p["status"] for p in body["problems"]} == {"failed", "wanted"}
         assert all(p["status"] != "ignored" for p in body["problems"])
-        assert {p["error"] for p in body["problems"]} == {"File not found", "Provider returned 500", ""}
+        assert {p["error"] for p in body["problems"]} == {
+            "File not found",
+            "Provider returned 500",
+            "",
+        }
         # The per-title roll-up moved to /wanted; the payload no longer carries it.
         assert "series" not in body
         assert "series_affected" not in body["totals"]
