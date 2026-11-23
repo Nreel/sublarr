@@ -152,8 +152,12 @@ def test_standalone_wire_id_resolves_to_its_row(app_client):
     _app, client = app_client
 
     with (
-        patch("db.standalone.get_standalone_series", return_value={"id": 4, "title": "Standalone"}) as lookup,
-        patch("services.standalone_manager.scan_series_or_fallback", return_value={"series_id": 4}) as scan,
+        patch(
+            "db.standalone.get_standalone_series", return_value={"id": 4, "title": "Standalone"}
+        ) as lookup,
+        patch(
+            "services.standalone_manager.scan_series_or_fallback", return_value={"series_id": 4}
+        ) as scan,
     ):
         resp = client.post("/api/v1/standalone/series/-4/scan")
 
@@ -165,7 +169,9 @@ def test_standalone_wire_id_resolves_to_its_row(app_client):
 def test_scanner_error_is_a_bad_gateway_and_charges_the_series(app_client):
     app, client = app_client
     _seed_items(app)
-    scanner = MagicMock(is_scanning=False, scan_series=MagicMock(return_value={"error": "sonarr_timeout"}))
+    scanner = MagicMock(
+        is_scanning=False, scan_series=MagicMock(return_value={"error": "sonarr_timeout"})
+    )
 
     with (
         patch("sonarr_client.get_sonarr_client", return_value=MagicMock()),
@@ -211,8 +217,13 @@ def test_crashed_scan_is_recorded_too(app_client):
         db.session.commit()
 
     with (
-        patch("db.standalone.get_standalone_series", return_value={"id": 3, "title": "Standalone Show"}),
-        patch("services.standalone_manager.scan_series_or_fallback", side_effect=RuntimeError("boom")),
+        patch(
+            "db.standalone.get_standalone_series",
+            return_value={"id": 3, "title": "Standalone Show"},
+        ),
+        patch(
+            "services.standalone_manager.scan_series_or_fallback", side_effect=RuntimeError("boom")
+        ),
     ):
         resp = client.post("/api/v1/standalone/series/-3/scan")
 

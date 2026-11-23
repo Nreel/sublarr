@@ -110,9 +110,9 @@ def test_a_nested_pair_still_maps_a_remote_path():
 
 
 def test_a_mapped_windows_path_is_not_remapped():
-    assert _mapped("D:\\TV=D:\\TV\\anime", UNC_FILE.replace("\\\\192.168.1.198\\kuf", "D:\\TV\\anime")) == (
-        "D:\\TV\\anime\\Anime Season\\Show\\Staffel 02\\Show.S02E01.mkv"
-    )
+    assert _mapped(
+        "D:\\TV=D:\\TV\\anime", UNC_FILE.replace("\\\\192.168.1.198\\kuf", "D:\\TV\\anime")
+    ) == ("D:\\TV\\anime\\Anime Season\\Show\\Staffel 02\\Show.S02E01.mkv")
 
 
 def test_a_windows_local_prefix_keeps_backslashes():

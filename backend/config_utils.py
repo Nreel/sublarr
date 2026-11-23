@@ -27,11 +27,7 @@ def _under_folder(path: str, folder: str, ignore_case: bool) -> bool:
     Lowering is applied only where it keeps the string length, so a caller that
     slices ``path`` at ``len(prefix)`` stays aligned with the original.
     """
-    if (
-        ignore_case
-        and len(path.lower()) == len(path)
-        and len(folder.lower()) == len(folder)
-    ):
+    if ignore_case and len(path.lower()) == len(path) and len(folder.lower()) == len(folder):
         return is_under_folder(path.lower(), folder.lower())
     return is_under_folder(path, folder)
 

@@ -682,9 +682,7 @@ class WantedRepository(BaseRepository, _WantedUpsertMixin, _WantedUpdatesMixin):
         self._commit()
         return result.rowcount
 
-    def record_series_scan_failure(
-        self, series_key: int, *, standalone: bool, message: str
-    ) -> int:
+    def record_series_scan_failure(self, series_key: int, *, standalone: bool, message: str) -> int:
         """Charge a failed series re-scan to the items that scan was meant to update.
 
         A re-scan that broke left every episode of the series wearing the state the
@@ -701,9 +699,7 @@ class WantedRepository(BaseRepository, _WantedUpsertMixin, _WantedUpdatesMixin):
         (``downloaded``/``blacklisted``/``ignored``) are skipped — the failed scan
         was not holding them up. Returns the number of rows charged.
         """
-        id_column = (
-            WantedItem.standalone_series_id if standalone else WantedItem.sonarr_series_id
-        )
+        id_column = WantedItem.standalone_series_id if standalone else WantedItem.sonarr_series_id
         stmt = (
             update(WantedItem)
             .where(

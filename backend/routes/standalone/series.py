@@ -243,9 +243,7 @@ def scan_series(series_id):
         # series' open items so the failure lands under "Failed & unmatched items".
         # ``ref.id`` is the id the wanted rows are keyed by: the standalone row id
         # (positive) or the Sonarr series id.
-        record_series_scan_failure(
-            ref.id, standalone=ref.is_standalone, message=str(scan_error)
-        )
+        record_series_scan_failure(ref.id, standalone=ref.is_standalone, message=str(scan_error))
         logger.warning("Series re-scan %s failed: %s", series_id, scan_error)
         return jsonify({"error": str(scan_error), "series_id": series_id}), 502
 
