@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.3] - 2026-11-23
+
 ### Changed
+- **Update checks follow this fork** — `/api/v1/update` queries the releases of
+  `Nreel/sublarr` instead of the upstream repository. The checked repository is
+  a setting (`BootSettings.update_repo`, env `SUBLARR_UPDATE_REPO`), so a fork
+  can point it elsewhere without a code change.
 - **Onboarding mirrors Settings, and re-runs show what is set** — the wizard
   steps now render the same surfaces as the settings pages: step 3 takes any
   number of Sonarr/Radarr instances (`sonarr_instances_json` /
@@ -33,6 +39,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   label; each button now carries a hover description (what it does, and what it
   does *not* — re-scan reads existing subtitle files, it does not download or
   translate).
+
+### Removed
+- **Outbound usage statistics** — the opt-in telemetry ping (install id,
+  provider/language aggregates) and its Settings → General consent card,
+  toggle and privacy note are gone; the app sends nothing off the machine.
+- **Upstream owner branding** — the owner credit block in Settings → About,
+  the Unraid template README, the Discord invite entry on the issue-config
+  page, and every documentation link that pointed at the upstream repository
+  or its owner site.
 
 ### Fixed
 - **Onboarding step 1 offered *Finish Setup*** — before a setup mode is
