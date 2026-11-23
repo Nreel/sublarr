@@ -59,7 +59,9 @@ const EMPTY_FORM = {
 
 // ─── Language Profiles Tab ────────────────────────────────────────────────────
 
-export function LanguageProfilesTab() {
+// defaultOnSave: onboarding mode — pressing Save also promotes the saved
+// profile to the library-wide default, like the per-row "set as default".
+export function LanguageProfilesTab({ defaultOnSave = false }: { defaultOnSave?: boolean }) {
   const { t } = useTranslation('settings')
   const { data: profiles, isLoading } = useLanguageProfiles()
   const createProfile = useCreateProfile()
@@ -157,14 +159,29 @@ export function LanguageProfilesTab() {
       scoring_preset: form.scoring_preset,
     }
 
+    const makeDefault = (id: number) => {
+      setAsDefaultForAll.mutate(id, {
+        onSuccess: () => toast(t('language_profiles.set_default_success', { name: payload.name })),
+        onError: (err) => toast(apiErrorMessage(err, t('language_profiles.set_default_failed')), 'error'),
+      })
+    }
+
     if (editingId) {
       updateProfile.mutate({ id: editingId, data: payload }, {
-        onSuccess: () => { toast(t('language_profiles.saved')); resetForm() },
+        onSuccess: () => {
+          toast(t('language_profiles.saved'))
+          resetForm()
+          if (defaultOnSave) makeDefault(editingId)
+        },
         onError: (err) => toast(apiErrorMessage(err, t('language_profiles.save_failed')), 'error'),
       })
     } else {
       createProfile.mutate(payload as Omit<LanguageProfile, 'id' | 'is_default'>, {
-        onSuccess: () => { toast(t('language_profiles.created')); resetForm() },
+        onSuccess: (created) => {
+          toast(t('language_profiles.created'))
+          resetForm()
+          if (defaultOnSave) makeDefault(created.id)
+        },
         onError: (err) => toast(apiErrorMessage(err, t('language_profiles.create_failed')), 'error'),
       })
     }
@@ -267,6 +284,7 @@ export function LanguageProfilesTab() {
                   cutoff_language: langs.includes(f.cutoff_language) ? f.cutoff_language : '',
                 }))}
                 placeholder={t('language_profiles.add_language')}
+                testId="target-lang-select"
               />
               <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                 {t('language_profiles.target_languages_help')}

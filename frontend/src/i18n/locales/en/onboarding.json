@@ -65,20 +65,7 @@
   "language_step": {
     "interface_language": "Interface language",
     "interface_language_hint": "The language the UI is shown in — the wizard switches as soon as you pick one. Changeable later under Settings → General.",
-    "description": "Choose the interface language and set up your subtitle language profile.",
-    "profile_heading": "Subtitle language profiles",
-    "profile_none": "No language profiles yet — create one so Sublarr knows which languages to search subtitles in.",
-    "profile_default_badge": "Default",
-    "profile_set_default": "Set as default",
-    "profile_name_label": "Profile name",
-    "profile_name_placeholder": "e.g. English & German",
-    "profile_target_label": "Target languages",
-    "profile_create": "Create profile & set as default",
-    "profile_invalid": "A profile needs a name and at least one target language.",
-    "profile_created": "Language profile created and set as default.",
-    "profile_create_failed": "Could not create the language profile.",
-    "profile_default_set": "Profile set as default for all media.",
-    "profile_set_default_failed": "Could not set the profile as default."
+    "description": "Choose the interface language and manage your subtitle language profiles — the same editor as Settings → Subtitles → Languages. Saving a profile makes it the default."
   },
   "automation_step": {
     "auto_search_label": "Search for missing subtitles automatically",

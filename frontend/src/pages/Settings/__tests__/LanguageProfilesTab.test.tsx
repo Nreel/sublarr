@@ -12,7 +12,7 @@
  * `TranslationTab.test.tsx` / `DefaultBackendSection.test.tsx` (mock
  * `@/hooks/useApi` with the hooks the component under test needs).
  */
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { LanguageProfilesTab } from '../LanguageProfilesTab'
 import type { LanguageProfile } from '@/lib/types'
@@ -48,13 +48,14 @@ const profile: LanguageProfile = {
 
 const updateMutate = vi.fn()
 const createMutate = vi.fn()
+const defaultMutate = vi.fn()
 
 vi.mock('@/hooks/useApi', () => ({
   useLanguageProfiles: () => ({ data: [profile], isLoading: false }),
   useCreateProfile: () => ({ mutate: createMutate, isPending: false }),
   useUpdateProfile: () => ({ mutate: updateMutate, isPending: false }),
   useDeleteProfile: () => ({ mutate: vi.fn(), isPending: false }),
-  useSetProfileAsDefaultForAll: () => ({ mutate: vi.fn(), isPending: false }),
+  useSetProfileAsDefaultForAll: () => ({ mutate: defaultMutate, isPending: false }),
   useBackends: () => ({
     data: {
       backends: [
@@ -292,5 +293,45 @@ describe('LanguageProfilesTab — source language priority', () => {
       }),
       expect.anything(),
     )
+  })
+})
+
+// Onboarding step 5 renders the tab with defaultOnSave: Save must also
+// promote the saved profile to the library-wide default.
+describe('LanguageProfilesTab — defaultOnSave (onboarding mirror)', () => {
+  beforeEach(() => {
+    defaultMutate.mockClear()
+    updateMutate.mockClear()
+    createMutate.mockClear()
+  })
+
+  it('promotes the edited profile to default after a successful save', () => {
+    render(<LanguageProfilesTab defaultOnSave />)
+    fireEvent.click(screen.getByTitle('language_profiles.edit_profile'))
+    fireEvent.click(screen.getByText('language_profiles.save'))
+    expect(updateMutate).toHaveBeenCalled()
+    updateMutate.mock.calls[0][1].onSuccess()
+    expect(defaultMutate).toHaveBeenCalledWith(1, expect.anything())
+  })
+
+  it('promotes a newly created profile using the id returned by create', () => {
+    render(<LanguageProfilesTab defaultOnSave />)
+    fireEvent.click(screen.getByText('language_profiles.add_profile'))
+    fireEvent.change(
+      screen.getByPlaceholderText('language_profiles.profile_name_placeholder'),
+      { target: { value: 'DE/EN' } },
+    )
+    fireEvent.change(screen.getByTestId('target-lang-select'), { target: { value: 'de' } })
+    fireEvent.click(screen.getByText('language_profiles.save'))
+    expect(createMutate).toHaveBeenCalled()
+    createMutate.mock.calls[0][1].onSuccess({ id: 42 })
+    expect(defaultMutate).toHaveBeenCalledWith(42, expect.anything())
+  })
+
+  it('leaves the default untouched when defaultOnSave is off', () => {
+    openEditor()
+    fireEvent.click(screen.getByText('language_profiles.save'))
+    updateMutate.mock.calls[updateMutate.mock.calls.length - 1][1].onSuccess()
+    expect(defaultMutate).not.toHaveBeenCalled()
   })
 })

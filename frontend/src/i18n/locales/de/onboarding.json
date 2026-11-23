@@ -65,20 +65,7 @@
   "language_step": {
     "interface_language": "Oberflächensprache",
     "interface_language_hint": "Die Sprache der Benutzeroberfläche — der Wizard wechselt sofort nach der Auswahl. Später änderbar unter Einstellungen → Allgemein.",
-    "description": "Wähle die Oberflächensprache und richt dein Untertitel-Sprachprofil ein.",
-    "profile_heading": "Untertitel-Sprachprofile",
-    "profile_none": "Noch keine Sprachprofile — erstelle eines, damit Sublarr weiß, in welchen Sprachen Untertitel gesucht werden.",
-    "profile_default_badge": "Standard",
-    "profile_set_default": "Als Standard setzen",
-    "profile_name_label": "Profilname",
-    "profile_name_placeholder": "z. B. Englisch & Deutsch",
-    "profile_target_label": "Zielsprachen",
-    "profile_create": "Profil erstellen & als Standard setzen",
-    "profile_invalid": "Ein Profil braucht einen Namen und mindestens eine Zielsprache.",
-    "profile_created": "Sprachprofil erstellt und als Standard gesetzt.",
-    "profile_create_failed": "Sprachprofil konnte nicht erstellt werden.",
-    "profile_default_set": "Profil als Standard für alle Medien gesetzt.",
-    "profile_set_default_failed": "Profil konnte nicht als Standard gesetzt werden."
+    "description": "Wähle die Oberflächensprache und verwalte deine Untertitel-Sprachprofile — derselbe Editor wie Einstellungen → Untertitel → Sprachen. Speichern macht das Profil zum Standard."
   },
   "automation_step": {
     "auto_search_label": "Automatisch nach fehlenden Untertiteln suchen",

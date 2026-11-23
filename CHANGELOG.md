@@ -13,13 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   number of Sonarr/Radarr instances (`sonarr_instances_json` /
   `radarr_instances_json`, masked keys round-trip), step 4 any number of path
   mapping rows, step 8 any number of Jellyfin/Emby/Plex/Kodi/Shoko instances,
-  and step 5 gains a *Subtitle language profiles* block that creates a profile
-  and makes it the library default. Re-running the wizard from Settings →
-  General preselects every previous choice (mode, library type, automation,
-  performance preset) and shows stored servers, mappings and profiles; each
-  step has a *Reset to defaults* button. Step 10 is *Run Scan* — "Step 10 of
-  10 — Run your wanted scan to find missing subtitles." with a *Start Scan*
-  button.
+  and step 5 embeds the *Languages & Profiles* editor from Settings →
+  Subtitles — add, edit and delete profiles; pressing *Save* also makes the
+  saved profile the library default, so the step has no *Reset to defaults*
+  button (profiles are removed per row instead). Re-running the wizard from
+  Settings → General preselects every previous choice (mode, library type,
+  automation, performance preset) and shows stored servers, mappings and
+  profiles; every step except *Languages* and *Run Scan* has a *Reset to
+  defaults* button. Step 10 is *Run Scan* — "Step 10 of 10 — Run your wanted
+  scan to find missing subtitles." with a *Start Scan* button.
 - **The Health page lists problems, not titles** — *Series & movies with
   missing subtitles* duplicated what `/wanted` already shows (per-title
   wanted items with filters, search and download actions), so it is gone,

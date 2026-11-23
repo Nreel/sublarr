@@ -16,9 +16,6 @@ import {
   completeSetup,
   getConfig,
   getOnboardingStatus,
-  getLanguageProfiles,
-  createLanguageProfile,
-  setProfileAsDefaultForAll,
 } from '@/api/client';
 import type { SetupBenchmark, SetupProfile } from '@/api/health';
 import { testSonarrInstance, testRadarrInstance, testApiKey } from '@/api/settings';
@@ -49,14 +46,15 @@ import {
   Library,
   Gauge,
 } from 'lucide-react';
-import { INTERFACE_LANGUAGE_OPTIONS, LANGUAGE_OPTIONS } from '@/styles/settingsShared';
+import { INTERFACE_LANGUAGE_OPTIONS } from '@/styles/settingsShared';
+import { LanguageProfilesTab } from '@/pages/Settings/LanguageProfilesTab';
 import {
   parseInstances,
   serializeInstances,
   generateId,
   type ServiceInstance,
 } from '@/pages/Settings/connections/ConnectionsMediaServers';
-import type { LanguageProfile } from '@/types/settings';
+
 import type { MediaServerType, MediaServerInstance, MediaServerTestResult } from '@/lib/types';
 
 export const ALL_STEPS = [
@@ -300,13 +298,6 @@ export default function Onboarding() {
   // Path mapping rows — serialized to the `path_mapping` string on save.
   const [mappingRows, setMappingRows] = useState<MappingRow[]>([]);
 
-  // Language profiles (Step 5): existing profiles prefilled on re-run, plus a
-  // draft form that creates one and makes it default for the whole library.
-  const [profiles, setProfiles] = useState<LanguageProfile[]>([]);
-  const [profileDraft, setProfileDraft] = useState({
-    name: '',
-    targetLanguages: [] as string[],
-  });
 
   // Performance profile step (consolidates the former FirstRunWizard modal)
   const [benchmark, setBenchmark] = useState<SetupBenchmark | null>(null);
@@ -427,14 +418,6 @@ export default function Onboarding() {
     };
   }, []);
 
-  // Language profiles load when the step is reached (list + default badge).
-  useEffect(() => {
-    if (currentStepDef.id === 'language' && profiles.length === 0) {
-      getLanguageProfiles()
-        .then(setProfiles)
-        .catch(() => {});
-    }
-  }, [currentStepDef.id, profiles.length]);
 
   const set = (key: string, val: string) => setValues(v => ({ ...v, [key]: val }));
 
@@ -671,9 +654,9 @@ export default function Onboarding() {
   };
 
   // "Reset to defaults" reverts this step's controls to the wizard defaults;
-  // it reaches the backend only when the user advances with Next. Language
-  // profiles are database records managed under Settings — the reset clears
-  // the wizard's draft form but never deletes existing profiles.
+  // it reaches the backend only when the user advances with Next. The
+  // Language step has no reset button — profiles are database records managed
+  // in the step itself (add, edit, delete), like Settings → Languages.
   const resetStep = () => {
     switch (currentStepDef.id) {
       case 'mode':
@@ -695,13 +678,6 @@ export default function Onboarding() {
       case 'pathmapping':
         setMappingRows([]);
         break;
-      case 'language':
-        setValues(v => ({
-          ...v,
-          interface_language: i18n.language?.startsWith('en') ? 'en' : 'de',
-        }));
-        setProfileDraft({ name: '', targetLanguages: [] });
-        break;
       case 'automation':
         setValues(v => ({
           ...v,
@@ -721,58 +697,6 @@ export default function Onboarding() {
         break;
       default:
         break;
-    }
-  };
-
-  // Language profile draft: create a minimal profile (Settings defaults for
-  // everything else) and make it the default for the whole library.
-  const createDefaultProfile = async () => {
-    if (!profileDraft.name.trim() || profileDraft.targetLanguages.length === 0) {
-      toast(t('language_step.profile_invalid'), 'error');
-      return;
-    }
-    try {
-      const created = await createLanguageProfile({
-        name: profileDraft.name.trim(),
-        source_languages: [],
-        target_languages: profileDraft.targetLanguages,
-        target_language_names: profileDraft.targetLanguages.map(
-          code => LANGUAGE_OPTIONS.find(o => o.value === code)?.label ?? code
-        ),
-        forced_preference: 'disabled',
-        forced_scoring: 'include',
-        prefer_signs: false,
-        download_full: true,
-        hi_preference: 'include',
-        cutoff_language: '',
-        translation_backend: '',
-        fallback_chain: [],
-        mt_keep_seeking_original: false,
-        mt_on_original_found: 'notify',
-        mt_min_original_score: 1,
-        combine_enabled: false,
-        combine_format: 'ass',
-        combine_languages: [],
-        combine_position: { primary: 'bottom', secondary: 'top' },
-        enabled_providers: [],
-        scoring_preset: '',
-      });
-      await setProfileAsDefaultForAll(created.id);
-      setProfiles(await getLanguageProfiles());
-      setProfileDraft({ name: '', targetLanguages: [] });
-      toast(t('language_step.profile_created'));
-    } catch (err: unknown) {
-      toast(apiErrorMessage(err, t('language_step.profile_create_failed')), 'error');
-    }
-  };
-
-  const setDefaultProfile = async (id: number) => {
-    try {
-      await setProfileAsDefaultForAll(id);
-      setProfiles(await getLanguageProfiles());
-      toast(t('language_step.profile_default_set'));
-    } catch (err: unknown) {
-      toast(apiErrorMessage(err, t('language_step.profile_set_default_failed')), 'error');
     }
   };
 
@@ -910,7 +834,7 @@ export default function Onboarding() {
                 </p>
               </div>
             </div>
-            {currentStepDef.id !== 'scan' && (
+            {currentStepDef.id !== 'scan' && currentStepDef.id !== 'language' && (
               <button
                 type="button"
                 data-testid="onboarding-reset-step"
@@ -1424,122 +1348,13 @@ export default function Onboarding() {
                 </p>
               </div>
 
-              {/* Language profiles: existing ones prefilled on re-run, plus a
-                  draft that creates a profile and makes it the default. */}
-              <div className="space-y-3">
-                <label
-                  className="block text-sm font-medium"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  {t('language_step.profile_heading')}
-                </label>
-                {profiles.length === 0 ? (
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {t('language_step.profile_none')}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {profiles.map(p => (
-                      <div
-                        key={p.id}
-                        data-testid="onboarding-profile-row"
-                        className="flex items-center gap-2 rounded-lg p-3"
-                        style={{
-                          backgroundColor: 'var(--bg-primary)',
-                          border: '1px solid var(--border)',
-                        }}
-                      >
-                        <span
-                          className="text-sm font-medium flex-1"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
-                          {p.name}
-                        </span>
-                        <span
-                          className="text-xs"
-                          style={{ color: 'var(--text-secondary)' }}
-                        >
-                          {p.target_language_names.join(', ')}
-                        </span>
-                        {p.is_default && (
-                          <span
-                            className="px-2 py-0.5 rounded-full text-[10px] font-medium"
-                            style={{ backgroundColor: 'var(--accent-bg)', color: 'var(--accent)' }}
-                          >
-                            {t('language_step.profile_default_badge')}
-                          </span>
-                        )}
-                        {!p.is_default && (
-                          <button
-                            type="button"
-                            onClick={() => setDefaultProfile(p.id)}
-                            className="px-2 py-1 rounded text-xs"
-                            style={{
-                              border: '1px solid var(--border)',
-                              color: 'var(--text-secondary)',
-                            }}
-                          >
-                            {t('language_step.profile_set_default')}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Field
-                    label={t('language_step.profile_name_label')}
-                    placeholder={t('language_step.profile_name_placeholder')}
-                    value={profileDraft.name}
-                    onChange={v => setProfileDraft(d => ({ ...d, name: v }))}
-                  />
-                  <label
-                    className="block text-sm font-medium"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    {t('language_step.profile_target_label')}
-                  </label>
-                  <div
-                    className="max-h-40 overflow-y-auto rounded-md p-2 grid grid-cols-2 sm:grid-cols-3 gap-1"
-                    style={{ border: '1px solid var(--border)', backgroundColor: 'var(--bg-primary)' }}
-                  >
-                    {LANGUAGE_OPTIONS.map(o => (
-                      <label
-                        key={o.value}
-                        className="flex items-center gap-1.5 text-xs cursor-pointer"
-                        style={{ color: 'var(--text-secondary)' }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={profileDraft.targetLanguages.includes(o.value)}
-                          onChange={e =>
-                            setProfileDraft(d => ({
-                              ...d,
-                              targetLanguages: e.target.checked
-                                ? [...d.targetLanguages, o.value]
-                                : d.targetLanguages.filter(c => c !== o.value),
-                            }))
-                          }
-                          className="h-3.5 w-3.5 rounded"
-                          style={{ accentColor: 'var(--accent)' }}
-                        />
-                        {o.label}
-                      </label>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    data-testid="onboarding-create-profile"
-                    onClick={createDefaultProfile}
-                    disabled={!profileDraft.name.trim() || profileDraft.targetLanguages.length === 0}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 disabled:opacity-50"
-                    style={{ color: 'var(--accent)', border: '1px solid var(--accent-dim)' }}
-                  >
-                    <Languages size={14} />
-                    {t('language_step.profile_create')}
-                  </button>
-                </div>
-              </div>
+              {/* Language profiles: the exact editor from
+                  Settings → Subtitles → Languages & Profiles. Profiles are
+                  persisted immediately through the profiles API; Save also
+                  makes the saved profile the library-wide default. On a
+                  re-run the existing profiles are fetched fresh, so the
+                  settings previously made here are remembered. */}
+              <LanguageProfilesTab defaultOnSave />
             </div>
           )}
 
