@@ -414,9 +414,7 @@ class OpenAICompatBackend(LLMBackend):
         client = self._get_client()
         body = dict(body)
         extra_body = {
-            key: body.pop(key)
-            for key in ("cache_prompt", "chat_template_kwargs")
-            if key in body
+            key: body.pop(key) for key in ("cache_prompt", "chat_template_kwargs") if key in body
         }
         completion = client.chat.completions.create(**body, extra_body=extra_body)
         # The SDK returns a pydantic model; convert to dict for parse step.
