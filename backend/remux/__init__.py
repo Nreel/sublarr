@@ -444,7 +444,9 @@ def _media_slot(label: str):
         raise RemuxError(str(exc)) from None
 
 
-def _remux_mkvmerge(video_path: str, stream_indices: list[int], output_path: str, proc_sink=None) -> None:
+def _remux_mkvmerge(
+    video_path: str, stream_indices: list[int], output_path: str, proc_sink=None
+) -> None:
     """Remove subtitle streams using mkvmerge.
 
     `stream_indices` are the global track IDs as reported by ffprobe/mkvmerge -i
@@ -482,7 +484,9 @@ def _remux_mkvmerge(video_path: str, stream_indices: list[int], output_path: str
 # ---------------------------------------------------------------------------
 
 
-def _remux_ffmpeg(video_path: str, stream_indices: list[int], output_path: str, proc_sink=None) -> None:
+def _remux_ffmpeg(
+    video_path: str, stream_indices: list[int], output_path: str, proc_sink=None
+) -> None:
     """Remove subtitle streams using ffmpeg stream copy."""
     if not _which("ffmpeg"):
         raise RemuxError("ffmpeg not found")

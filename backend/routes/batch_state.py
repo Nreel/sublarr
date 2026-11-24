@@ -31,6 +31,7 @@ def request_cancel(state: dict) -> bool:
         event.set()
     return True
 
+
 # Translation stats state moved to services.translation_jobs (2026-07-02) so
 # the job runner lives entirely in the services layer. Re-exported here for
 # routes that still import it from routes.batch_state (same dict/lock objects).

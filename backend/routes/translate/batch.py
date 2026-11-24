@@ -11,7 +11,13 @@ from flask import current_app, jsonify, request
 
 from events import emit_event
 from extensions import socketio
-from routes.batch_state import batch_lock, batch_state, begin_run, request_cancel, serialize_batch_state
+from routes.batch_state import (
+    batch_lock,
+    batch_state,
+    begin_run,
+    request_cancel,
+    serialize_batch_state,
+)
 from routes.translate import bp
 from routes.translate._helpers import (
     _as_bool,

@@ -92,7 +92,9 @@ def start_scan():
 
         try:
             with app.app_context():
-                result = scan_for_duplicates(media_path, socketio=socketio, cancel_event=cancel_event)
+                result = scan_for_duplicates(
+                    media_path, socketio=socketio, cancel_event=cancel_event
+                )
                 with _scan_lock:
                     _scan_state["result"] = result
                     _scan_state["cancelled"] = bool(result.get("cancelled"))

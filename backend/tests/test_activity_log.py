@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 import pytest
 
@@ -363,8 +363,8 @@ def test_new_event_type_constants():
         EVENT_BACKUP,
         EVENT_CLEANUP,
         EVENT_HOOK,
-        EVENT_REPAIR,
         EVENT_REMUX,
+        EVENT_REPAIR,
         EVENT_SYNC,
         EVENT_WHISPER,
     )
@@ -443,7 +443,7 @@ def test_update_activity_status_replaces_corrupt_details(app_ctx):
         event_type="backup",
         status="running",
         details_json="not json",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     db.session.add(row)
     db.session.commit()

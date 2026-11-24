@@ -437,7 +437,9 @@ def get_library_health() -> dict:
         ]
     except SQLAlchemyError:
         session.rollback()
-        logger.warning("scheduler_job_runs unavailable — reporting without scheduler errors", exc_info=True)
+        logger.warning(
+            "scheduler_job_runs unavailable — reporting without scheduler errors", exc_info=True
+        )
 
     whisper_errors: list[dict] = []
     try:
@@ -522,9 +524,7 @@ def get_library_health() -> dict:
 
     hook_errors: list[dict] = []
     try:
-        hook_names = {
-            h.id: h.name for h in session.execute(select(HookConfig)).scalars().all()
-        }
+        hook_names = {h.id: h.name for h in session.execute(select(HookConfig)).scalars().all()}
         webhook_names = {
             w.id: w.name for w in session.execute(select(WebhookConfig)).scalars().all()
         }
@@ -542,9 +542,7 @@ def get_library_health() -> dict:
         hook_errors = [
             {
                 "hook": (
-                    hook_names.get(r.hook_id)
-                    or webhook_names.get(r.webhook_id)
-                    or r.event_name
+                    hook_names.get(r.hook_id) or webhook_names.get(r.webhook_id) or r.event_name
                 ),
                 "error": r.error or r.stderr or "",
                 "created_at": r.triggered_at.isoformat() if r.triggered_at else None,

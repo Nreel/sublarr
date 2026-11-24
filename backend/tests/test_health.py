@@ -28,7 +28,7 @@ def _mock_probes(mocker, *, sonarr="ok", radarr="ok", media_servers=None):
             if media_servers is not None
             else {"media_servers": "1/1 healthy", "media_server_by_type": {"jellyfin": "ok"}},
             None,
-        )
+        ),
     )
 
 

@@ -6,7 +6,9 @@ import json
 from datetime import UTC, datetime, timedelta
 
 
-def _add_job_run(app, job_id, status, started=None, error_type=None, error_msg=None, triggered_by="schedule"):
+def _add_job_run(
+    app, job_id, status, started=None, error_type=None, error_msg=None, triggered_by="schedule"
+):
     from db.models.scheduler import JobRun
     from extensions import db
 
@@ -156,7 +158,13 @@ class TestOpsErrorSections:
             error_type="RuntimeError",
             error_msg="sonarr 500",
         )
-        _add_job_run(app_ctx, "cleanup", "timeout", started=base - timedelta(minutes=20), error_msg="ran past timeout")
+        _add_job_run(
+            app_ctx,
+            "cleanup",
+            "timeout",
+            started=base - timedelta(minutes=20),
+            error_msg="ran past timeout",
+        )
         _add_job_run(app_ctx, "wanted_revive", "missed", started=base - timedelta(minutes=10))
         _add_job_run(app_ctx, "stats_rollup", "ok", started=base)
         _add_job_run(app_ctx, "upgrade_scan", "skipped_overlap", started=base)
@@ -242,7 +250,9 @@ class TestOpsErrorSections:
 
         base = datetime.now(UTC)
         for i in range(60):
-            _add_activity(app_ctx, "scan", "failed", error=f"err{i}", created=base - timedelta(minutes=60 - i))
+            _add_activity(
+                app_ctx, "scan", "failed", error=f"err{i}", created=base - timedelta(minutes=60 - i)
+            )
 
         errs = get_library_health()["ops_errors"]
         assert len(errs) == 50
@@ -251,7 +261,9 @@ class TestOpsErrorSections:
 
     def test_endpoint_exposes_sections(self, client):
         with client.application.app_context():
-            _add_notification(client.application, "error", status="failed", error="db backup failed")
+            _add_notification(
+                client.application, "error", status="failed", error="db backup failed"
+            )
         resp = client.get("/api/v1/health/library?fresh=1")
         assert resp.status_code == 200
         body = resp.get_json()

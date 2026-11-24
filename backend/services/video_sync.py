@@ -201,9 +201,7 @@ def sync_with_ffsubsync(subtitle_path: str, video_path: str, proc_sink=None) -> 
     ]
     try:
         with sync_subprocess_lock:
-            result = _run_capturing(
-                cmd, compute_io_timeout(video_path), proc_sink
-            )
+            result = _run_capturing(cmd, compute_io_timeout(video_path), proc_sink)
     except subprocess.TimeoutExpired:
         _safe_remove(out_path)
         _audit("error", None, "timeout 600s")

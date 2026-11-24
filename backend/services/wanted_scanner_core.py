@@ -188,7 +188,9 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             result = self._scan_all_locked(incremental)
         except Exception as e:
             logger.exception("Wanted scan failed: %s", e)
-            log_activity(EVENT_SCAN, status="failed", details={"kind": "full_scan", "error": str(e)})
+            log_activity(
+                EVENT_SCAN, status="failed", details={"kind": "full_scan", "error": str(e)}
+            )
             return {"error": str(e)}
         finally:
             self._pass_done = None
@@ -464,7 +466,9 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
         except Exception as e:
             logger.exception("Wanted scan for series %d failed: %s", series_id, e)
             log_activity(
-                EVENT_SCAN, status="failed", details={"kind": "series_scan", "series_id": series_id, "error": str(e)}
+                EVENT_SCAN,
+                status="failed",
+                details={"kind": "series_scan", "series_id": series_id, "error": str(e)},
             )
             return {"error": str(e)}
         finally:
@@ -514,7 +518,9 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
         except Exception as e:
             logger.exception("Wanted scan for movie %d failed: %s", movie_id, e)
             log_activity(
-                EVENT_SCAN, status="failed", details={"kind": "movie_scan", "movie_id": movie_id, "error": str(e)}
+                EVENT_SCAN,
+                status="failed",
+                details={"kind": "movie_scan", "movie_id": movie_id, "error": str(e)},
             )
             return {"error": str(e)}
         finally:

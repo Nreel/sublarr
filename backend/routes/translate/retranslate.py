@@ -273,7 +273,6 @@ def retranslate_batch():
         begin_run,
         retranslate_batch_state,
         retranslate_lock,
-        request_cancel,
     )
     from services.translation_jobs import update_stats
     from translator import translate_file
@@ -437,7 +436,9 @@ def retranslate_batch():
                 )
             finally:
                 with retranslate_lock:
-                    retranslate_batch_state.update({"running": False, "current_file": None, "started_at": None})
+                    retranslate_batch_state.update(
+                        {"running": False, "current_file": None, "started_at": None}
+                    )
 
     try:
         submit_background(_run_retranslate)

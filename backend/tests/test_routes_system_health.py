@@ -400,7 +400,13 @@ class TestHealthCheckMediaServers:
         manager = MagicMock()
         manager.health_check_all.return_value = [
             {"name": "plex", "type": "plex", "healthy": True, "message": "ok", "enabled": True},
-            {"name": "jellyfin", "type": "jellyfin", "healthy": False, "message": "timeout", "enabled": True},
+            {
+                "name": "jellyfin",
+                "type": "jellyfin",
+                "healthy": False,
+                "message": "timeout",
+                "enabled": True,
+            },
         ]
         with patch(
             "mediaserver.get_media_server_manager",
@@ -416,7 +422,13 @@ class TestHealthCheckMediaServers:
     def test_disabled_type_not_configured(self):
         manager = MagicMock()
         manager.health_check_all.return_value = [
-            {"name": "jellyfin", "type": "jellyfin", "healthy": False, "message": "disabled", "enabled": False},
+            {
+                "name": "jellyfin",
+                "type": "jellyfin",
+                "healthy": False,
+                "message": "disabled",
+                "enabled": False,
+            },
             {"name": "plex", "type": "plex", "healthy": True, "message": "ok", "enabled": True},
         ]
         with patch(
