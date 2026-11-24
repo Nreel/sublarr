@@ -105,6 +105,26 @@ def list_jobs():
                     type: array
                     items:
                       type: object
+                      properties:
+                        progress:
+                          type: object
+                          description: >-
+                            Live per-line translation progress from the in-memory
+                            QueueState; only present while the job is running.
+                          properties:
+                            done:
+                              type: integer
+                            total:
+                              type: integer
+                            pct:
+                              type: number
+                            eta_seconds:
+                              type: integer
+                              nullable: true
+                            backend:
+                              type: string
+                            cost_so_far_micro_usd:
+                              type: integer
                   total:
                     type: integer
                   page:
@@ -120,10 +140,39 @@ def list_jobs():
         page, per_page = page_args(max_per_page=200)
         status_filter = request.args.get("status")
         result = get_jobs(page=page, per_page=per_page, status=status_filter)
+        _attach_line_progress(result.get("data", []))
         return jsonify(result)
     except Exception as e:
         logger.exception("GET /jobs failed: %s", e)
         return jsonify({"error": "Internal server error", "detail": "list_jobs_failed"}), 500
+
+
+def _attach_line_progress(jobs: list) -> None:
+    """Merge live per-line progress from QueueState into running job rows.
+
+    ``translator.manager._translate_in_batches`` advances ``done_lines`` per
+    finished chunk; the activity tab polls this endpoint, so running jobs carry
+    the same progress payload ``GET /translation/queue`` exposes (lingarr-style
+    RequestProgress: percent + counters, computed at emit/serialize time, never
+    stored in the DB).
+    """
+    from translation.queue_state import get_queue_state
+
+    snaps = {s["job_id"]: s for s in get_queue_state().active_snapshot()}
+    for job in jobs:
+        if job.get("status") != "running":
+            continue
+        snap = snaps.get(job.get("id"))
+        if not snap:
+            continue
+        job["progress"] = {
+            "done": snap["progress"]["done"],
+            "total": snap["progress"]["total"],
+            "pct": snap["progress"]["pct"],
+            "eta_seconds": snap["eta_seconds"],
+            "backend": snap["backend"],
+            "cost_so_far_micro_usd": snap["cost_so_far_micro_usd"],
+        }
 
 
 @bp.route("/jobs/<job_id>", methods=["DELETE"])

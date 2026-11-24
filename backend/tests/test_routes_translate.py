@@ -95,6 +95,45 @@ def test_list_jobs_pagination(client):
     assert resp.status_code == 200
 
 
+def test_list_jobs_attaches_line_progress(client):
+    from translation.queue_state import get_queue_state, reset_for_tests
+
+    reset_for_tests()
+    state = get_queue_state()
+    state.register_job(
+        job_id="j1",
+        file_path="/media/ep1.srt",
+        source_lang="en",
+        target_lang="de",
+        backend="claude",
+        total_lines=100,
+    )
+    state.update_progress("j1", done=25)
+
+    fake_jobs = {
+        "data": [
+            {"id": "j1", "status": "running", "file_path": "/media/ep1.srt"},
+            {"id": "j2", "status": "completed", "file_path": "/media/ep2.srt"},
+        ],
+        "total": 2,
+        "page": 1,
+        "per_page": 50,
+    }
+    try:
+        with patch("db.jobs.get_jobs", return_value=fake_jobs):
+            resp = client.get("/api/v1/jobs?status=running")
+    finally:
+        reset_for_tests()
+    assert resp.status_code == 200
+    data = resp.get_json()
+    progress = data["data"][0]["progress"]
+    assert progress["done"] == 25
+    assert progress["total"] == 100
+    assert progress["pct"] == 25.0
+    assert progress["backend"] == "claude"
+    assert "progress" not in data["data"][1]
+
+
 # ---------------------------------------------------------------------------
 # POST /api/v1/jobs/<job_id>/retry — retry failed job
 # ---------------------------------------------------------------------------

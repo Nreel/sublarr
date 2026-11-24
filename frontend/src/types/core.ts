@@ -1,5 +1,14 @@
 /** Core / shared types — job queue, auth, health, stats, batch. */
 
+export interface JobLineProgress {
+  done: number
+  total: number
+  pct: number
+  eta_seconds: number | null
+  backend: string
+  cost_so_far_micro_usd: number
+}
+
 export interface Job {
   id: string
   file_path: string
@@ -12,6 +21,7 @@ export interface Job {
   arr_context: Record<string, unknown> | null
   created_at: string
   completed_at: string
+  progress?: JobLineProgress
 }
 
 export interface PaginatedJobs {

@@ -17,12 +17,39 @@ vi.mock('@/hooks/useApi', () => ({
 vi.mock('@/components/shared/Toast', () => ({ toast: vi.fn() }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: unknown) => (typeof fallback === 'string' ? fallback : key),
+    t: (key: string, arg?: unknown) => {
+      if (typeof arg === 'string') return arg
+      const templates: Record<string, string> = {
+        'translations.lines': '{{done}}/{{total}} lines',
+        'translations.eta': '{{seconds}}s remaining',
+      }
+      const template = templates[key] ?? key
+      return template.replace(/\{\{(\w+)\}\}/g, (_m, name: string) =>
+        String((arg as Record<string, unknown> | undefined)?.[name]),
+      )
+    },
   }),
 }))
 
 const RUNNING_JOBS = {
   data: [{ id: 'run-1', file_path: '/media/Show - S01E01.en.srt', status: 'running' }],
+}
+const RUNNING_JOBS_WITH_PROGRESS = {
+  data: [
+    {
+      id: 'run-1',
+      file_path: '/media/Show - S01E01.en.srt',
+      status: 'running',
+      progress: {
+        done: 120,
+        total: 300,
+        pct: 40,
+        eta_seconds: 60,
+        backend: 'llama.cpp',
+        cost_so_far_micro_usd: 4200,
+      },
+    },
+  ],
 }
 const QUEUED_JOBS = {
   data: [
@@ -62,6 +89,22 @@ describe('TranslationsTab', () => {
     fireEvent.click(firstCancel)
     expect(mockCancelMutate).toHaveBeenCalledTimes(1)
     expect(mockCancelMutate.mock.calls[0][0]).toBe('q-1')
+  })
+
+  it('renders a progress bar and per-line stats for running jobs with progress', () => {
+    mockJobs({ data: [] }, RUNNING_JOBS_WITH_PROGRESS)
+    render(<TranslationsTab />)
+    expect(screen.getByText('120/300 lines')).toBeInTheDocument()
+    expect(screen.getByText('60s remaining')).toBeInTheDocument()
+    expect(screen.getByText('llama.cpp')).toBeInTheDocument()
+    expect(screen.getByText('40%')).toBeInTheDocument()
+  })
+
+  it('renders no per-line stats for running jobs without progress', () => {
+    mockJobs({ data: [] }, RUNNING_JOBS)
+    render(<TranslationsTab />)
+    expect(screen.queryByText('translations.lines')).not.toBeInTheDocument()
+    expect(screen.queryByText('40%')).not.toBeInTheDocument()
   })
 
   it('renders the clear-queued button and calls the mutation', () => {

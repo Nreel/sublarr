@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Per-line translation progress on the activity Translations tab** —
+  running jobs now carry a live progress bar and per-line statistics instead
+  of a bare running badge. `GET /api/v1/jobs` merges the in-memory
+  `QueueState` tracker (`done_lines`/`total_lines`, advanced per finished
+  chunk by `translator.manager._translate_in_batches`) into running job rows
+  as `progress {done, total, pct, eta_seconds, backend, cost_so_far_micro_usd}`,
+  mirroring Lingarr's SignalR `RequestProgress` payload (percent computed at
+  serialize time, never persisted). The tab renders the shared `ProgressBar`
+  plus a stats line (`N/M lines · Xs remaining · backend`); queued rows are
+  unchanged.
 - **Content-based language guards in the translation flows** — a track tag
   is no longer trusted blindly, and a saved file is no longer assumed to be
   in its target language. Before the LLM call, the collected dialogue text is

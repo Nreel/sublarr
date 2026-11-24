@@ -16,7 +16,9 @@
     "cancel_failed": "Job konnte nicht abgebrochen werden",
     "clear_queued": "Wartende Jobs leeren",
     "clear_success": "{{n}} wartende Jobs abgebrochen",
-    "clear_failed": "Wartende Jobs konnten nicht geleert werden"
+    "clear_failed": "Wartende Jobs konnten nicht geleert werden",
+    "lines": "{{done}}/{{total}} Zeilen",
+    "eta": "{{seconds}}s verbleibend"
   },
   "title": "Übersetzungen",
   "filter": {

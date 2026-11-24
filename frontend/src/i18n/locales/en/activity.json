@@ -16,7 +16,9 @@
     "cancel_failed": "Failed to cancel job",
     "clear_queued": "Clear queued jobs",
     "clear_success": "{{n}} queued jobs cancelled",
-    "clear_failed": "Failed to clear queued jobs"
+    "clear_failed": "Failed to clear queued jobs",
+    "lines": "{{done}}/{{total}} lines",
+    "eta": "{{seconds}}s remaining"
   },
   "title": "Translations",
   "filter": {

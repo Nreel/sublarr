@@ -5,50 +5,72 @@ import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ProgressBar } from '@/components/shared/ProgressBar'
 import { toast } from '@/components/shared/Toast'
 import { truncatePath } from '@/lib/utils'
+import type { JobLineProgress } from '@/types/core'
 import { Layers, Loader2, X } from 'lucide-react'
 
 const TranslationJobRow = memo(function TranslationJobRow({
   file_path,
   status,
+  progress,
   cancelLabel,
   onCancel,
   cancelDisabled,
+  t,
 }: {
   file_path: string
   status: 'running' | 'queued'
+  progress?: JobLineProgress
   cancelLabel?: string
   onCancel?: () => void
   cancelDisabled?: boolean
+  t: (key: string, options?: Record<string, unknown>) => string
 }) {
   return (
-    <div className="px-4 py-2.5 flex items-center gap-3">
-      {status === 'running' ? (
-        <Loader2 size={14} className="animate-spin" style={{ color: 'var(--accent)' }} />
-      ) : (
-        <div
-          className="w-3.5 h-3.5 rounded-full shrink-0"
-          style={{ border: '2px solid var(--warning)' }}
-        />
-      )}
-      <span
-        className="flex-1 truncate"
-        title={file_path}
-        style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}
-      >
-        {truncatePath(file_path)}
-      </span>
-      <StatusBadge status={status} />
-      {onCancel && (
-        <button
-          type="button"
-          aria-label={cancelLabel}
-          title={cancelLabel}
-          onClick={onCancel}
-          disabled={cancelDisabled}
-          className="shrink-0 p-1 rounded-md text-muted hover:text-error hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    <div className="px-4 py-2.5 flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        {status === 'running' ? (
+          <Loader2 size={14} className="animate-spin" style={{ color: 'var(--accent)' }} />
+        ) : (
+          <div
+            className="w-3.5 h-3.5 rounded-full shrink-0"
+            style={{ border: '2px solid var(--warning)' }}
+          />
+        )}
+        <span
+          className="flex-1 truncate"
+          title={file_path}
+          style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}
         >
-          <X size={14} />
-        </button>
+          {truncatePath(file_path)}
+        </span>
+        <StatusBadge status={status} />
+        {onCancel && (
+          <button
+            type="button"
+            aria-label={cancelLabel}
+            title={cancelLabel}
+            onClick={onCancel}
+            disabled={cancelDisabled}
+            className="shrink-0 p-1 rounded-md text-muted hover:text-error hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+      {progress && (
+        <>
+          <ProgressBar value={progress.done} max={progress.total} />
+          <div
+            className="flex flex-wrap items-center gap-x-3 text-xs"
+            style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+          >
+            <span>{t('translations.lines', { done: progress.done, total: progress.total })}</span>
+            {progress.eta_seconds != null && (
+              <span>{t('translations.eta', { seconds: progress.eta_seconds })}</span>
+            )}
+            <span>{progress.backend}</span>
+          </div>
+        </>
       )}
     </div>
   )
@@ -153,7 +175,13 @@ export function TranslationsTab() {
         <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
           {activeJobs?.data?.length ? (
             activeJobs.data.map((job) => (
-              <TranslationJobRow key={job.id} file_path={job.file_path} status="running" />
+              <TranslationJobRow
+                key={job.id}
+                file_path={job.file_path}
+                status="running"
+                progress={job.progress}
+                t={t}
+              />
             ))
           ) : (
             <div className="px-4 py-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>

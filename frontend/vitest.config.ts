@@ -11,6 +11,10 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.ts',
     pool: 'forks',
+    // Full-suite runs load every module per fork; dynamic imports in beforeAll
+    // (e.g. CleanupSettings.test.tsx) exceed the 10s default hook timeout under
+    // that load even though the file passes in isolation.
+    hookTimeout: 30_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
