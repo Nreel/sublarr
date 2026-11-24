@@ -461,7 +461,7 @@ function SchedulerErrorRow({ e, t }: { e: HealthSchedulerError; t: T }) {
   );
 }
 
-function WhisperErrorRow({ e, t }: { e: HealthWhisperError; t: T }) {
+function WhisperErrorRow({ e }: { e: HealthWhisperError }) {
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
       <td
@@ -498,7 +498,7 @@ function WhisperErrorRow({ e, t }: { e: HealthWhisperError; t: T }) {
 }
 
 /** Video-sync failures; `job_id` carries the engine name (ffsubsync/alass). */
-function SyncErrorRow({ e, t }: { e: HealthSyncError; t: T }) {
+function SyncErrorRow({ e }: { e: HealthSyncError }) {
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
       <td
@@ -570,7 +570,7 @@ function OpsErrorRow({ e, t }: { e: HealthOpsError; t: T }) {
   );
 }
 
-function HookErrorRow({ e, t }: { e: HealthHookError; t: T }) {
+function HookErrorRow({ e }: { e: HealthHookError }) {
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
       <td
@@ -897,7 +897,7 @@ export function HealthPage() {
                 </thead>
                 <tbody>
                   {whisperList.visible.map((e, i) => (
-                    <WhisperErrorRow key={`${e.job_id}:${i}`} e={e} t={t} />
+                    <WhisperErrorRow key={`${e.job_id}:${i}`} e={e} />
                   ))}
                   <SentinelRow list={whisperList} colSpan={5} t={t} />
                 </tbody>
@@ -926,7 +926,7 @@ export function HealthPage() {
                 </thead>
                 <tbody>
                   {syncList.visible.map((e, i) => (
-                    <SyncErrorRow key={`${e.job_id}:${e.started_at}:${i}`} e={e} t={t} />
+                    <SyncErrorRow key={`${e.job_id}:${e.started_at}:${i}`} e={e} />
                   ))}
                   <SentinelRow list={syncList} colSpan={5} t={t} />
                 </tbody>
@@ -981,7 +981,7 @@ export function HealthPage() {
                 </thead>
                 <tbody>
                   {hookList.visible.map((e, i) => (
-                    <HookErrorRow key={`${e.hook}:${e.created_at}:${i}`} e={e} t={t} />
+                    <HookErrorRow key={`${e.hook}:${e.created_at}:${i}`} e={e} />
                   ))}
                   <SentinelRow list={hookList} colSpan={3} t={t} />
                 </tbody>
