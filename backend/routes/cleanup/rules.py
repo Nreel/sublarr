@@ -253,19 +253,35 @@ def run_rule(rule_id: int):
         500:
           description: Execution error
     """
+    from db.activity import log_activity, update_activity_status
+    from db.models.activity import EVENT_CLEANUP
     from extensions import socketio
     from services.cleanup_rule_runner import CleanupBusyError, execute_rule
 
+    activity_row = log_activity(
+        EVENT_CLEANUP, status="running", details={"kind": "rule_run", "rule_id": rule_id}
+    )
     try:
         result = execute_rule(rule_id, socketio=socketio)
+        update_activity_status(
+            activity_row,
+            "success",
+            {
+                "files_deleted": result.get("files_deleted", 0),
+                "bytes_freed": result.get("bytes_freed", 0),
+            },
+        )
         return jsonify(result)
     except CleanupBusyError as e:
+        update_activity_status(activity_row, "failed", {"error": str(e)})
         return jsonify({"error": str(e)}), 409
     except ValueError as e:
+        update_activity_status(activity_row, "failed", {"error": str(e)})
         code = 404 if "not found" in str(e) else 400
         return jsonify({"error": str(e)}), code
     except Exception as e:
         logger.exception("Rule %d failed: %s", rule_id, e)
+        update_activity_status(activity_row, "failed", {"error": str(e)})
         return jsonify({"error": "Internal server error"}), 500
 
 

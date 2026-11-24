@@ -7,12 +7,16 @@ const mockUseJobs = vi.fn()
 const mockUseBatchStatus = vi.fn()
 const mockCancelMutate = vi.fn()
 const mockClearMutate = vi.fn()
+const mockCancelRunningMutate = vi.fn()
+const mockStopBatchMutate = vi.fn()
 
 vi.mock('@/hooks/useApi', () => ({
   useJobs: (...args: unknown[]) => mockUseJobs(...args),
   useBatchStatus: () => mockUseBatchStatus(),
   useCancelJob: () => ({ mutate: mockCancelMutate, isPending: false }),
   useClearQueuedJobs: () => ({ mutate: mockClearMutate, isPending: false }),
+  useCancelRunningTranslation: () => ({ mutate: mockCancelRunningMutate, isPending: false }),
+  useStopBatchTranslate: () => ({ mutate: mockStopBatchMutate, isPending: false }),
 }))
 vi.mock('@/components/shared/Toast', () => ({ toast: vi.fn() }))
 vi.mock('react-i18next', () => ({
@@ -77,10 +81,30 @@ describe('TranslationsTab', () => {
     expect(cancelButtons).toHaveLength(2)
   })
 
-  it('does not render cancel buttons for running rows', () => {
+  it('renders a stop control on running rows that cancels through the live queue', () => {
     mockJobs({ data: [] }, RUNNING_JOBS)
     render(<TranslationsTab />)
-    expect(screen.queryByLabelText('translations.cancel_job')).not.toBeInTheDocument()
+    const stopButton = screen.getByLabelText('translations.stop_running')
+    fireEvent.click(stopButton)
+    // Cooperative queue cancel (POST /translation/queue/<id>/cancel), not
+    // the queued-job DELETE mutation.
+    expect(mockCancelRunningMutate).toHaveBeenCalledWith('run-1', expect.anything())
+    expect(mockCancelMutate).not.toHaveBeenCalled()
+  })
+
+  it('renders a batch STOP control while a batch run is in flight', () => {
+    mockUseBatchStatus.mockReturnValue({
+      data: { running: true, total: 10, processed: 3, succeeded: 2, failed: 1, skipped: 0 },
+    })
+    render(<TranslationsTab />)
+    const stopButton = screen.getByLabelText('translations.stop_batch')
+    fireEvent.click(stopButton)
+    expect(mockStopBatchMutate).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not render the batch STOP control when no batch is running', () => {
+    render(<TranslationsTab />)
+    expect(screen.queryByLabelText('translations.stop_batch')).not.toBeInTheDocument()
   })
 
   it('calls the cancel mutation with the job id when clicked', () => {

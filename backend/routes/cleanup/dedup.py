@@ -8,6 +8,7 @@ Endpoints:
 """
 
 import logging
+import threading
 import uuid
 
 from flask import current_app, jsonify, request
@@ -67,6 +68,9 @@ def start_scan():
         _scan_state["progress"] = 0
         _scan_state["total"] = 0
         _scan_state["result"] = None
+        _scan_state["cancel_event"] = threading.Event()
+        _scan_state["cancelled"] = False
+        cancel_event = _scan_state["cancel_event"]
 
     # The worker runs on the shared pool, outside the request that started it.
     # Both the engine and the socket emit reach for app state, so the context
@@ -76,22 +80,36 @@ def start_scan():
     # ever surfaces in the status endpoint.
     app = current_app._get_current_object()
 
+    from db.activity import log_activity, update_activity_status
+    from db.models.activity import EVENT_CLEANUP
+
+    activity_row = log_activity(
+        EVENT_CLEANUP, status="running", details={"kind": "dedup_scan", "scan_id": scan_id}
+    )
+
     def _run_scan():
         from dedup_engine import scan_for_duplicates
 
         try:
             with app.app_context():
-                result = scan_for_duplicates(media_path, socketio=socketio)
+                result = scan_for_duplicates(media_path, socketio=socketio, cancel_event=cancel_event)
                 with _scan_lock:
                     _scan_state["result"] = result
+                    _scan_state["cancelled"] = bool(result.get("cancelled"))
                     _scan_state["running"] = False
                 socketio.emit("scan_complete", result)
+                update_activity_status(
+                    activity_row,
+                    "cancelled" if result.get("cancelled") else "success",
+                    {"groups": len(result.get("groups", []))},
+                )
             logger.info("Dedup scan complete: %s", scan_id)
         except Exception as e:
             logger.exception("Dedup scan failed: %s", e)
             with _scan_lock:
                 _scan_state["result"] = {"error": str(e)}
                 _scan_state["running"] = False
+            update_activity_status(activity_row, "failed", {"error": str(e)})
             try:
                 with app.app_context():
                     socketio.emit("scan_error", {"error": str(e)})
@@ -142,8 +160,44 @@ def scan_status():
                 "running": _scan_state["running"],
                 "scan_id": _scan_state["scan_id"],
                 "result": _scan_state["result"],
+                "cancelled": bool(_scan_state.get("cancelled")),
             }
         )
+
+
+@bp.route("/scan/stop", methods=["POST"])
+def stop_scan():
+    """Stop a running dedup scan at the next file boundary.
+    ---
+    post:
+      security:
+        - apiKeyAuth: []
+      tags:
+        - Cleanup
+      summary: Stop dedup scan
+      description: Files already hashed are stored and reported as partial groups; the result carries cancelled=true. Hashing of pending files stops immediately.
+      responses:
+        202:
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        409:
+          description: No scan running
+    """
+    with _scan_lock:
+        if not _scan_state["running"]:
+            return jsonify({"error": "No scan running"}), 409
+        event = _scan_state["cancel_event"]
+
+    if event is not None:
+        event.set()
+    logger.info("Dedup scan %s stop requested", _scan_state.get("scan_id"))
+    return jsonify({"status": "cancelling"}), 202
 
 
 @bp.route("/duplicates", methods=["GET"])

@@ -90,6 +90,63 @@ def get_job(job_id):
     return jsonify(job)
 
 
+@bp.route("/jobs/<job_id>/cancel", methods=["POST"])
+def cancel_job(job_id):
+    """Mark a queued or running whisper job as cancelled.
+
+    Queued jobs are cancelled outright; a running one gets a per-job flag
+    checked between phases (extracting / loading / transcribing / saving),
+    so it stops at the next boundary. If the flag lands before the saving
+    phase, the transcript is not persisted.
+    ---
+    post:
+      security:
+        - apiKeyAuth: []
+      tags:
+        - Whisper
+      summary: Cancel a whisper job
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema:
+            type: string
+      responses:
+        202:
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        404:
+          description: Job not found
+        409:
+          description: Job already terminal
+    """
+    from db.whisper import get_whisper_job, update_whisper_job
+    from routes.whisper import _get_queue
+
+    job = get_whisper_job(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    if job.get("status", "") in ("completed", "failed", "cancelled"):
+        return jsonify({"error": "Job already finished"}), 409
+
+    queue = _get_queue()
+    if queue.cancel_job(job_id):
+        return jsonify({"status": "cancelling", "job_id": job_id}), 202
+
+    # The DB row exists but the in-memory queue has dropped it (typically
+    # after a restart): mark the row cancelled directly so the orphan does
+    # not stay queued forever. Mirrors the DELETE handler.
+    update_whisper_job(job_id, status="cancelled")
+    return jsonify({"status": "cancelling", "job_id": job_id, "orphan": True}), 202
+
+
 @bp.route("/jobs/<job_id>", methods=["DELETE"])
 def delete_job(job_id):
     """Cancel or delete a job.

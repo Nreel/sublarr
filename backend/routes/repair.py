@@ -120,6 +120,27 @@ def repair_status():
     return jsonify(job.get_state()), 200
 
 
+@bp.route("/stop", methods=["POST"])
+def repair_stop():
+    """Stop the running repair pass at its next candidate boundary.
+
+    ---
+    post:
+      summary: Stop the repair pass
+      responses:
+        202:
+          description: Stop requested; pass reports cancelled in /status
+        409:
+          description: No repair pass running
+    """
+    from services.repair import job
+
+    if not job.request_stop():
+        return jsonify({"error": "No repair pass running"}), 409
+
+    return jsonify({"status": "cancelling"}), 202
+
+
 @bp.route("/wrong-episodes", methods=["GET"])
 def wrong_episodes():
     """Saved automatic downloads whose winning release names another episode.

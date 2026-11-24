@@ -123,6 +123,14 @@ function GlobalWebSocketListener() {
     onJobUpdate: () => {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] })
     },
+    // Remux/sync runs report through the activity log; their socket updates
+    // keep the History tab's running rows (and their STOP buttons) current.
+    onRemuxJobUpdate: () => {
+      void queryClient.invalidateQueries({ queryKey: ['activity'] })
+    },
+    onSyncJobUpdate: () => {
+      void queryClient.invalidateQueries({ queryKey: ['activity'] })
+    },
     onWantedBatchProgress: refreshQueueStatus,
     onWantedBatchCompleted: refreshQueueStatus,
     onBatchExtractProgress: refreshQueueStatus,

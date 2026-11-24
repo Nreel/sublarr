@@ -11,16 +11,18 @@ from wanted_search.process import process_wanted_item
 logger = logging.getLogger(__name__)
 
 
-def process_wanted_batch(item_ids=None, app=None):
+def process_wanted_batch(item_ids=None, app=None, cancel_event=None):
     """Process multiple wanted items with parallel execution.
 
-    Uses ThreadPoolExecutor for parallel processing. Provider-level rate
+    Uses ThreadPoolExecutor for parallel execution. Provider-level rate
     limiters and circuit breakers handle concurrency safety. Error isolation
     ensures one item failure doesn't abort the batch.
 
     Args:
         item_ids: List of specific IDs, or None for all 'wanted' items.
         app: Flask app instance. Each worker thread pushes its own app context.
+        cancel_event: Optional threading.Event; when set, the loop stops after
+            the item in flight and pending items are never started.
 
     Yields:
         Progress dicts for each item processed.
@@ -61,6 +63,10 @@ def process_wanted_batch(item_ids=None, app=None):
         }
 
         for future in as_completed(future_to_item):
+            if cancel_event is not None and cancel_event.is_set():
+                # Never start pending items; let the in-flight ones finish.
+                executor.shutdown(cancel_futures=True)
+                break
             item = future_to_item[future]
             item_id = item["id"]
             display = item.get("title", item.get("file_path", str(item_id)))

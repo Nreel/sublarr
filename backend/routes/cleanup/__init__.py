@@ -28,6 +28,7 @@ _scan_state = {
     "scan_id": None,
     "progress": 0,
     "total": 0,
+    "cancel_event": None,
     "result": None,
 }
 _scan_lock = threading.Lock()

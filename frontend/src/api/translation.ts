@@ -286,6 +286,12 @@ export async function getQueue(): Promise<TranslationQueueSnapshot> {
   return data
 }
 
+/** Stop the translation batch run in flight (stops between files). */
+export async function stopBatchTranslate(): Promise<{ status: string }> {
+  const { data } = await api.post('/batch/cancel')
+  return data
+}
+
 export async function cancelJob(
   jobId: string,
 ): Promise<{ status: string; job_id: string }> {

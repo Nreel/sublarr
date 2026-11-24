@@ -335,3 +335,147 @@ def test_get_activity_orders_by_id_desc(app_ctx):
     # And the row matched-by-newest is the last one we just inserted.
     last_inserted = db.session.query(ActivityLog).order_by(ActivityLog.id.desc()).first()
     assert result["data"][0]["id"] == last_inserted.id
+
+
+# ---------------------------------------------------------------------------
+# Extended lifecycle: log_event returns the row id, update_activity_status
+# moves rows to terminal statuses, new event types accepted by GET /activity.
+# ---------------------------------------------------------------------------
+
+NEW_EVENT_TYPES = [
+    "whisper",
+    "remux",
+    "sync",
+    "cleanup",
+    "backup",
+    "hook",
+    "automation",
+    "anidb",
+    "repair",
+]
+
+
+def test_new_event_type_constants():
+    """Every new event type constant maps to its literal."""
+    from db.models.activity import (
+        EVENT_ANIDB,
+        EVENT_AUTOMATION,
+        EVENT_BACKUP,
+        EVENT_CLEANUP,
+        EVENT_HOOK,
+        EVENT_REPAIR,
+        EVENT_REMUX,
+        EVENT_SYNC,
+        EVENT_WHISPER,
+    )
+
+    assert [
+        EVENT_WHISPER,
+        EVENT_REMUX,
+        EVENT_SYNC,
+        EVENT_CLEANUP,
+        EVENT_BACKUP,
+        EVENT_HOOK,
+        EVENT_AUTOMATION,
+        EVENT_ANIDB,
+        EVENT_REPAIR,
+    ] == NEW_EVENT_TYPES
+
+
+def test_log_event_returns_row_id(app_ctx):
+    """log_activity() returns the inserted row's id."""
+    from db.activity import get_activity, log_activity
+
+    row_id = log_activity(
+        "remux", file_path="/m/x.mkv", status="running", details={"job_id": "abc"}
+    )
+    assert row_id is not None
+    result = get_activity(page=1, per_page=10)
+    assert result["data"][0]["id"] == row_id
+
+
+def test_update_activity_status_terminal(app_ctx):
+    """update_activity_status() flips a running row to failed and merges details."""
+    from db.activity import get_activity, log_activity, update_activity_status
+
+    row_id = log_activity(
+        "whisper", file_path="/m/v.mkv", status="running", details={"job_id": "j1"}
+    )
+    update_activity_status(row_id, "failed", {"error": "boom"})
+
+    entry = get_activity(page=1, per_page=10)["data"][0]
+    assert entry["status"] == "failed"
+    assert entry["details"]["error"] == "boom"
+    assert entry["details"]["job_id"] == "j1"  # merge keeps the start details
+
+
+def test_update_activity_status_cancelled_and_success(app_ctx):
+    """Terminal cancelled/success updates work."""
+    from db.activity import get_activity, log_activity, update_activity_status
+
+    cancelled = log_activity("sync", status="running", details={"job_id": "s1"})
+    update_activity_status(cancelled, "cancelled")
+    done = log_activity("cleanup", status="running", details={"rules": 2})
+    update_activity_status(done, "success", {"rules_done": 2})
+
+    data = get_activity(page=1, per_page=10)["data"]
+    statuses = {row["id"]: row["status"] for row in data}
+    assert statuses[cancelled] == "cancelled"
+    assert statuses[done] == "success"
+    assert data[0]["details"]["rules_done"] == 2
+
+
+def test_update_activity_status_swallows_bad_ids(app_ctx):
+    """None and unknown row ids are no-ops, never raise."""
+    from db.activity import update_activity_status
+
+    update_activity_status(None, "success")
+    update_activity_status(999999, "failed", {"error": "x"})
+
+
+def test_update_activity_status_replaces_corrupt_details(app_ctx):
+    """A row whose stored details_json is not valid JSON is replaced cleanly."""
+    from db.activity import get_activity, update_activity_status
+    from db.models.activity import ActivityLog
+    from extensions import db
+
+    row = ActivityLog(
+        event_type="backup",
+        status="running",
+        details_json="not json",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.session.add(row)
+    db.session.commit()
+
+    update_activity_status(row.id, "failed", {"error": "disk full"})
+    entry = get_activity(page=1, per_page=10)["data"][0]
+    assert entry["details"] == {"error": "disk full"}
+    assert entry["status"] == "failed"
+
+
+def test_activity_endpoint_accepts_new_event_types(client):
+    """GET /api/v1/activity?type=<new> is accepted for every new type."""
+    from db.activity import log_activity
+
+    with client.application.app_context():
+        for event_type in NEW_EVENT_TYPES:
+            log_activity(event_type, status="success")
+    for event_type in NEW_EVENT_TYPES:
+        resp = client.get(f"/api/v1/activity?type={event_type}")
+        assert resp.status_code == 200, event_type
+        assert resp.get_json()["data"][0]["event_type"] == event_type
+
+
+def test_running_and_failed_rows_visible_in_endpoint(client):
+    """running/failed statuses pass through the endpoint with parsed details."""
+    from db.activity import log_activity, update_activity_status
+
+    with client.application.app_context():
+        row_id = log_activity("hook", status="running", details={"hook": "on-download"})
+        update_activity_status(row_id, "failed", {"error": "script died"})
+
+    body = client.get("/api/v1/activity?type=hook").get_json()
+    entry = body["data"][0]
+    assert entry["status"] == "failed"
+    assert entry["details"]["error"] == "script died"

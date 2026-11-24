@@ -10,7 +10,9 @@ import { useTranslation } from 'react-i18next'
 import { HistoryPage } from '@/pages/History'
 import { ActivityLogTab } from '@/components/activity/ActivityLogTab'
 
-type SubFilter = 'downloads' | 'translate' | 'extract' | 'delete' | 'scan'
+type SubFilter =
+  | 'downloads' | 'translate' | 'extract' | 'delete' | 'scan'
+  | 'whisper' | 'remux' | 'sync' | 'cleanup' | 'backup' | 'hook' | 'automation' | 'anidb' | 'repair'
 
 export function UnifiedHistoryTab() {
   const { t } = useTranslation('activity')
@@ -22,6 +24,15 @@ export function UnifiedHistoryTab() {
     { id: 'extract',   label: t('history.filter_extract') },
     { id: 'delete',    label: t('history.filter_delete') },
     { id: 'scan',      label: t('history.filter_scan') },
+    { id: 'whisper',   label: t('history.filter_whisper') },
+    { id: 'remux',     label: t('history.filter_remux') },
+    { id: 'sync',      label: t('history.filter_sync') },
+    { id: 'cleanup',   label: t('history.filter_cleanup') },
+    { id: 'backup',    label: t('history.filter_backup') },
+    { id: 'hook',      label: t('history.filter_hook') },
+    { id: 'automation', label: t('history.filter_automation') },
+    { id: 'anidb',     label: t('history.filter_anidb') },
+    { id: 'repair',    label: t('history.filter_repair') },
   ]
 
   return (

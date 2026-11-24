@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useJobs, useBatchStatus, useCancelJob, useClearQueuedJobs } from '@/hooks/useApi'
+import { useJobs, useBatchStatus, useCancelJob, useClearQueuedJobs, useCancelRunningTranslation, useStopBatchTranslate } from '@/hooks/useApi'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ProgressBar } from '@/components/shared/ProgressBar'
 import { toast } from '@/components/shared/Toast'
@@ -83,6 +83,10 @@ export function TranslationsTab() {
   const { data: batch } = useBatchStatus()
   const cancelJob = useCancelJob()
   const clearQueued = useClearQueuedJobs()
+  // Running rows cancel through the live translation queue (cooperative),
+  // not DELETE /jobs — that endpoint rejects running jobs with 409.
+  const cancelRunning = useCancelRunningTranslation()
+  const stopBatch = useStopBatchTranslate()
 
   const queuedCount = queuedJobs?.data?.length ?? 0
 
@@ -90,6 +94,20 @@ export function TranslationsTab() {
     cancelJob.mutate(jobId, {
       onSuccess: () => toast(t('translations.cancel_success'), 'success'),
       onError: () => toast(t('translations.cancel_failed'), 'error'),
+    })
+  }
+
+  const handleCancelRunning = (jobId: string) => {
+    cancelRunning.mutate(jobId, {
+      onSuccess: () => toast(t('translations.cancel_success'), 'success'),
+      onError: () => toast(t('translations.cancel_failed'), 'error'),
+    })
+  }
+
+  const handleStopBatch = () => {
+    stopBatch.mutate(undefined, {
+      onSuccess: () => toast(t('queue.stop_success'), 'success'),
+      onError: () => toast(t('queue.stop_failed'), 'error'),
     })
   }
 
@@ -120,6 +138,16 @@ export function TranslationsTab() {
           <div className="flex items-center gap-2 mb-3">
             <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent)' }} />
             <h2 className="text-sm font-semibold">{t('queue.batch_processing')}</h2>
+            <button
+              type="button"
+              aria-label={t('translations.stop_batch')}
+              title={t('translations.stop_batch')}
+              onClick={handleStopBatch}
+              disabled={stopBatch.isPending}
+              className="ml-auto shrink-0 p-1 rounded-md text-muted hover:text-error hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <X size={14} />
+            </button>
           </div>
           <ProgressBar value={batch.processed} max={batch.total} className="mb-3" />
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-sm">
@@ -180,6 +208,9 @@ export function TranslationsTab() {
                 file_path={job.file_path}
                 status="running"
                 progress={job.progress}
+                cancelLabel={t('translations.stop_running')}
+                onCancel={() => handleCancelRunning(job.id)}
+                cancelDisabled={cancelRunning.isPending}
                 t={t}
               />
             ))
@@ -225,6 +256,7 @@ export function TranslationsTab() {
                 cancelLabel={t('translations.cancel_job')}
                 onCancel={() => handleCancelJob(job.id)}
                 cancelDisabled={cancelJob.isPending}
+                t={t}
               />
             ))
           ) : (

@@ -170,10 +170,12 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             return {"error": "scan_already_running"}
 
         self._scanning = True
+        self._cancel_event.clear()
         try:
             result = self._scan_all_locked(incremental)
         except Exception as e:
             logger.exception("Wanted scan failed: %s", e)
+            log_activity(EVENT_SCAN, status="failed", details={"kind": "full_scan", "error": str(e)})
             return {"error": str(e)}
         finally:
             self._pass_done = None
@@ -250,7 +252,7 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
         updated += u
         scanned_paths.update(paths)
 
-        if abort_requested():
+        if abort_requested() or self._cancel_event.is_set():
             aborted = True
         else:
             # Scan all Radarr instances
@@ -259,7 +261,7 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             updated += u
             scanned_paths.update(paths)
 
-        if not aborted and abort_requested():
+        if not aborted and (abort_requested() or self._cancel_event.is_set()):
             aborted = True
         elif not aborted:
             # Scan standalone items
@@ -447,6 +449,9 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             }
         except Exception as e:
             logger.exception("Wanted scan for series %d failed: %s", series_id, e)
+            log_activity(
+                EVENT_SCAN, status="failed", details={"kind": "series_scan", "series_id": series_id, "error": str(e)}
+            )
             return {"error": str(e)}
         finally:
             self._scanning = False
@@ -493,6 +498,9 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             }
         except Exception as e:
             logger.exception("Wanted scan for movie %d failed: %s", movie_id, e)
+            log_activity(
+                EVENT_SCAN, status="failed", details={"kind": "movie_scan", "movie_id": movie_id, "error": str(e)}
+            )
             return {"error": str(e)}
         finally:
             self._scanning = False
@@ -629,6 +637,15 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
 
     def cancel_search(self):
         """Signal the running search to stop after current item completions."""
+        self._cancel_event.set()
+
+    def cancel_scan(self):
+        """Signal the running scan to stop at the next between-source checkpoint.
+
+        A stopped full pass stays resumable (#248): ``_resume``/``_pass_done``
+        are untouched, so the next full scan continues where this one stopped
+        and the scheduled tick keeps firing.
+        """
         self._cancel_event.set()
 
     # ─── Scheduler ───────────────────────────────────────────────────────

@@ -293,6 +293,64 @@ def run_now(job_id: str):
     return jsonify({"status": "queued", "oneshot_id": oneshot_id}), 202
 
 
+@bp.route("/jobs/<job_id>/stop", methods=["POST"])
+@limiter.limit("30 per minute")
+def stop_job(job_id: str):
+    """Abort the in-flight run of a job WITHOUT pausing it.
+
+    Cooperative cancellation (``services.scheduler.cancellation``): the tick
+    sets the run's event, and abort-aware job bodies stop at their next
+    checkpoint. The schedule/trigger is untouched — unlike ``pause``, the job
+    keeps firing on its next tick.
+    ---
+    post:
+      tags:
+        - Scheduler
+      summary: Stop in-flight scheduler run
+      responses:
+        202:
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        404:
+          description: Job not registered
+        409:
+          description: No run in flight
+    """
+    s = _get_scheduler()
+    if s is None:
+        return _scheduler_down_response()
+    if job_id not in s._registered_ids:
+        return (
+            jsonify(
+                {
+                    "error": f"Job {job_id!r} not found",
+                    "error_type": "NotFoundError",
+                }
+            ),
+            404,
+        )
+    from services.scheduler.cancellation import request_stop
+
+    if request_stop(job_id, reason="stopped by user"):
+        _audit_log(job_id, "stop")
+        return jsonify({"status": "cancelling"}), 202
+    return (
+        jsonify(
+            {
+                "error": f"No run of {job_id!r} is in flight",
+                "error_type": "ConflictError",
+            }
+        ),
+        409,
+    )
+
+
 @bp.route("/jobs/<job_id>/pause", methods=["POST"])
 @limiter.limit("30 per minute")
 def pause(job_id: str):

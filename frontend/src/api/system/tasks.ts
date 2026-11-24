@@ -118,6 +118,18 @@ export async function getSyncJobStatus(jobId: string): Promise<{
   return data
 }
 
+/** Abort a video-sync job in flight (kills ffsubsync/alass). */
+export async function stopVideoSyncJob(jobId: string): Promise<{ status: string; job_id: string }> {
+  const { data } = await api.post(`/tools/video-sync/jobs/${jobId}/stop`)
+  return data
+}
+
+/** Stop the subtitle repair run in flight. */
+export async function stopRepair(): Promise<{ status: string }> {
+  const { data } = await api.post('/repair/stop')
+  return data
+}
+
 export async function getVideoChapters(videoPath: string): Promise<ChapterList> {
   const { data } = await api.get('/tools/chapters', {
     params: { video_path: videoPath },
@@ -160,6 +172,12 @@ export async function getCleanupStats(): Promise<DiskSpaceStats> {
 
 export async function startCleanupScan(): Promise<{ scan_id: string; message: string }> {
   const { data } = await api.post('/cleanup/scan')
+  return data
+}
+
+/** Stop the dedup scan in flight (stops between files). */
+export async function stopCleanupScan(): Promise<{ status: string }> {
+  const { data } = await api.post('/cleanup/scan/stop')
   return data
 }
 

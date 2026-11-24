@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useWantedBatchStatus, useWantedBatchProbeStatus, useScannerStatus } from '@/hooks/useApi'
+import { useWantedBatchStatus, useWantedBatchProbeStatus, useScannerStatus, useStopWantedBatch, useStopBatchProbe, useCancelTask } from '@/hooks/useApi'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { ProgressBar } from '@/components/shared/ProgressBar'
+import { toast } from '@/components/shared/Toast'
 import { truncatePath } from '@/lib/utils'
-import { Layers, ListVideo, ScanSearch, Search } from 'lucide-react'
+import { Layers, ListVideo, ScanSearch, Search, X } from 'lucide-react'
 
 interface ProviderSummary {
   active: number
@@ -18,6 +19,16 @@ export function QueuePage() {
   const { data: wantedBatch } = useWantedBatchStatus()
   const { data: probe } = useWantedBatchProbeStatus()
   const { data: scanner } = useScannerStatus()
+  const stopBatch = useStopWantedBatch()
+  const stopProbe = useStopBatchProbe()
+  const cancelScan = useCancelTask()
+
+  // Every stop reports the same pair of toasts; mutation state drives the
+  // button's disabled flag.
+  const stopOptions = {
+    onSuccess: () => toast(t('queue.stop_success'), 'success'),
+    onError: () => toast(t('queue.stop_failed'), 'error'),
+  }
 
   // Track provider summary from WebSocket search progress events
   const [providerSummary, setProviderSummary] = useState<ProviderSummary | null>(null)
@@ -41,6 +52,11 @@ export function QueuePage() {
           <div className="flex items-center gap-2 mb-3">
             <Search size={16} className="animate-pulse text-warning" />
             <h2 className="text-sm font-semibold">{t('queue.wanted_batch_searching')}</h2>
+            <StopButton
+              label={t('queue.stop_search')}
+              pending={stopBatch.isPending}
+              onStop={() => stopBatch.mutate(undefined, stopOptions)}
+            />
           </div>
           <ProgressBar value={wantedBatch.processed} max={wantedBatch.total} className="mb-3" />
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-sm">
@@ -82,6 +98,11 @@ export function QueuePage() {
           <div className="flex items-center gap-2 mb-3">
             <Layers size={16} className="animate-pulse text-accent" />
             <h2 className="text-sm font-semibold">{t('queue.batch_probe_running')}</h2>
+            <StopButton
+              label={t('queue.stop_probe')}
+              pending={stopProbe.isPending}
+              onStop={() => stopProbe.mutate(undefined, stopOptions)}
+            />
           </div>
           <ProgressBar value={probe.extracted ?? 0} max={probe.total} className="mb-3" />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
@@ -116,6 +137,11 @@ export function QueuePage() {
           <div className="flex items-center gap-2 mb-3">
             <ScanSearch size={16} className="animate-pulse text-success" />
             <h2 className="text-sm font-semibold">{t('queue.scanner_running')}</h2>
+            <StopButton
+              label={t('queue.stop_scan')}
+              pending={cancelScan.isPending}
+              onStop={() => cancelScan.mutate('wanted_scan', stopOptions)}
+            />
             {scanner.progress.phase && (
               <span className="text-xs px-2 py-0.5 rounded bg-page text-muted">
                 {scanner.progress.phase}
@@ -159,6 +185,23 @@ export function QueuePage() {
         </div>
       )}
     </div>
+  )
+}
+
+/** Trailing STOP control for an in-flight run card (mirrors TranslationJobRow's X). */
+function StopButton({ label, pending, onStop }: { label: string; pending: boolean; onStop: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onStop}
+      disabled={pending}
+      data-testid="queue-stop"
+      className="ml-auto shrink-0 p-1 rounded-md text-muted hover:text-error hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      <X size={14} />
+    </button>
   )
 }
 

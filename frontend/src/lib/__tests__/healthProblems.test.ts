@@ -11,6 +11,10 @@ const CODES = [
   'no_results', 'no_credentials', 'not_initialized', 'low_hit_rate', 'no_activity',
   'timeout', 'line_mismatch', 'backend_auth', 'backend_quota', 'backend_unreachable', 'backend_error',
   'source_missing', 'signs_only', 'unsupported_format', 'outside_media', 'job_error',
+  'scheduler_error', 'timeout_not_started', 'timeout_abandoned', 'missed', 'cancelled',
+  'whisper_failed', 'sync_failed', 'remux_failed', 'extract_failed', 'cleanup_failed',
+  'backup_failed', 'hook_failed', 'automation_failed', 'anidb_failed', 'repair_failed',
+  'notification_failed',
 ]
 
 function lookup(locale: Record<string, unknown>, key: string): string | undefined {
@@ -42,13 +46,19 @@ describe('problemBadgeSpec', () => {
 })
 
 describe('healthProblemCount', () => {
-  it('counts stuck items, degraded providers, and recent translation failures', () => {
+  it('counts stuck items, degraded providers, recent translation failures, and new failure sections', () => {
     expect(
       healthProblemCount({
         totals: { problems: 5, providers_degraded: 2 },
         translation: { failures_7d: 3 },
+        scheduler_errors: [{}],
+        whisper_errors: [{}, {}],
+        sync_errors: [{}],
+        ops_errors: [{}, {}, {}],
+        hook_errors: [{}],
+        backup_errors: [{}],
       } as never),
-    ).toBe(10)
+    ).toBe(19)
   })
 
   it('is zero when the payload is missing or everything is healthy', () => {

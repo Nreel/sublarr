@@ -389,6 +389,40 @@ def _safe_arg_path(path: str) -> str:
     return safe_subprocess_arg(path)
 
 
+def _run_capturing(cmd: list[str], timeout: float, proc_sink=None) -> subprocess.CompletedProcess:
+    """``subprocess.run(cmd, capture_output=True, text=True, timeout=...)`` via
+    ``Popen`` so the caller can hold the process handle and kill it (the
+    remux job stop endpoint). Capture and timeout semantics match ``run``:
+    UTF-8 text output, child killed on timeout, ``TimeoutExpired`` raised.
+    With no ``proc_sink`` the plain ``subprocess.run`` path is kept.
+    """
+    if proc_sink is None:
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc_sink is not None:
+        proc_sink(proc)
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+
+
 # ---------------------------------------------------------------------------
 # mkvmerge backend
 # ---------------------------------------------------------------------------
@@ -410,7 +444,7 @@ def _media_slot(label: str):
         raise RemuxError(str(exc)) from None
 
 
-def _remux_mkvmerge(video_path: str, stream_indices: list[int], output_path: str) -> None:
+def _remux_mkvmerge(video_path: str, stream_indices: list[int], output_path: str, proc_sink=None) -> None:
     """Remove subtitle streams using mkvmerge.
 
     `stream_indices` are the global track IDs as reported by ffprobe/mkvmerge -i
@@ -435,14 +469,7 @@ def _remux_mkvmerge(video_path: str, stream_indices: list[int], output_path: str
     from utils.io_timeout import compute_io_timeout
 
     with _media_slot("mkvmerge remux"):
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=compute_io_timeout(video_path),
-        )
+        result = _run_capturing(cmd, compute_io_timeout(video_path), proc_sink)
     if result.returncode not in (0, 1):  # mkvmerge exit 1 = warnings, still OK
         # mkvmerge writes hard errors to stdout, not stderr — include both so
         # failures are never logged with an empty reason.
@@ -455,7 +482,7 @@ def _remux_mkvmerge(video_path: str, stream_indices: list[int], output_path: str
 # ---------------------------------------------------------------------------
 
 
-def _remux_ffmpeg(video_path: str, stream_indices: list[int], output_path: str) -> None:
+def _remux_ffmpeg(video_path: str, stream_indices: list[int], output_path: str, proc_sink=None) -> None:
     """Remove subtitle streams using ffmpeg stream copy."""
     if not _which("ffmpeg"):
         raise RemuxError("ffmpeg not found")
@@ -475,14 +502,7 @@ def _remux_ffmpeg(video_path: str, stream_indices: list[int], output_path: str) 
     from utils.io_timeout import compute_io_timeout
 
     with _media_slot("ffmpeg remux"):
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=compute_io_timeout(video_path),
-        )
+        result = _run_capturing(cmd, compute_io_timeout(video_path), proc_sink)
     if result.returncode != 0:
         raise RemuxError(f"ffmpeg failed (exit {result.returncode}): {result.stderr[-500:]}")
 
@@ -680,6 +700,7 @@ def remove_subtitle_streams(
     streams: list[tuple[int, int]],
     use_reflink: bool = True,
     trash_dir: str = ".sublarr",
+    proc_sink=None,
 ) -> str | None:
     """Remove one or more subtitle streams from a video container in one pass.
 
@@ -735,15 +756,15 @@ def remove_subtitle_streams(
             video_path,
         )
         if backend == "mkvmerge" and _which("mkvmerge"):
-            _remux_mkvmerge(video_path, stream_indices, tmp_path)
+            _remux_mkvmerge(video_path, stream_indices, tmp_path, proc_sink)
         elif backend == "mkvmerge":
             logger.warning(
                 "mkvmerge not found — falling back to ffmpeg for MKV "
                 "(install mkvtoolnix for better support)"
             )
-            _remux_ffmpeg(video_path, stream_indices, tmp_path)
+            _remux_ffmpeg(video_path, stream_indices, tmp_path, proc_sink)
         else:
-            _remux_ffmpeg(video_path, stream_indices, tmp_path)
+            _remux_ffmpeg(video_path, stream_indices, tmp_path, proc_sink)
 
         _verify(video_path, tmp_path, n_removed=len(streams))
 
@@ -767,6 +788,7 @@ def remove_subtitle_stream(
     subtitle_track_index: int,
     use_reflink: bool = True,
     trash_dir: str = ".sublarr",
+    proc_sink=None,
 ) -> str | None:
     """Remove a single subtitle stream. Convenience wrapper around remove_subtitle_streams."""
     return remove_subtitle_streams(
@@ -774,6 +796,7 @@ def remove_subtitle_stream(
         streams=[(stream_index, subtitle_track_index)],
         use_reflink=use_reflink,
         trash_dir=trash_dir,
+        proc_sink=proc_sink,
     )
 
 

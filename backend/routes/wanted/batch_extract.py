@@ -6,7 +6,13 @@ from flask import current_app, jsonify, request
 
 from events import emit_event
 from extensions import socketio
-from routes.batch_state import _batch_extract_lock, _batch_extract_state
+from routes.batch_state import (
+    _batch_extract_lock,
+    _batch_extract_state,
+    begin_run,
+    request_cancel,
+    serialize_batch_state,
+)
 from routes.wanted import bp
 from services.background_tasks import submit_background
 
@@ -49,10 +55,15 @@ def _run_batch_extract(item_ids, auto_translate, app):
                 "current_item": None,
             }
         )
+        # A cancel that arrived between the route's 202 and this reset must survive.
+        if not _batch_extract_state.get("cancelled"):
+            begin_run(_batch_extract_state)
 
     try:
         with app.app_context():
             for idx, item_id in enumerate(item_ids):
+                if _batch_extract_state["cancel_event"].is_set():
+                    break
                 item = get_wanted_item(item_id)
                 with _batch_extract_lock:
                     _batch_extract_state["current_item"] = (item or {}).get(
@@ -246,4 +257,37 @@ def batch_extract_status():
           description: Current batch-extract state
     """
     with _batch_extract_lock:
-        return jsonify(dict(_batch_extract_state))
+        return jsonify(serialize_batch_state(_batch_extract_state))
+
+
+@bp.route("/wanted/batch-extract/cancel", methods=["POST"])
+def cancel_batch_extract():
+    """Stop the running batch extract.
+    ---
+    post:
+      tags:
+        - Wanted
+      summary: Cancel batch extract
+      description: >
+        Sets the cancellation event checked between items of the running
+        batch extract. Pending items are never extracted; the in-flight one
+        finishes first. Nothing about the schedule changes.
+      security:
+        - apiKeyAuth: []
+      responses:
+        202:
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        409:
+          description: No batch extract running
+    """
+    with _batch_extract_lock:
+        if not request_cancel(_batch_extract_state):
+            return jsonify({"error": "Batch extraction is not running"}), 409
+    return jsonify({"status": "cancelling"}), 202

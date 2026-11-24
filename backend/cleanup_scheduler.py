@@ -13,6 +13,8 @@ lifecycle.
 import logging
 from datetime import UTC, datetime
 
+from services.scheduler.cancellation import abort_requested
+
 logger = logging.getLogger(__name__)
 
 # Default: run weekly (168 hours)
@@ -155,6 +157,9 @@ def _execute_cleanup():
     )
 
     _state["executing"] = True
+    activity_row = None
+    rules_done = 0
+    run_cancelled = False
     try:
         # Always run zombie-job expiry regardless of user-configured cleanup rules
         _expire_zombie_jobs()
@@ -176,7 +181,34 @@ def _execute_cleanup():
 
         logger.info("Executing %d scheduled cleanup rules", len(scheduled_rules))
 
+        from db.activity import log_activity, update_activity_status
+        from db.models.activity import EVENT_CLEANUP
+
+        activity_row = log_activity(
+            EVENT_CLEANUP, status="running", details={"rules": len(scheduled_rules)}
+        )
+
+        rules_done = 0
         for rule in scheduled_rules:
+            # Scheduler stop: drop the remaining rules but keep the ones
+            # already executed (each logged its own cleanup record).
+            if abort_requested():
+                logger.info(
+                    "Scheduled cleanup cancelled after %d/%d rules",
+                    rules_done,
+                    len(scheduled_rules),
+                )
+                run_cancelled = True
+                update_activity_status(activity_row, "cancelled", {"rules_done": rules_done})
+                try:
+                    repo.log_cleanup(
+                        action_type="scheduled_cleanup_cancelled",
+                        files_deleted=0,
+                        bytes_freed=0,
+                    )
+                except Exception:
+                    logger.debug("Failed to log cancelled cleanup run", exc_info=True)
+                break
             try:
                 rule_type = rule["rule_type"]
                 rule_id = rule["id"]
@@ -419,8 +451,16 @@ def _execute_cleanup():
                 else:
                     logger.warning("Unknown rule type in scheduler: %s", rule_type)
 
+                rules_done += 1
             except Exception as e:
                 logger.error("Failed to execute rule %d (%s): %s", rule["id"], rule["name"], e)
+                log_activity(
+                    EVENT_CLEANUP,
+                    status="failed",
+                    details={"kind": "rule_failure", "rule": rule["name"], "error": str(e)},
+                )
     finally:
         _state["executing"] = False
         _state["last_run_at"] = datetime.now(UTC)
+        if activity_row is not None and not run_cancelled:
+            update_activity_status(activity_row, "success", {"rules_done": rules_done})

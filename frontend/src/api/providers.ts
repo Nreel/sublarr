@@ -203,6 +203,8 @@ export const saveWhisperBackendConfig = (name: string, config: Record<string, st
 export const getWhisperConfig = () => api.get('/whisper/config').then(r => r.data)
 export const saveWhisperConfig = (config: Record<string, unknown>) => api.put('/whisper/config', config).then(r => r.data)
 export const getWhisperQueue = (params?: { status?: string; limit?: number }) => api.get('/whisper/queue', { params }).then(r => r.data)
+/** Cancel a whisper job — queued instantly, in-flight at the next phase boundary. */
+export const cancelWhisperJob = (jobId: string) => api.post(`/whisper/jobs/${jobId}/cancel`).then(r => r.data)
 export const getWhisperJob = (jobId: string) => api.get(`/whisper/jobs/${jobId}`).then(r => r.data)
 export const submitWhisperJob = (data: { file_path: string; language?: string }) => api.post('/whisper/transcribe', data).then(r => r.data)
 export const deleteWhisperJob = (jobId: string) => api.delete(`/whisper/jobs/${jobId}`).then(r => r.data)

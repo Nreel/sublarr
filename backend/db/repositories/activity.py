@@ -18,8 +18,13 @@ class ActivityLogRepository:
         file_path: str | None = None,
         status: str = "success",
         details: dict | None = None,
-    ) -> None:
-        """Insert a new activity_log row. Rolls back on error."""
+    ) -> int | None:
+        """Insert a new activity_log row. Rolls back on error.
+
+        Returns the new row's id, or ``None`` if the insert failed —
+        callers use the id with :meth:`update_activity_status` to move a
+        long-running activity from ``running`` to a terminal status.
+        """
         try:
             row = ActivityLog(
                 event_type=event_type,
@@ -30,9 +35,49 @@ class ActivityLogRepository:
             )
             db.session.add(row)
             db.session.commit()
+            return row.id
         except Exception:
             logger.exception("Failed to log activity event %s", event_type)
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass  # e.g. no app context on a worker thread - bookkeeping must never raise
+            return None
+
+    def update_activity_status(
+        self,
+        row_id: int | None,
+        status: str,
+        details: dict | None = None,
+    ) -> None:
+        """Update status (and optionally details_json) of an existing row.
+
+        ``details`` is merged into the stored JSON (new keys win); errors
+        are swallowed so callers in pipelines never break on log bookkeeping.
+        """
+        if row_id is None:
+            return
+        try:
+            row = db.session.get(ActivityLog, row_id)
+            if row is None:
+                return
+            row.status = status
+            if details is not None:
+                merged = {}
+                if row.details_json:
+                    try:
+                        merged = json.loads(row.details_json)
+                    except (TypeError, ValueError):
+                        merged = {}
+                merged.update(details)
+                row.details_json = json.dumps(merged)
+            db.session.commit()
+        except Exception:
+            logger.exception("Failed to update activity status for row %s", row_id)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass  # e.g. no app context on a worker thread - bookkeeping must never raise
 
     def get_activity(
         self,

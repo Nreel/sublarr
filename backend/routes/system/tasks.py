@@ -97,6 +97,7 @@ def list_tasks():
                 "next_run": scan_next,
                 "interval_hours": scan_interval,
                 "enabled": scan_interval > 0,
+                "cancellable": True,
             }
         )
 
@@ -130,6 +131,7 @@ def list_tasks():
                 "next_run": search_next,
                 "interval_hours": search_interval,
                 "enabled": search_interval > 0,
+                "cancellable": True,
             }
         )
     except Exception as exc:
@@ -165,7 +167,7 @@ def list_tasks():
                 "next_run": None,
                 "interval_hours": None,
                 "enabled": True,
-                "cancellable": False,
+                "cancellable": True,
                 "progress": (
                     {"processed": ext["processed"], "total": ext["total"]}
                     if ext["running"]
@@ -288,10 +290,10 @@ def cancel_task(name):
           schema:
             type: string
       responses:
+        202:
+          description: Cancellation requested (wanted_scan)
         200:
           description: Task cancelled
-        400:
-          description: Task not cancellable
         404:
           description: Unknown task
         409:
@@ -306,7 +308,10 @@ def cancel_task(name):
         scanner.cancel_search()
         return jsonify({"status": "cancelled", "task": name})
     if name == "wanted_scan":
-        return jsonify({"error": "Scan cannot be cancelled mid-run"}), 400
+        if not scanner.is_scanning:
+            return jsonify({"error": "Task not running"}), 409
+        scanner.cancel_scan()
+        return jsonify({"status": "cancelling", "task": name}), 202
     return jsonify({"error": f"Unknown task or not cancellable: {name}"}), 404
 
 

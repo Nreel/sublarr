@@ -404,6 +404,7 @@ def extract_streams(
     streams_to_remove: list[tuple[int, int]] = []
     extracted: list[dict] = []
     seen_lang_fmt: set[tuple[str, str]] = set()
+    extract_errors: list[str] = []
 
     for stream_info in sub_streams:
         lang_fmt = (stream_info["language"], stream_info["format"])
@@ -525,6 +526,17 @@ def extract_streams(
                 stream_info["sub_index"],
                 sub_exc,
             )
+            extract_errors.append(f"stream {stream_info['sub_index']}: {sub_exc}")
+
+    # Run-level row (one per file, never one per stream) so extract failures
+    # reach /activity and /health instead of only the log.
+    if extract_errors:
+        log_activity(
+            EVENT_EXTRACT,
+            file_path=file_path,
+            status="failed",
+            details={"kind": "stream_extract", "error": "; ".join(extract_errors[:5])},
+        )
 
     return any_extracted, streams_to_remove, extracted
 
@@ -612,6 +624,12 @@ def remove_streams_from_container(
             log_label,
             remux_exc,
         )
+        log_activity(
+            EVENT_EXTRACT,
+            file_path=file_path,
+            status="failed",
+            details={"kind": "container_removal", "error": str(remux_exc)},
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -655,6 +673,12 @@ def trash_unwanted_sidecars(
             "[%s]: sidecar cleanup failed: %s",
             log_label,
             cleanup_exc,
+        )
+        log_activity(
+            EVENT_EXTRACT,
+            file_path=file_path,
+            status="failed",
+            details={"kind": "sidecar_cleanup", "error": str(cleanup_exc)},
         )
         return 0
 

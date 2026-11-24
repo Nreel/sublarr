@@ -206,6 +206,106 @@ const SPEC: Record<string, ProblemBadgeSpec> = {
     tier: 'error',
   },
 
+  // Scheduler tick failures (scheduler_job_runs statuses).
+  scheduler_error: {
+    labelKey: 'badges.scheduler_error.label',
+    hintKey: 'badges.scheduler_error.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'error',
+  },
+  timeout_not_started: {
+    labelKey: 'badges.timeout_not_started.label',
+    hintKey: 'badges.timeout_not_started.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'error',
+  },
+  timeout_abandoned: {
+    labelKey: 'badges.timeout_abandoned.label',
+    hintKey: 'badges.timeout_abandoned.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'error',
+  },
+  missed: {
+    labelKey: 'badges.missed.label',
+    hintKey: 'badges.missed.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'warn',
+  },
+  cancelled: {
+    labelKey: 'badges.cancelled.label',
+    hintKey: 'badges.cancelled.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'warn',
+  },
+
+  // Other activity pipelines (/health sections beyond translation).
+  whisper_failed: {
+    labelKey: 'badges.whisper_failed.label',
+    hintKey: 'badges.whisper_failed.hint',
+    href: PROVIDERS_GLOBAL,
+    tier: 'error',
+  },
+  sync_failed: {
+    labelKey: 'badges.sync_failed.label',
+    hintKey: 'badges.sync_failed.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'error',
+  },
+  remux_failed: {
+    labelKey: 'badges.remux_failed.label',
+    hintKey: 'badges.remux_failed.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'error',
+  },
+  extract_failed: {
+    labelKey: 'badges.extract_failed.label',
+    hintKey: 'badges.extract_failed.hint',
+    href: GENERAL_PATHS,
+    tier: 'error',
+  },
+  cleanup_failed: {
+    labelKey: 'badges.cleanup_failed.label',
+    hintKey: 'badges.cleanup_failed.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'error',
+  },
+  backup_failed: {
+    labelKey: 'badges.backup_failed.label',
+    hintKey: 'badges.backup_failed.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'error',
+  },
+  hook_failed: {
+    labelKey: 'badges.hook_failed.label',
+    hintKey: 'badges.hook_failed.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'error',
+  },
+  automation_failed: {
+    labelKey: 'badges.automation_failed.label',
+    hintKey: 'badges.automation_failed.hint',
+    href: AUTOMATION_SEARCH,
+    tier: 'error',
+  },
+  anidb_failed: {
+    labelKey: 'badges.anidb_failed.label',
+    hintKey: 'badges.anidb_failed.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'error',
+  },
+  repair_failed: {
+    labelKey: 'badges.repair_failed.label',
+    hintKey: 'badges.repair_failed.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'error',
+  },
+  notification_failed: {
+    labelKey: 'badges.notification_failed.label',
+    hintKey: 'badges.notification_failed.hint',
+    href: SYSTEM_DIAGNOSTICS,
+    tier: 'error',
+  },
+
   unknown: {
     labelKey: 'badges.unknown.label',
     hintKey: 'badges.unknown.hint',
@@ -224,14 +324,22 @@ export const TIER_COLOR: Record<ProblemTier, string> = {
   warn: 'var(--warning)',
 };
 
-/** What the sidebar chip counts: stuck wanted items, degraded providers, and
- *  translation failures in the last 7 days. Zero means the page has nothing
- *  to show, so the chip drops out. */
+/** What the sidebar chip counts: stuck wanted items, degraded providers,
+ *  translation failures in the last 7 days, and every newer failure section
+ *  the page reports (scheduler ticks, whisper, video sync, ops, hooks,
+ *  backup/notifications). Zero means the page has nothing to show, so the
+ *  chip drops out. */
 export function healthProblemCount(health: LibraryHealth | undefined): number {
   if (!health) return 0;
   return (
     (health.totals?.problems ?? 0) +
     (health.totals?.providers_degraded ?? 0) +
-    (health.translation?.failures_7d ?? 0)
+    (health.translation?.failures_7d ?? 0) +
+    (health.scheduler_errors?.length ?? 0) +
+    (health.whisper_errors?.length ?? 0) +
+    (health.sync_errors?.length ?? 0) +
+    (health.ops_errors?.length ?? 0) +
+    (health.hook_errors?.length ?? 0) +
+    (health.backup_errors?.length ?? 0)
   );
 }

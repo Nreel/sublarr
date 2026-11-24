@@ -10,7 +10,13 @@ from flask import current_app, jsonify, request
 
 from events import emit_event
 from extensions import socketio
-from routes.batch_state import wanted_batch_lock, wanted_batch_state
+from routes.batch_state import (
+    begin_run,
+    request_cancel,
+    serialize_batch_state,
+    wanted_batch_lock,
+    wanted_batch_state,
+)
 from routes.wanted import _series_wanted, bp
 from services.background_tasks import submit_background
 
@@ -226,13 +232,19 @@ def wanted_batch_search():
                 "current_item": None,
             }
         )
+        begin_run(wanted_batch_state)
+        cancel_event = wanted_batch_state["cancel_event"]
 
     _app = current_app._get_current_object()
 
     def _run_batch():
         with _app.app_context():
             try:
-                for progress in process_wanted_batch(item_ids, app=_app):
+                for progress in process_wanted_batch(item_ids, app=_app, cancel_event=cancel_event):
+                    # Stop between items: the generator itself also aborts, but
+                    # this guards against an in-flight item finishing last.
+                    if cancel_event.is_set():
+                        break
                     with wanted_batch_lock:
                         wanted_batch_state["processed"] = progress["processed"]
                         wanted_batch_state["found"] = progress["found"]
@@ -310,4 +322,37 @@ def wanted_batch_status():
                     nullable: true
     """
     with wanted_batch_lock:
-        return jsonify(dict(wanted_batch_state))
+        return jsonify(serialize_batch_state(wanted_batch_state))
+
+
+@bp.route("/wanted/batch/cancel", methods=["POST"])
+def cancel_wanted_batch():
+    """Stop the running wanted batch search.
+    ---
+    post:
+      tags:
+        - Wanted
+      summary: Cancel wanted batch search
+      description: >
+        Sets the cancellation event checked between items of the running
+        wanted batch search. The schedule/trigger is untouched — a stopped
+        batch can be started again at any time.
+      security:
+        - apiKeyAuth: []
+      responses:
+        202:
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        409:
+          description: No batch search running
+    """
+    with wanted_batch_lock:
+        if not request_cancel(wanted_batch_state):
+            return jsonify({"error": "Wanted batch search is not running"}), 409
+    return jsonify({"status": "cancelling"}), 202

@@ -196,6 +196,22 @@ class HookEngine:
                 )
                 update_hook_trigger_stats(hook_id, result["success"])
 
+                if not result["success"]:
+                    # Surface hook failures in /activity too (success rows
+                    # skipped to keep the log readable).
+                    from db.activity import log_activity
+                    from db.models.activity import EVENT_HOOK
+
+                    log_activity(
+                        EVENT_HOOK,
+                        status="failed",
+                        details={
+                            "hook": config.get("name", "?"),
+                            "event": event_name,
+                            "error": result.get("error", ""),
+                        },
+                    )
+
                 # Emit meta-event
                 from events.catalog import hook_executed
 

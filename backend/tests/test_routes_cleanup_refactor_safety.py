@@ -55,13 +55,14 @@ def test_orphan_lock_accessible_at_package_scope():
     assert hasattr(cleanup_mod._orphan_lock, "release")
 
 
-def test_all_17_routes_registered_on_blueprint():
+def test_all_18_routes_registered_on_blueprint():
     """Pin that every URL currently served by /api/v1/cleanup stays served after the split."""
     from routes.cleanup import bp
 
     expected_rules = {
         ("POST", "/api/v1/cleanup/scan"),
         ("GET", "/api/v1/cleanup/scan/status"),
+        ("POST", "/api/v1/cleanup/scan/stop"),
         ("GET", "/api/v1/cleanup/duplicates"),
         ("POST", "/api/v1/cleanup/duplicates/delete"),
         ("POST", "/api/v1/cleanup/orphaned/scan"),

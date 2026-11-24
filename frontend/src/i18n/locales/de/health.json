@@ -137,9 +137,119 @@
       "label": "Job fehlgeschlagen",
       "hint": "Der Übersetzungs-Job brach vor dem Backend ab."
     },
+    "scheduler_error": {
+      "label": "Scheduler-Fehler",
+      "hint": "Der geplante Job lief und brach ab — siehe die Laufhistorie des Jobs."
+    },
+    "timeout_not_started": {
+      "label": "Timeout (nie gestartet)",
+      "hint": "Ein überlappender Lauf blockierte den Start; dieser Lauf begann nie innerhalb des Zeitbudgets."
+    },
+    "timeout_abandoned": {
+      "label": "Timeout (nie beendet)",
+      "hint": "Der Lauf wurde nach dem Timeout nicht unterbrochen und blieb hängen."
+    },
+    "missed": {
+      "label": "Ausgelassener Lauf",
+      "hint": "Der Termin wurde übersprungen (Überlappung oder Stillstand)."
+    },
+    "cancelled": {
+      "label": "Gestoppt",
+      "hint": "Der Lauf wurde vom Benutzer gestoppt."
+    },
+    "whisper_failed": {
+      "label": "Whisper fehlgeschlagen",
+      "hint": "Transkription fehlgeschlagen — Whisper-Backend-Einstellungen prüfen."
+    },
+    "sync_failed": {
+      "label": "Videosync fehlgeschlagen",
+      "hint": "ffsubsync/alass brach ab — Sync-Engine-Setup prüfen."
+    },
+    "remux_failed": {
+      "label": "Remux fehlgeschlagen",
+      "hint": "FFmpeg-Umbau brach ab; das Original-Backup bleibt erhalten."
+    },
+    "extract_failed": {
+      "label": "Extraktion fehlgeschlagen",
+      "hint": "Embeddede Untertitel konnten nicht extrahiert werden — Mediapfade prüfen."
+    },
+    "cleanup_failed": {
+      "label": "Aufräumen fehlgeschlagen",
+      "hint": "Eine Aufräumregel oder ein Duplikat-Scan brach ab."
+    },
+    "backup_failed": {
+      "label": "Backup fehlgeschlagen",
+      "hint": "Die Datenbank-Sicherung schlug fehl."
+    },
+    "hook_failed": {
+      "label": "Hook fehlgeschlagen",
+      "hint": "Das Hook-Skript lief nicht erfolgreich."
+    },
+    "automation_failed": {
+      "label": "Automatisierung fehlgeschlagen",
+      "hint": "Die Automation-Queue brach ab — Automatisierungs-Einstellungen prüfen."
+    },
+    "anidb_failed": {
+      "label": "AniDB-Sync fehlgeschlagen",
+      "hint": "Der AniDB-Abgleich brach ab."
+    },
+    "repair_failed": {
+      "label": "Reparatur fehlgeschlagen",
+      "hint": "Die Untertitel-Reparatur brach ab."
+    },
+    "notification_failed": {
+      "label": "Benachrichtigung fehlgeschlagen",
+      "hint": "Versand oder Backup-Alarm konnte nicht übermittelt werden."
+    },
     "unknown": {
       "label": "Problem",
       "hint": "Ein Problem ohne eigene Erklärung auf dieser Seite."
+    }
+  },
+  "sections": {
+    "scheduler": {
+      "title": "Fehlgeschlagene geplante Jobs",
+      "col_job": "Job",
+      "col_status": "Status",
+      "col_reason": "Fehlertyp",
+      "col_error": "Nachricht",
+      "col_when": "Wann",
+      "col_trigger": "Auslöser"
+    },
+    "whisper": {
+      "title": "Whisper-Fehler",
+      "col_file": "Datei",
+      "col_backend": "Backend",
+      "col_status": "Status",
+      "col_error": "Fehler",
+      "col_when": "Wann"
+    },
+    "sync": {
+      "title": "Videosync-Fehler",
+      "col_file": "Datei",
+      "col_engine": "Engine",
+      "col_status": "Status",
+      "col_error": "Fehler",
+      "col_when": "Wann"
+    },
+    "ops": {
+      "title": "Operationen-Fehler",
+      "col_kind": "Art",
+      "col_file": "Datei",
+      "col_error": "Fehler",
+      "col_when": "Wann"
+    },
+    "hooks": {
+      "title": "Hook-Fehler",
+      "col_hook": "Hook",
+      "col_error": "Fehler",
+      "col_when": "Wann"
+    },
+    "backups": {
+      "title": "Backup- & Benachrichtigungsfehler",
+      "col_event": "Ereignis",
+      "col_error": "Fehler",
+      "col_when": "Wann"
     }
   },
   "providers": {

@@ -23,7 +23,13 @@ from flask import current_app, jsonify, request
 from config import get_settings
 from events import emit_event
 from extensions import socketio
-from routes.batch_state import _batch_probe_lock, _batch_probe_state
+from routes.batch_state import (
+    _batch_probe_lock,
+    _batch_probe_state,
+    begin_run,
+    request_cancel,
+    serialize_batch_state,
+)
 from routes.wanted import bp
 from services.background_tasks import submit_background
 from services.embedded_extractor import (
@@ -53,6 +59,10 @@ def _init_batch_probe_state(total: int) -> None:
                 "current_item": None,
             }
         )
+        # A cancel that arrived between the route's 202 and this init must survive:
+        # only mint a fresh event for a run nobody has stopped yet.
+        if not _batch_probe_state.get("cancelled"):
+            begin_run(_batch_probe_state)
 
 
 def _finalize_batch_probe(start_time: float) -> None:
@@ -198,6 +208,10 @@ def _run_batch_probe(items, app):
                 executor.submit(_gated_probe, item["file_path"]): item for item in items
             }
             for future in as_completed(future_to_item):
+                if _batch_probe_state["cancel_event"].is_set():
+                    # Never start pending probes; let in-flight ones finish.
+                    executor.shutdown(cancel_futures=True)
+                    break
                 _process_probe_result(future_to_item[future], future)
     finally:
         _finalize_batch_probe(start_time)
@@ -290,4 +304,38 @@ def batch_probe_status():
           description: Current batch-probe state
     """
     with _batch_probe_lock:
-        return jsonify(dict(_batch_probe_state))
+        return jsonify(serialize_batch_state(_batch_probe_state))
+
+
+@bp.route("/wanted/batch-probe/cancel", methods=["POST"])
+def cancel_batch_probe():
+    """Stop the running batch probe.
+    ---
+    post:
+      tags:
+        - Wanted
+      summary: Cancel batch probe
+      description: >
+        Sets the cancellation event checked between items of the running
+        batch probe. Pending items are never probed; an in-flight probe
+        finishes first. Nothing about the schedule changes — a probe can be
+        started again at any time.
+      security:
+        - apiKeyAuth: []
+      responses:
+        202:
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        409:
+          description: No batch probe running
+    """
+    with _batch_probe_lock:
+        if not request_cancel(_batch_probe_state):
+            return jsonify({"error": "Batch probe is not running"}), 409
+    return jsonify({"status": "cancelling"}), 202

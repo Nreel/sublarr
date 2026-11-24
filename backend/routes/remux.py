@@ -22,11 +22,12 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from ass_utils import get_media_streams
 from config import get_settings
@@ -41,6 +42,8 @@ logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="remux")
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
+# ffmpeg/mkvmerge children of running jobs, for the stop endpoint. Same lock.
+_job_procs: dict[str, subprocess.Popen] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -76,6 +79,10 @@ def _update_job(
     job_id: str, status: str, result: dict | None = None, error: str | None = None
 ) -> None:
     with _jobs_lock:
+        # A user-stopped job must not be re-stamped "failed" by the worker
+        # when the killed child exits non-zero.
+        if _jobs.get(job_id, {}).get("status") == "cancelled" and status != "cancelled":
+            return
         _jobs[job_id] = {"status": status, "result": result, "error": error}
     try:
         from app import socketio
@@ -128,12 +135,30 @@ def _trash_paths() -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+def _job_status(job_id: str) -> str | None:
+    """Current in-memory status of a remux job (``cancelled`` after a user stop)."""
+    with _jobs_lock:
+        return _jobs.get(job_id, {}).get("status")
+
+
 def _run_remux(job_id: str, video_path: str, stream_index: int, subtitle_track_index: int) -> None:
     settings = get_settings()
     use_reflink = getattr(settings, "remux_use_reflink", True)
     trash_dir = getattr(settings, "remux_trash_dir", ".sublarr")
     _update_job(job_id, "running")
     _arr_pause(True)
+
+    from db.activity import log_activity, update_activity_status
+    from db.models.activity import EVENT_REMUX
+
+    activity_row = log_activity(
+        EVENT_REMUX, file_path=video_path, status="running", details={"job_id": job_id}
+    )
+
+    def _sink(proc: subprocess.Popen) -> None:
+        with _jobs_lock:
+            _job_procs[job_id] = proc
+
     try:
         bak_path = remove_subtitle_stream(
             video_path=video_path,
@@ -141,8 +166,10 @@ def _run_remux(job_id: str, video_path: str, stream_index: int, subtitle_track_i
             subtitle_track_index=subtitle_track_index,
             use_reflink=use_reflink,
             trash_dir=trash_dir,
+            proc_sink=_sink,
         )
         _update_job(job_id, "completed", result={"backup_path": bak_path, "video_path": video_path})
+        update_activity_status(activity_row, "success", {"backup_path": bak_path})
         logger.info("Remux job %s completed — backup: %s", job_id, bak_path)
     except RemuxError as exc:
         _update_job(job_id, "failed", error=str(exc))
@@ -151,7 +178,18 @@ def _run_remux(job_id: str, video_path: str, stream_index: int, subtitle_track_i
         _update_job(job_id, "failed", error=f"Unexpected error: {exc}")
         logger.exception("Remux job %s unexpected error", job_id)
     finally:
+        terminal = _job_status(job_id)
+        if terminal == "cancelled":
+            update_activity_status(activity_row, "cancelled")
+        elif terminal == "completed":
+            pass  # already stamped "success"
+        elif terminal == "failed":
+            with _jobs_lock:
+                err = _jobs.get(job_id, {}).get("error")
+            update_activity_status(activity_row, "failed", {"error": err})
         _arr_pause(False)
+        with _jobs_lock:
+            _job_procs.pop(job_id, None)
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +240,15 @@ def remove_track_from_container(ep_id: int, index: int):
     with _jobs_lock:
         _jobs[job_id] = {"status": "queued", "result": None, "error": None}
 
-    _executor.submit(_run_remux, job_id, video_path, stream_index, subtitle_track_index)
+    # Worker threads do not inherit the request app context; _run_remux
+    # writes activity_log rows which need one (see video_sync._submit_sync).
+    app = current_app._get_current_object()
+
+    def _runner(job_id: str, video_path: str, stream_index: int, subtitle_track_index: int) -> None:
+        with app.app_context():
+            _run_remux(job_id, video_path, stream_index, subtitle_track_index)
+
+    _executor.submit(_runner, job_id, video_path, stream_index, subtitle_track_index)
     return jsonify({"job_id": job_id, "status": "queued"}), 202
 
 
@@ -407,6 +453,69 @@ def delete_backup():
         return internal_error_response("Delete failed")
 
     return jsonify({"deleted": backup_path}), 200
+
+
+@bp.route("/remux/jobs/<job_id>/stop", methods=["POST"])
+def stop_remux_job(job_id: str):
+    """Kill the ffmpeg/mkvmerge child of a running remux job.
+
+    Terminate, then kill after a ~5s grace period. The job lands in
+    ``cancelled`` (socketio ``remux_job_update``); the worker's terminal
+    update after the kill does not re-stamp it.
+    ---
+    post:
+      tags:
+        - Remux
+      summary: Stop a running remux job
+      responses:
+        202:
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        404:
+          description: Unknown job
+        409:
+          description: Job not running
+    """
+    with _jobs_lock:
+        entry = _jobs.get(job_id)
+        if entry is None:
+            return jsonify({"error": "Job not found"}), 404
+        if entry.get("status") != "running":
+            return jsonify({"error": "Job is not running"}), 409
+        proc = _job_procs.get(job_id)
+
+    if proc is not None:
+        # Child already started: terminate, kill after the grace period.
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        proc.wait()
+
+    with _jobs_lock:
+        if _jobs.get(job_id, {}).get("status") != "running":
+            return jsonify({"error": "Job already finished"}), 409
+        _jobs[job_id] = {"status": "cancelled", "result": None, "error": "stopped by user"}
+
+    try:
+        from app import socketio
+
+        socketio.emit(
+            "remux_job_update",
+            {"job_id": job_id, "status": "cancelled", "result": None, "error": "stopped by user"},
+        )
+    except Exception as exc:
+        logger.debug("SocketIO emit remux_job_update failed: %s", exc)
+
+    logger.info("Remux job %s cancelled by user", job_id)
+    return jsonify({"status": "cancelling"}), 202
 
 
 def _purge_sidecars_for_video(video_path: str) -> int:

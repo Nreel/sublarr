@@ -22,9 +22,21 @@ def log_activity(
     file_path: str | None = None,
     status: str = "success",
     details: dict | None = None,
+) -> int | None:
+    """Log an activity event. Safe to call anywhere — never raises.
+
+    Returns the new row's id (or ``None`` on failure).
+    """
+    return _get_repo().log_event(event_type, file_path=file_path, status=status, details=details)
+
+
+def update_activity_status(
+    row_id: int | None,
+    status: str,
+    details: dict | None = None,
 ) -> None:
-    """Log an activity event. Safe to call anywhere — never raises."""
-    _get_repo().log_event(event_type, file_path=file_path, status=status, details=details)
+    """Move a logged activity row to a new status. Safe to call anywhere — never raises."""
+    _get_repo().update_activity_status(row_id, status, details=details)
 
 
 def get_activity(

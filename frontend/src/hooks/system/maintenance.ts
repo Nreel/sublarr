@@ -119,6 +119,7 @@ export function useCancelTask() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['activity'] })
     },
   })
 }

@@ -7,6 +7,28 @@ importing from translate.py and wanted.py.
 
 import threading
 
+
+def serialize_batch_state(state: dict) -> dict:
+    """JSON-safe copy of a batch state dict (the ``cancel_event`` is not serializable)."""
+    return {k: v for k, v in state.items() if k != "cancel_event"}
+
+
+def begin_run(state: dict) -> None:
+    """Reset cancellation for a new run. Caller must hold the state's lock."""
+    state["cancelled"] = False
+    state["cancel_event"] = threading.Event()
+
+
+def request_cancel(state: dict) -> bool:
+    """Mark a run as cancelling. Caller must hold the state's lock."""
+    if not state.get("running"):
+        return False
+    state["cancelled"] = True
+    event = state.get("cancel_event")
+    if event is not None:
+        event.set()
+    return True
+
 # Translation stats state moved to services.translation_jobs (2026-07-02) so
 # the job runner lives entirely in the services layer. Re-exported here for
 # routes that still import it from routes.batch_state (same dict/lock objects).
@@ -23,6 +45,8 @@ batch_state = {
     "skipped": 0,
     "current_file": None,
     "errors": [],
+    "cancelled": False,
+    "cancel_event": threading.Event(),
 }
 batch_lock = threading.Lock()
 
@@ -38,6 +62,8 @@ retranslate_batch_state = {
     "succeeded": 0,
     "failed": 0,
     "current_file": None,
+    "cancelled": False,
+    "cancel_event": threading.Event(),
 }
 retranslate_lock = threading.Lock()
 
@@ -51,6 +77,8 @@ wanted_batch_state = {
     "failed": 0,
     "skipped": 0,
     "current_item": None,
+    "cancelled": False,
+    "cancel_event": threading.Event(),
 }
 wanted_batch_lock = threading.Lock()
 
@@ -64,6 +92,8 @@ _batch_extract_state = {
     "failed": 0,
     "skipped": 0,
     "current_item": None,
+    "cancelled": False,
+    "cancel_event": threading.Event(),
 }
 _batch_extract_lock = threading.Lock()
 
@@ -78,5 +108,7 @@ _batch_probe_state = {
     "skipped": 0,
     "failed": 0,
     "current_item": None,
+    "cancelled": False,
+    "cancel_event": threading.Event(),
 }
 _batch_probe_lock = threading.Lock()

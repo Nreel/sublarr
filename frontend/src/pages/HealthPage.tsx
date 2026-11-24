@@ -19,8 +19,9 @@ import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatTile } from '@/components/statistics/primitives';
 import { useInfiniteChunk } from '@/components/shared/useInfiniteChunk';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useLibraryHealth } from '@/hooks/useApi';
-import { type HealthPipelineError, type HealthProblemRow, type HealthProviderRow, type HealthTranslationBackend, type HealthTranslationError } from '@/api/system/healthLibrary';
+import { type HealthPipelineError, type HealthProblemRow, type HealthProviderRow, type HealthTranslationBackend, type HealthTranslationError, type HealthSchedulerError, type HealthWhisperError, type HealthSyncError, type HealthOpsError, type HealthHookError, type HealthBackupError } from '@/api/system/healthLibrary';
 import { problemBadgeSpec, TIER_COLOR } from '@/lib/healthProblems';
 import { formatRelativeTime, formatProviderName } from '@/lib/utils';
 
@@ -409,6 +410,222 @@ function TranslationPipelineErrorRow({ e, t }: { e: HealthPipelineError; t: T })
   );
 }
 
+const basename = (path: string) => path.split(/[\\/]/).pop() || path;
+
+/** Scheduler tick failures: the status code is the badge (error / timeout /
+ *  timeout_not_started / timeout_abandoned / missed / cancelled). */
+function SchedulerErrorRow({ e, t }: { e: HealthSchedulerError; t: T }) {
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+      <td
+        className="px-3 py-2 text-sm font-medium truncate max-w-[220px]"
+        title={e.job_id}
+        style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.job_id}
+      </td>
+      <td className="px-3 py-2">
+        <ProblemBadge
+          kind={e.status === 'error' ? 'scheduler_error' : e.status}
+          fallbackLabel={e.status}
+          showHint={false}
+          t={t}
+        />
+      </td>
+      <td
+        className="px-3 py-2 text-xs uppercase hidden sm:table-cell"
+        style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.error_type || '—'}
+      </td>
+      <td
+        className="px-3 py-2 text-xs truncate max-w-[320px] hidden md:table-cell"
+        title={e.error_msg}
+        style={{ color: 'var(--error)' }}
+      >
+        {e.error_msg || '—'}
+      </td>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.started_at ? formatRelativeTime(e.started_at) : ''}
+      </td>
+      <td
+        className="px-3 py-2 text-xs hidden sm:table-cell"
+        style={{ color: 'var(--text-secondary)' }}
+      >
+        {e.triggered_by}
+      </td>
+    </tr>
+  );
+}
+
+function WhisperErrorRow({ e, t }: { e: HealthWhisperError; t: T }) {
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+      <td
+        className="px-3 py-2 text-sm font-medium truncate max-w-[260px]"
+        title={e.file_path}
+        style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}
+      >
+        {basename(e.file_path)}
+      </td>
+      <td
+        className="px-3 py-2 text-xs hidden sm:table-cell"
+        style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.backend_name || '—'}
+      </td>
+      <td className="px-3 py-2">
+        <StatusBadge status={e.status} />
+      </td>
+      <td
+        className="px-3 py-2 text-xs truncate max-w-[320px] hidden md:table-cell"
+        title={e.error}
+        style={{ color: 'var(--error)' }}
+      >
+        {e.error || '—'}
+      </td>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.completed_at ? formatRelativeTime(e.completed_at) : ''}
+      </td>
+    </tr>
+  );
+}
+
+/** Video-sync failures; `job_id` carries the engine name (ffsubsync/alass). */
+function SyncErrorRow({ e, t }: { e: HealthSyncError; t: T }) {
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+      <td
+        className="px-3 py-2 text-sm font-medium truncate max-w-[260px]"
+        title={e.file_path}
+        style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}
+      >
+        {basename(e.file_path)}
+      </td>
+      <td
+        className="px-3 py-2 text-xs uppercase hidden sm:table-cell"
+        style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.job_id}
+      </td>
+      <td className="px-3 py-2">
+        <StatusBadge status={e.status} />
+      </td>
+      <td
+        className="px-3 py-2 text-xs truncate max-w-[320px] hidden md:table-cell"
+        title={e.error}
+        style={{ color: 'var(--error)' }}
+      >
+        {e.error || '—'}
+      </td>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.started_at ? formatRelativeTime(e.started_at) : ''}
+      </td>
+    </tr>
+  );
+}
+
+/** Failed operations from the activity log — badge by event kind. */
+function OpsErrorRow({ e, t }: { e: HealthOpsError; t: T }) {
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+      <td className="px-3 py-2">
+        <ProblemBadge
+          kind={`${e.event_type}_failed`}
+          fallbackLabel={e.event_type}
+          showHint={false}
+          t={t}
+        />
+      </td>
+      <td
+        className="px-3 py-2 text-sm font-medium truncate max-w-[260px]"
+        title={e.file_path}
+        style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.file_path ? basename(e.file_path) : '—'}
+      </td>
+      <td
+        className="px-3 py-2 text-xs truncate max-w-[320px] hidden md:table-cell"
+        title={e.error}
+        style={{ color: 'var(--error)' }}
+      >
+        {e.error || '—'}
+      </td>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.created_at ? formatRelativeTime(e.created_at) : ''}
+      </td>
+    </tr>
+  );
+}
+
+function HookErrorRow({ e, t }: { e: HealthHookError; t: T }) {
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+      <td
+        className="px-3 py-2 text-sm font-medium truncate max-w-[220px]"
+        title={e.hook}
+        style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.hook}
+      </td>
+      <td
+        className="px-3 py-2 text-xs truncate max-w-[320px]"
+        title={e.error}
+        style={{ color: 'var(--error)' }}
+      >
+        {e.error || '—'}
+      </td>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.created_at ? formatRelativeTime(e.created_at) : ''}
+      </td>
+    </tr>
+  );
+}
+
+/** Failed backup alerts and failed notification deliveries alike. */
+function BackupErrorRow({ e, t }: { e: HealthBackupError; t: T }) {
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+      <td className="px-3 py-2">
+        <ProblemBadge
+          kind={e.event_type === 'error' ? 'notification_failed' : e.event_type}
+          fallbackLabel={e.event_type}
+          showHint={false}
+          t={t}
+        />
+      </td>
+      <td
+        className="px-3 py-2 text-xs truncate max-w-[320px]"
+        title={e.error}
+        style={{ color: 'var(--error)' }}
+      >
+        {e.error || '—'}
+      </td>
+      <td
+        className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+      >
+        {e.created_at ? formatRelativeTime(e.created_at) : ''}
+      </td>
+    </tr>
+  );
+}
+
 export function HealthPage() {
   const { t } = useTranslation('health');
 
@@ -425,6 +642,12 @@ export function HealthPage() {
   const backendList = useInfiniteChunk(data?.translation?.backends ?? [], 40);
   const errorList = useInfiniteChunk(data?.translation?.recent_errors ?? [], 40);
   const pipelineList = useInfiniteChunk(data?.translation?.pipeline_errors ?? [], 40);
+  const schedulerList = useInfiniteChunk(data?.scheduler_errors ?? [], 40);
+  const whisperList = useInfiniteChunk(data?.whisper_errors ?? [], 40);
+  const syncList = useInfiniteChunk(data?.sync_errors ?? [], 40);
+  const opsList = useInfiniteChunk(data?.ops_errors ?? [], 40);
+  const hookList = useInfiniteChunk(data?.hook_errors ?? [], 40);
+  const backupList = useInfiniteChunk(data?.backup_errors ?? [], 40);
 
   if (isLoading) {
     return (
@@ -623,6 +846,177 @@ export function HealthPage() {
           {t('translation.hint')}
         </p>
       </Section>
+
+      {/* Other activity pipelines — each section only appears once it has rows. */}
+      {data?.scheduler_errors?.length ? (
+        <Section title={t('sections.scheduler.title')}>
+          <div
+            className="rounded-lg overflow-hidden"
+            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+          >
+            <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+              <table className="w-full min-w-[520px]">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <Th>{t('sections.scheduler.col_job')}</Th>
+                    <Th>{t('sections.scheduler.col_status')}</Th>
+                    <Th className="hidden sm:table-cell">{t('sections.scheduler.col_reason')}</Th>
+                    <Th className="hidden md:table-cell">{t('sections.scheduler.col_error')}</Th>
+                    <Th className="hidden lg:table-cell">{t('sections.scheduler.col_when')}</Th>
+                    <Th className="hidden sm:table-cell">{t('sections.scheduler.col_trigger')}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {schedulerList.visible.map((e, i) => (
+                    <SchedulerErrorRow key={`${e.job_id}:${e.started_at}:${i}`} e={e} t={t} />
+                  ))}
+                  <SentinelRow list={schedulerList} colSpan={6} t={t} />
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Section>
+      ) : null}
+
+      {data?.whisper_errors?.length ? (
+        <Section title={t('sections.whisper.title')}>
+          <div
+            className="rounded-lg overflow-hidden"
+            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+          >
+            <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+              <table className="w-full min-w-[520px]">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <Th>{t('sections.whisper.col_file')}</Th>
+                    <Th className="hidden sm:table-cell">{t('sections.whisper.col_backend')}</Th>
+                    <Th>{t('sections.whisper.col_status')}</Th>
+                    <Th className="hidden md:table-cell">{t('sections.whisper.col_error')}</Th>
+                    <Th className="hidden lg:table-cell">{t('sections.whisper.col_when')}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {whisperList.visible.map((e, i) => (
+                    <WhisperErrorRow key={`${e.job_id}:${i}`} e={e} t={t} />
+                  ))}
+                  <SentinelRow list={whisperList} colSpan={5} t={t} />
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Section>
+      ) : null}
+
+      {data?.sync_errors?.length ? (
+        <Section title={t('sections.sync.title')}>
+          <div
+            className="rounded-lg overflow-hidden"
+            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+          >
+            <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+              <table className="w-full min-w-[520px]">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <Th>{t('sections.sync.col_file')}</Th>
+                    <Th className="hidden sm:table-cell">{t('sections.sync.col_engine')}</Th>
+                    <Th>{t('sections.sync.col_status')}</Th>
+                    <Th className="hidden md:table-cell">{t('sections.sync.col_error')}</Th>
+                    <Th className="hidden lg:table-cell">{t('sections.sync.col_when')}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {syncList.visible.map((e, i) => (
+                    <SyncErrorRow key={`${e.job_id}:${e.started_at}:${i}`} e={e} t={t} />
+                  ))}
+                  <SentinelRow list={syncList} colSpan={5} t={t} />
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Section>
+      ) : null}
+
+      {data?.ops_errors?.length ? (
+        <Section title={t('sections.ops.title')}>
+          <div
+            className="rounded-lg overflow-hidden"
+            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+          >
+            <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+              <table className="w-full min-w-[460px]">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <Th>{t('sections.ops.col_kind')}</Th>
+                    <Th className="hidden sm:table-cell">{t('sections.ops.col_file')}</Th>
+                    <Th className="hidden md:table-cell">{t('sections.ops.col_error')}</Th>
+                    <Th className="hidden lg:table-cell">{t('sections.ops.col_when')}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {opsList.visible.map((e, i) => (
+                    <OpsErrorRow key={`${e.event_type}:${e.created_at}:${i}`} e={e} t={t} />
+                  ))}
+                  <SentinelRow list={opsList} colSpan={4} t={t} />
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Section>
+      ) : null}
+
+      {data?.hook_errors?.length ? (
+        <Section title={t('sections.hooks.title')}>
+          <div
+            className="rounded-lg overflow-hidden"
+            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+          >
+            <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+              <table className="w-full min-w-[420px]">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <Th>{t('sections.hooks.col_hook')}</Th>
+                    <Th>{t('sections.hooks.col_error')}</Th>
+                    <Th className="hidden lg:table-cell">{t('sections.hooks.col_when')}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hookList.visible.map((e, i) => (
+                    <HookErrorRow key={`${e.hook}:${e.created_at}:${i}`} e={e} t={t} />
+                  ))}
+                  <SentinelRow list={hookList} colSpan={3} t={t} />
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Section>
+      ) : null}
+
+      {data?.backup_errors?.length ? (
+        <Section title={t('sections.backups.title')}>
+          <div
+            className="rounded-lg overflow-hidden"
+            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+          >
+            <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+              <table className="w-full min-w-[420px]">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <Th>{t('sections.backups.col_event')}</Th>
+                    <Th>{t('sections.backups.col_error')}</Th>
+                    <Th className="hidden lg:table-cell">{t('sections.backups.col_when')}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {backupList.visible.map((e, i) => (
+                    <BackupErrorRow key={`${e.event_type}:${e.created_at}:${i}`} e={e} t={t} />
+                  ))}
+                  <SentinelRow list={backupList} colSpan={3} t={t} />
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Section>
+      ) : null}
 
       <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>
         <HeartPulse size={12} />

@@ -116,7 +116,7 @@ def compute_content_hash_from_bytes(content: bytes, language: str | None = None)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def scan_for_duplicates(media_path: str, socketio=None) -> dict:
+def scan_for_duplicates(media_path: str, socketio=None, cancel_event=None) -> dict:
     """Scan a media path recursively for duplicate subtitles.
 
     Walks the directory tree, hashes all subtitle files, stores hashes
@@ -125,6 +125,9 @@ def scan_for_duplicates(media_path: str, socketio=None) -> dict:
     Args:
         media_path: Root directory to scan.
         socketio: Optional SocketIO instance for progress events.
+        cancel_event: Optional threading.Event; when set, the hashing loop
+            stops after the file in flight (pending files are never hashed)
+            and the result carries ``cancelled: True`` with partial groups.
 
     Returns:
         Dict with total_scanned, duplicates_found, groups.
@@ -157,6 +160,7 @@ def scan_for_duplicates(media_path: str, socketio=None) -> dict:
     processed = 0
     errors = []
     hash_results = []
+    cancelled = False
 
     def _process_file(fp):
         """Hash a single file (runs in thread pool)."""
@@ -170,6 +174,11 @@ def scan_for_duplicates(media_path: str, socketio=None) -> dict:
         futures = {submit_with_run_label(executor, _process_file, fp): fp for fp in subtitle_files}
 
         for future in as_completed(futures):
+            if cancel_event is not None and cancel_event.is_set():
+                # Never hash pending files; let in-flight ones finish.
+                executor.shutdown(cancel_futures=True)
+                cancelled = True
+                break
             result = future.result()
             processed += 1
 
@@ -234,6 +243,7 @@ def scan_for_duplicates(media_path: str, socketio=None) -> dict:
         "duplicates_found": duplicates_found,
         "groups": groups,
         "errors": errors if errors else [],
+        "cancelled": cancelled,
     }
 
 

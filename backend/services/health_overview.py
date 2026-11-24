@@ -24,6 +24,7 @@ because the endpoint is cached.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -111,6 +112,19 @@ _BACKEND_ERROR_KINDS = (
 )
 
 
+def _activity_error(details_json: str | None) -> str:
+    """Error message stored in an activity_log row's ``details_json``."""
+    if not details_json:
+        return ""
+    try:
+        details = json.loads(details_json)
+    except (TypeError, ValueError):
+        return ""
+    if isinstance(details, dict):
+        return str(details.get("error", ""))
+    return ""
+
+
 def _classify_pipeline_error(error: str) -> str:
     """Kind of a failed translation job that never reached a backend."""
     lowered = (error or "").lower()
@@ -132,10 +146,14 @@ def _classify_backend_error(status: str, error_type: str, error_msg: str) -> str
 
 
 def get_library_health() -> dict:
+    from db.models.activity import ActivityLog
     from db.models.circuit_breaker import CircuitBreakerState
-    from db.models.core import Job, WantedItem
+    from db.models.core import Job, SyncJobRun, WantedItem
+    from db.models.hooks import HookConfig, HookLog, WebhookConfig
+    from db.models.notifications import NotificationHistory
     from db.models.providers import ProviderStats
-    from db.models.translation import TranslationBackendStats, TranslationEvent
+    from db.models.scheduler import JobRun
+    from db.models.translation import TranslationBackendStats, TranslationEvent, WhisperJob
     from extensions import db
 
     session = db.session
@@ -376,6 +394,198 @@ def get_library_health() -> dict:
         or 0
     )
 
+    # ── operational error sections ──────────────────────────────────────────
+    # Failures from subsystems that write no wanted-item, provider stat or
+    # translation event: scheduler ticks, whisper jobs, sync engines, the
+    # unified activity log, hooks, and notification delivery (which carries
+    # database-backup failures). Each is a capped, newest-first list in a
+    # 7-day window — these are diagnostics, not per-item problems, so a cap
+    # costs nothing the page would otherwise miss (a flood past 50 rows is
+    # evidence enough). Each section degrades independently like the
+    # breaker/translation joins above: an install whose schema drifted must
+    # never 500 here.
+    window_start = datetime.now(UTC) - timedelta(days=7)
+    _ERROR_CAP = 50
+
+    scheduler_errors: list[dict] = []
+    try:
+        run_rows = (
+            session.execute(
+                select(JobRun)
+                .where(
+                    JobRun.status.in_(
+                        ("error", "timeout", "timeout_not_started", "timeout_abandoned", "missed")
+                    )
+                )
+                .where(JobRun.started_at >= window_start)
+                .order_by(JobRun.started_at.desc(), JobRun.id.desc())
+                .limit(_ERROR_CAP)
+            )
+            .scalars()
+            .all()
+        )
+        scheduler_errors = [
+            {
+                "job_id": r.job_id,
+                "status": r.status,
+                "error_type": r.error_type or "",
+                "error_msg": r.error_msg or "",
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "triggered_by": r.triggered_by or "schedule",
+            }
+            for r in run_rows
+        ]
+    except SQLAlchemyError:
+        session.rollback()
+        logger.warning("scheduler_job_runs unavailable — reporting without scheduler errors", exc_info=True)
+
+    whisper_errors: list[dict] = []
+    try:
+        w_rows = (
+            session.execute(
+                select(WhisperJob)
+                .where(WhisperJob.status.in_(("failed", "cancelled")))
+                .where(WhisperJob.created_at >= window_start)
+                .order_by(WhisperJob.created_at.desc(), WhisperJob.id.desc())
+                .limit(_ERROR_CAP)
+            )
+            .scalars()
+            .all()
+        )
+        whisper_errors = [
+            {
+                "job_id": j.id,
+                "file_path": j.file_path,
+                "backend_name": j.backend_name or "",
+                "status": j.status,
+                "error": j.error or "",
+                "completed_at": j.completed_at.isoformat() if j.completed_at else None,
+            }
+            for j in w_rows
+        ]
+    except SQLAlchemyError:
+        session.rollback()
+        logger.warning("whisper_jobs unavailable — reporting without whisper errors", exc_info=True)
+
+    sync_errors: list[dict] = []
+    try:
+        s_rows = (
+            session.execute(
+                select(SyncJobRun)
+                .where(SyncJobRun.status.in_(("failed", "error")))
+                .where(SyncJobRun.created_at >= window_start)
+                .order_by(SyncJobRun.created_at.desc(), SyncJobRun.id.desc())
+                .limit(_ERROR_CAP)
+            )
+            .scalars()
+            .all()
+        )
+        sync_errors = [
+            {
+                "job_id": r.engine,
+                "file_path": r.video_path or r.subtitle_path or "",
+                "status": r.status,
+                "error": r.reason or "",
+                "started_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in s_rows
+        ]
+    except SQLAlchemyError:
+        session.rollback()
+        logger.warning("sync_job_runs unavailable — reporting without sync errors", exc_info=True)
+
+    ops_errors: list[dict] = []
+    try:
+        a_rows = (
+            session.execute(
+                select(ActivityLog)
+                .where(ActivityLog.status == "failed")
+                .where(ActivityLog.created_at >= window_start)
+                .order_by(ActivityLog.created_at.desc(), ActivityLog.id.desc())
+                .limit(_ERROR_CAP)
+            )
+            .scalars()
+            .all()
+        )
+        ops_errors = [
+            {
+                "event_type": r.event_type,
+                "file_path": r.file_path or "",
+                "error": _activity_error(r.details_json),
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in a_rows
+        ]
+    except SQLAlchemyError:
+        session.rollback()
+        logger.warning("activity_log unavailable — reporting without ops errors", exc_info=True)
+
+    hook_errors: list[dict] = []
+    try:
+        hook_names = {
+            h.id: h.name for h in session.execute(select(HookConfig)).scalars().all()
+        }
+        webhook_names = {
+            w.id: w.name for w in session.execute(select(WebhookConfig)).scalars().all()
+        }
+        h_rows = (
+            session.execute(
+                select(HookLog)
+                .where(HookLog.success == 0)
+                .where(HookLog.triggered_at >= window_start)
+                .order_by(HookLog.triggered_at.desc(), HookLog.id.desc())
+                .limit(_ERROR_CAP)
+            )
+            .scalars()
+            .all()
+        )
+        hook_errors = [
+            {
+                "hook": (
+                    hook_names.get(r.hook_id)
+                    or webhook_names.get(r.webhook_id)
+                    or r.event_name
+                ),
+                "error": r.error or r.stderr or "",
+                "created_at": r.triggered_at.isoformat() if r.triggered_at else None,
+            }
+            for r in h_rows
+        ]
+    except SQLAlchemyError:
+        session.rollback()
+        logger.warning("hook_log unavailable — reporting without hook errors", exc_info=True)
+
+    backup_errors: list[dict] = []
+    try:
+        # notification_history carries both backup-failure alerts and failed
+        # deliveries of any notification — both are "we tried to tell you and
+        # it broke", which /health must show.
+        n_rows = (
+            session.execute(
+                select(NotificationHistory)
+                .where(NotificationHistory.status == "failed")
+                .where(NotificationHistory.sent_at >= window_start)
+                .order_by(NotificationHistory.sent_at.desc(), NotificationHistory.id.desc())
+                .limit(_ERROR_CAP)
+            )
+            .scalars()
+            .all()
+        )
+        backup_errors = [
+            {
+                "event_type": r.event_type,
+                "error": r.error or r.title or "",
+                "created_at": r.sent_at.isoformat() if r.sent_at else None,
+            }
+            for r in n_rows
+        ]
+    except SQLAlchemyError:
+        session.rollback()
+        logger.warning(
+            "notification_history unavailable — reporting without backup/notification errors",
+            exc_info=True,
+        )
+
     # ── totals ──────────────────────────────────────────────────────────────
     wanted_total = (
         session.execute(
@@ -417,4 +627,10 @@ def get_library_health() -> dict:
         "problems": problems,
         "providers": providers,
         "translation": translation,
+        "scheduler_errors": scheduler_errors,
+        "whisper_errors": whisper_errors,
+        "sync_errors": sync_errors,
+        "ops_errors": ops_errors,
+        "hook_errors": hook_errors,
+        "backup_errors": backup_errors,
     }

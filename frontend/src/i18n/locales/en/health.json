@@ -137,9 +137,119 @@
       "label": "Job failed",
       "hint": "The translation job broke before reaching a backend."
     },
+    "scheduler_error": {
+      "label": "Scheduler error",
+      "hint": "Scheduled job ran and crashed — see the job's run history."
+    },
+    "timeout_not_started": {
+      "label": "Timeout (never started)",
+      "hint": "An overlapping run blocked the schedule; this run never started within the budget."
+    },
+    "timeout_abandoned": {
+      "label": "Timeout (never finished)",
+      "hint": "The run was not interrupted after its timeout and stayed hanging."
+    },
+    "missed": {
+      "label": "Missed run",
+      "hint": "The scheduled slot was skipped (overlap or downtime)."
+    },
+    "cancelled": {
+      "label": "Stopped",
+      "hint": "The run was stopped by the user."
+    },
+    "whisper_failed": {
+      "label": "Whisper failed",
+      "hint": "Transcription failed — check the Whisper backend settings."
+    },
+    "sync_failed": {
+      "label": "Video sync failed",
+      "hint": "ffsubsync/alass broke down — check the sync engine setup."
+    },
+    "remux_failed": {
+      "label": "Remux failed",
+      "hint": "FFmpeg rework broke; the original backup is kept."
+    },
+    "extract_failed": {
+      "label": "Extraction failed",
+      "hint": "Embedded subtitles could not be extracted — check media paths."
+    },
+    "cleanup_failed": {
+      "label": "Cleanup failed",
+      "hint": "A cleanup rule or duplicate scan broke."
+    },
+    "backup_failed": {
+      "label": "Backup failed",
+      "hint": "The database backup failed."
+    },
+    "hook_failed": {
+      "label": "Hook failed",
+      "hint": "The hook script did not run successfully."
+    },
+    "automation_failed": {
+      "label": "Automation failed",
+      "hint": "The automation queue broke — check automation settings."
+    },
+    "anidb_failed": {
+      "label": "AniDB sync failed",
+      "hint": "The AniDB mapping sync broke."
+    },
+    "repair_failed": {
+      "label": "Repair failed",
+      "hint": "The subtitle repair run broke."
+    },
+    "notification_failed": {
+      "label": "Notification failed",
+      "hint": "Delivery or backup alert could not be sent."
+    },
     "unknown": {
       "label": "Problem",
       "hint": "A problem the page has no specific explanation for."
+    }
+  },
+  "sections": {
+    "scheduler": {
+      "title": "Scheduled job failures",
+      "col_job": "Job",
+      "col_status": "Status",
+      "col_reason": "Error type",
+      "col_error": "Message",
+      "col_when": "When",
+      "col_trigger": "Trigger"
+    },
+    "whisper": {
+      "title": "Whisper failures",
+      "col_file": "File",
+      "col_backend": "Backend",
+      "col_status": "Status",
+      "col_error": "Error",
+      "col_when": "When"
+    },
+    "sync": {
+      "title": "Video sync failures",
+      "col_file": "File",
+      "col_engine": "Engine",
+      "col_status": "Status",
+      "col_error": "Error",
+      "col_when": "When"
+    },
+    "ops": {
+      "title": "Operations failures",
+      "col_kind": "Kind",
+      "col_file": "File",
+      "col_error": "Error",
+      "col_when": "When"
+    },
+    "hooks": {
+      "title": "Hook failures",
+      "col_hook": "Hook",
+      "col_error": "Error",
+      "col_when": "When"
+    },
+    "backups": {
+      "title": "Backup & notification failures",
+      "col_event": "Event",
+      "col_error": "Error",
+      "col_when": "When"
     }
   },
   "providers": {

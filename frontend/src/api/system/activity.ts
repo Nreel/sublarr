@@ -2,9 +2,12 @@ import { api } from '../core'
 
 export interface ActivityEntry {
   id: number
-  event_type: 'download' | 'extract' | 'delete' | 'scan'
+  event_type:
+    | 'download' | 'translate' | 'extract' | 'delete' | 'scan' | 'search'
+    | 'whisper' | 'remux' | 'sync' | 'cleanup' | 'backup' | 'hook'
+    | 'automation' | 'anidb' | 'repair'
   file_path: string | null
-  status: 'success' | 'failed'
+  status: 'success' | 'failed' | 'cancelled' | 'running' | 'warning' | 'rollback'
   details: Record<string, unknown> | null
   created_at: string
 }

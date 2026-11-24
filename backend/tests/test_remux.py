@@ -611,7 +611,7 @@ def test_make_backup_raises_when_trash_dir_unavailable(tmp_path):
 def _fake_remux_writing(out_bytes: bytes = b"y" * 1500):
     """Return a ``_remux_mkvmerge`` stand-in that actually produces output."""
 
-    def _run(_src, _indices, out_path):
+    def _run(_src, _indices, out_path, proc_sink=None):
         with open(out_path, "wb") as fh:
             fh.write(out_bytes)
 

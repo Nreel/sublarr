@@ -267,6 +267,11 @@ def run_sync(app) -> dict:
         sync_state["running"] = True
         sync_state["error"] = None
 
+    from db.activity import log_activity, update_activity_status
+    from db.models.activity import EVENT_ANIDB
+
+    activity_row = log_activity(EVENT_ANIDB, status="running", details={"kind": "anidb_sync"})
+
     start = time.monotonic()
     result = {"series_processed": 0, "mappings_upserted": 0, "skipped": 0, "error": None}
     try:
@@ -279,10 +284,22 @@ def run_sync(app) -> dict:
         logger.error("AniDB sync failed: %s", exc)
     except Exception as exc:
         result["error"] = f"Unexpected error: {exc}"
-        logger.exception("AniDB sync unexpected failure")
+        logger.exception("Anidb sync unexpected failure")
     finally:
         elapsed = time.monotonic() - start
         result["elapsed_seconds"] = round(elapsed, 1)
+        if result.get("error"):
+            update_activity_status(activity_row, "failed", {"error": result["error"]})
+        else:
+            update_activity_status(
+                activity_row,
+                "success",
+                {
+                    "series_processed": result.get("series_processed", 0),
+                    "mappings_upserted": result.get("mappings_upserted", 0),
+                    "skipped": result.get("skipped", 0),
+                },
+            )
         with _sync_state_lock:
             sync_state["running"] = False
             sync_state["last_run"] = _now_iso()

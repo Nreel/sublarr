@@ -109,7 +109,7 @@ class TestRemoveSubtitleStreamsHardlinkGate:
     def test_allow_policy_rewrites(self, hardlinked_video):
         import remux as remux_mod
 
-        def _fake_remux(video_path, indices, out):
+        def _fake_remux(video_path, indices, out, proc_sink=None):
             with open(out, "wb") as fh:
                 fh.write(b"remuxed")
 

@@ -106,7 +106,25 @@ class SubtitleLengthMismatchError(SyncSanityThresholdError):
     """
 
 
-def sync_with_ffsubsync(subtitle_path: str, video_path: str) -> dict:
+def _run_capturing(cmd: list[str], timeout: float, proc_sink=None) -> subprocess.CompletedProcess:
+    """``subprocess.run(cmd, capture_output=True, text=True, timeout=...)``;
+    via ``Popen`` only when a ``proc_sink`` is given (the job stop endpoint),
+    so sink-less callers keep the plain ``run`` path. Child killed on
+    timeout, ``TimeoutExpired`` raised afterwards either way.
+    """
+    if proc_sink is None:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    proc_sink(proc)
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+
+
+def sync_with_ffsubsync(subtitle_path: str, video_path: str, proc_sink=None) -> dict:
     """Sync subtitle to video using ffsubsync (speech-detection based).
 
     Creates a .bak copy before modifying the subtitle in-place.
@@ -183,8 +201,8 @@ def sync_with_ffsubsync(subtitle_path: str, video_path: str) -> dict:
     ]
     try:
         with sync_subprocess_lock:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=compute_io_timeout(video_path)
+            result = _run_capturing(
+                cmd, compute_io_timeout(video_path), proc_sink
             )
     except subprocess.TimeoutExpired:
         _safe_remove(out_path)
@@ -263,7 +281,7 @@ def sync_with_ffsubsync(subtitle_path: str, video_path: str) -> dict:
     }
 
 
-def sync_with_alass(subtitle_path: str, reference_path: str) -> dict:
+def sync_with_alass(subtitle_path: str, reference_path: str, proc_sink=None) -> dict:
     """Sync subtitle to a reference subtitle using alass.
 
     Creates a .bak copy before modifying the subtitle in-place.
@@ -326,7 +344,7 @@ def sync_with_alass(subtitle_path: str, reference_path: str) -> dict:
     ]
     try:
         with sync_subprocess_lock:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            result = _run_capturing(cmd, 300, proc_sink)
     except subprocess.TimeoutExpired:
         _safe_remove(out_path)
         _audit("error", "timeout 300s")

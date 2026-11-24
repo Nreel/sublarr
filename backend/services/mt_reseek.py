@@ -47,6 +47,8 @@ import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
 
+from services.scheduler.cancellation import abort_requested
+
 logger = logging.getLogger(__name__)
 
 #: Max provisional items to re-seek per tick (budget cap; mirrors the
@@ -269,8 +271,15 @@ def _reseek() -> dict:
     searched = 0
     found = 0
     skipped = 0
+    cancelled = False
 
     for item in items:
+        # Scheduler stop: leave the remaining provisional items untouched
+        # (no backoff stamp), report the partial run.
+        if abort_requested():
+            cancelled = True
+            logger.info("MT reseek cancelled after %d/%d items", searched + skipped, len(items))
+            break
         item_id = item.get("id")
         # Profile turned keep-seeking off → leave the item inert, don't search.
         # Its turn is still taken, or the oldest such rows would fill every
@@ -302,7 +311,7 @@ def _reseek() -> dict:
         else:
             _mark_reseek_miss(item_id)
 
-    return {"searched": searched, "found": found, "skipped": skipped}
+    return {"searched": searched, "found": found, "skipped": skipped, "cancelled": cancelled}
 
 
 def mt_reseek_tick() -> None:

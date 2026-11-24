@@ -593,28 +593,46 @@ class SubtitleAutomationRunner:
             budget_s = _configured_budget_s()
         deadline = time.monotonic() + budget_s
         processed = 0
-        while processed < max_items:
-            # One queue item is the unit of work: claiming the row starts a
-            # ffprobe/extract/ffsubsync operation that cannot be interrupted,
-            # so a stop takes effect before the next item is claimed.
-            if abort_requested():
-                logger.info(
-                    "subtitle_automation_tick: stopping as asked after %d item(s)",
-                    processed,
-                )
-                return processed
-            if time.monotonic() >= deadline:
-                logger.info(
-                    "subtitle_automation_tick: %ds budget spent after %d item(s) — "
-                    "leaving the rest of the queue for the next tick",
-                    budget_s,
-                    processed,
-                )
-                return processed
-            if not self.process_one(task_types=task_types):
-                break
-            processed += 1
-        return processed
+
+        from db.activity import log_activity, update_activity_status
+        from db.models.activity import EVENT_AUTOMATION
+
+        activity_row = log_activity(
+            EVENT_AUTOMATION, status="running", details={"max_items": max_items}
+        )
+        try:
+            while processed < max_items:
+                # One queue item is the unit of work: claiming the row starts a
+                # ffprobe/extract/ffsubsync operation that cannot be interrupted,
+                # so a stop takes effect before the next item is claimed.
+                if abort_requested():
+                    logger.info(
+                        "subtitle_automation_tick: stopping as asked after %d item(s)",
+                        processed,
+                    )
+                    update_activity_status(activity_row, "cancelled", {"processed": processed})
+                    return processed
+                if time.monotonic() >= deadline:
+                    logger.info(
+                        "subtitle_automation_tick: %ds budget spent after %d item(s) — "
+                        "leaving the rest of the queue for the next tick",
+                        budget_s,
+                        processed,
+                    )
+                    update_activity_status(
+                        activity_row, "success", {"processed": processed, "budget_spent": True}
+                    )
+                    return processed
+                if not self.process_one(task_types=task_types):
+                    break
+                processed += 1
+            update_activity_status(activity_row, "success", {"processed": processed})
+            return processed
+        except Exception as exc:
+            update_activity_status(
+                activity_row, "failed", {"error": str(exc), "processed": processed}
+            )
+            raise
 
 
 def subtitle_automation_tick() -> None:

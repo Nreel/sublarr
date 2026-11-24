@@ -168,6 +168,24 @@ export async function getWantedBatchStatus(): Promise<WantedBatchStatus> {
   return data
 }
 
+/** Stop the wanted batch search in flight (stops between items). */
+export async function stopWantedBatch(): Promise<{ status: string }> {
+  const { data } = await api.post('/wanted/batch/cancel')
+  return data
+}
+
+/** Stop the batch probe in flight (stops between items). */
+export async function stopBatchProbe(): Promise<{ status: string }> {
+  const { data } = await api.post('/wanted/batch-probe/cancel')
+  return data
+}
+
+/** Stop the batch embedded-sub extraction in flight (stops between items). */
+export async function stopBatchExtract(): Promise<{ status: string }> {
+  const { data } = await api.post('/wanted/batch-extract/cancel')
+  return data
+}
+
 export async function searchAllWanted(): Promise<{ status: string }> {
   const { data } = await api.post('/wanted/search-all')
   return data

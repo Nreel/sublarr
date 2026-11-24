@@ -269,7 +269,12 @@ def retranslate_batch():
     """
     from config import get_settings
     from db.jobs import get_outdated_jobs, record_stat, update_job
-    from routes.batch_state import retranslate_batch_state, retranslate_lock
+    from routes.batch_state import (
+        begin_run,
+        retranslate_batch_state,
+        retranslate_lock,
+        request_cancel,
+    )
     from services.translation_jobs import update_stats
     from translator import translate_file
     from translator.target_resolution import resolve_translation_target, target_sidecar_patterns
@@ -305,6 +310,7 @@ def retranslate_batch():
                 "current_file": None,
             }
         )
+        begin_run(retranslate_batch_state)
 
     total = len(outdated)
     _app = current_app._get_current_object()
@@ -319,6 +325,8 @@ def retranslate_batch():
 
             try:
                 for job in outdated:
+                    if retranslate_batch_state["cancel_event"].is_set():
+                        break
                     file_path = job["file_path"]
                     context = job.get("arr_context") or {}
                     if wanted_item_path_refusal({**context, "file_path": file_path}):
@@ -456,3 +464,38 @@ def retranslate_batch():
             "total": total,
         }
     ), 202
+
+
+@bp.route("/retranslate/batch/cancel", methods=["POST"])
+def cancel_retranslate_batch():
+    """Stop the running re-translation batch.
+    ---
+    post:
+      tags:
+        - Translate
+      summary: Cancel re-translation batch
+      description: >
+        Sets the cancellation event checked between jobs of the running
+        re-translation batch. The in-flight job finishes first; the rest are
+        never started. Nothing about schedules changes.
+      security:
+        - apiKeyAuth: []
+      responses:
+        202:
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        409:
+          description: No re-translation batch running
+    """
+    from routes.batch_state import request_cancel, retranslate_batch_state, retranslate_lock
+
+    with retranslate_lock:
+        if not request_cancel(retranslate_batch_state):
+            return jsonify({"error": "Re-translation batch is not running"}), 409
+    return jsonify({"status": "cancelling"}), 202

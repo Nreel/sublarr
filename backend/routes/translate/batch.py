@@ -11,7 +11,7 @@ from flask import current_app, jsonify, request
 
 from events import emit_event
 from extensions import socketio
-from routes.batch_state import batch_lock, batch_state
+from routes.batch_state import batch_lock, batch_state, begin_run, request_cancel, serialize_batch_state
 from routes.translate import bp
 from routes.translate._helpers import (
     _as_bool,
@@ -176,6 +176,7 @@ def batch_start():
                 "errors": [],
             }
         )
+        begin_run(batch_state)
 
     _app = current_app._get_current_object()
 
@@ -183,6 +184,8 @@ def batch_start():
         with _app.app_context():
             try:
                 for f in files:
+                    if batch_state["cancel_event"].is_set():
+                        break
                     with batch_lock:
                         batch_state["current_file"] = f["path"]
 
@@ -343,4 +346,38 @@ def batch_status_endpoint():
                     nullable: true
     """
     with batch_lock:
-        return jsonify(dict(batch_state))
+        return jsonify(serialize_batch_state(batch_state))
+
+
+@bp.route("/batch/cancel", methods=["POST"])
+def cancel_batch():
+    """Stop the running translation batch.
+    ---
+    post:
+      tags:
+        - Translate
+      summary: Cancel translation batch
+      description: >
+        Sets the cancellation event checked between files of the running
+        batch translation. The in-flight file finishes first; the rest are
+        never started. Nothing about schedules changes — the batch can be
+        started again at any time.
+      security:
+        - apiKeyAuth: []
+      responses:
+        202:
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        409:
+          description: No batch running
+    """
+    with batch_lock:
+        if not request_cancel(batch_state):
+            return jsonify({"error": "Batch is not running"}), 409
+    return jsonify({"status": "cancelling"}), 202

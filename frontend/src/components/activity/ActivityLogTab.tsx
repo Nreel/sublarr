@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useActivity } from '@/hooks/useSystemApi'
+import { useActivity, useStopRemuxJob, useStopVideoSyncJob, useCancelWhisperJob, useStopCleanupScan, useStopScheduledJob, useStopRepair } from '@/hooks/useSystemApi'
+import { StatusBadge } from '@/components/shared/StatusBadge'
+import { toast } from '@/components/shared/Toast'
 import { parseMediaTitle, formatRelativeTime } from '@/lib/utils'
 import type { ActivityEntry } from '@/api/system/activity'
+import { X } from 'lucide-react'
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
   download: 'var(--success)',
@@ -10,6 +13,16 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   extract: 'var(--accent)',
   delete: 'var(--danger)',
   scan: 'var(--text-muted)',
+  search: 'var(--success)',
+  whisper: 'var(--info, var(--accent))',
+  remux: 'var(--upgrade)',
+  sync: 'var(--upgrade)',
+  cleanup: 'var(--warning)',
+  backup: 'var(--text-muted)',
+  hook: 'var(--warning)',
+  automation: 'var(--accent)',
+  anidb: 'var(--info, var(--accent))',
+  repair: 'var(--danger)',
 }
 
 const PER_PAGE = 50
@@ -38,7 +51,15 @@ function TypeBadge({ entry }: { entry: ActivityEntry }) {
   )
 }
 
-function ActivityRow({ entry }: { entry: ActivityEntry }) {
+function ActivityRow({
+  entry,
+  onStop,
+  stopping,
+}: {
+  entry: ActivityEntry
+  onStop?: () => void
+  stopping?: boolean
+}) {
   const { t } = useTranslation('activity')
   const media = entry.file_path ? parseMediaTitle(entry.file_path) : null
 
@@ -82,6 +103,24 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         )}
       </span>
 
+      <span style={{ flexShrink: 0 }}>
+        <StatusBadge status={entry.status} />
+      </span>
+
+      {entry.status === 'running' && onStop && (
+        <button
+          type="button"
+          aria-label={t('history.stop_running')}
+          title={t('history.stop_running')}
+          data-testid={`activity-stop-${entry.id}`}
+          onClick={onStop}
+          disabled={stopping}
+          className="shrink-0 p-1 rounded-md text-muted hover:text-error hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <X size={14} />
+        </button>
+      )}
+
       <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
         {formatRelativeTime(entry.created_at)}
       </span>
@@ -89,7 +128,10 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
   )
 }
 
-const EVENT_TYPES = ['download', 'translate', 'extract', 'delete', 'scan'] as const
+const EVENT_TYPES = [
+  'download', 'translate', 'extract', 'delete', 'scan',
+  'whisper', 'remux', 'sync', 'cleanup', 'backup', 'hook', 'automation', 'anidb', 'repair',
+] as const
 
 const EVENT_TYPE_I18N_KEYS: Record<string, string> = {
   download: 'history.filter_downloads',
@@ -97,12 +139,64 @@ const EVENT_TYPE_I18N_KEYS: Record<string, string> = {
   extract: 'history.filter_extract',
   delete: 'history.filter_delete',
   scan: 'history.filter_scan',
+  whisper: 'history.filter_whisper',
+  remux: 'history.filter_remux',
+  sync: 'history.filter_sync',
+  cleanup: 'history.filter_cleanup',
+  backup: 'history.filter_backup',
+  hook: 'history.filter_hook',
+  automation: 'history.filter_automation',
+  anidb: 'history.filter_anidb',
+  repair: 'history.filter_repair',
 }
 
 export function ActivityLogTab({ defaultFilter, hideFilter }: { defaultFilter?: string; hideFilter?: boolean }) {
   const { t } = useTranslation('activity')
   const [page, setPage] = useState(1)
   const [typeFilter, setTypeFilter] = useState<string | undefined>(defaultFilter)
+
+  const stopRemux = useStopRemuxJob()
+  const stopSync = useStopVideoSyncJob()
+  const cancelWhisper = useCancelWhisperJob()
+  const stopCleanupScan = useStopCleanupScan()
+  const stopScheduled = useStopScheduledJob()
+  const stopRepair = useStopRepair()
+  const stopping =
+    stopRemux.isPending || stopSync.isPending || cancelWhisper.isPending ||
+    stopCleanupScan.isPending || stopScheduled.isPending || stopRepair.isPending
+  const stopOptions = {
+    onSuccess: () => toast(t('history.stop_success'), 'success'),
+    onError: () => toast(t('history.stop_failed'), 'error'),
+  }
+  const jobIdOf = (entry: ActivityEntry): string | null =>
+    entry.details?.job_id != null ? String(entry.details.job_id) : null
+
+  /** Stop control for a running row, picked by event type. Terminal kinds
+   *  (download/translate/delete/scan/search/backup/hook) have no stop — the
+   *  row is already finished. */
+  const stopFor = (entry: ActivityEntry): (() => void) | null => {
+    const jobId = jobIdOf(entry)
+    switch (entry.event_type) {
+      case 'remux':
+        return jobId ? () => stopRemux.mutate(jobId, stopOptions) : null
+      case 'sync':
+        return jobId ? () => stopSync.mutate(jobId, stopOptions) : null
+      case 'whisper':
+        return jobId ? () => cancelWhisper.mutate(jobId, stopOptions) : null
+      case 'cleanup':
+        return entry.details?.kind === 'dedup_scan'
+          ? () => stopCleanupScan.mutate(undefined, stopOptions)
+          : () => stopScheduled.mutate('cleanup', stopOptions)
+      case 'automation':
+        return () => stopScheduled.mutate('subtitle_automation', stopOptions)
+      case 'anidb':
+        return () => stopScheduled.mutate('anidb_sync', stopOptions)
+      case 'repair':
+        return () => stopRepair.mutate(undefined, stopOptions)
+      default:
+        return null
+    }
+  }
 
   const { data, isLoading } = useActivity(page, PER_PAGE, typeFilter)
   const entries = data?.data ?? []
@@ -166,7 +260,9 @@ export function ActivityLogTab({ defaultFilter, hideFilter }: { defaultFilter?: 
             {t('log_empty', 'No activity recorded yet.')}
           </div>
         ) : (
-          entries.map((entry) => <ActivityRow key={entry.id} entry={entry} />)
+          entries.map((entry) => (
+            <ActivityRow key={entry.id} entry={entry} onStop={stopFor(entry) ?? undefined} stopping={stopping} />
+          ))
         )}
       </div>
 

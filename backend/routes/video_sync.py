@@ -8,6 +8,7 @@ GET  /api/v1/tools/video-sync/<job_id> → job status
 import contextlib
 import logging
 import os
+import subprocess
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -23,6 +24,8 @@ logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="video-sync")
 _jobs: dict = {}
 _jobs_lock = threading.Lock()
+# ffsubsync/alass children of running jobs, for the stop endpoint. Same lock.
+_job_procs: dict[str, subprocess.Popen] = {}
 
 
 def _submit_sync(app, *args) -> None:
@@ -46,6 +49,10 @@ def _submit_sync(app, *args) -> None:
 
 def _update_job(job_id: str, status: str, result: dict = None, error: str = None) -> None:
     with _jobs_lock:
+        # A user-stopped job must not be re-stamped "failed" by the worker
+        # when the killed child exits non-zero.
+        if _jobs.get(job_id, {}).get("status") == "cancelled" and status != "cancelled":
+            return
         _jobs[job_id] = {"status": status, "result": result, "error": error}
     try:
         from app import socketio
@@ -72,23 +79,109 @@ def _run_sync(
     cleanup_ref: str | None,
 ) -> None:
     _update_job(job_id, "running")
+
+    from db.activity import log_activity, update_activity_status
+    from db.models.activity import EVENT_SYNC
+
+    activity_row = log_activity(
+        EVENT_SYNC,
+        file_path=subtitle_path,
+        status="running",
+        details={"job_id": job_id, "engine": engine},
+    )
+
+    def _sink(proc: subprocess.Popen) -> None:
+        with _jobs_lock:
+            _job_procs[job_id] = proc
+
     try:
         from services.video_sync import sync_with_alass, sync_with_ffsubsync
 
         if engine == "ffsubsync":
-            result = sync_with_ffsubsync(subtitle_path, video_path)
+            result = sync_with_ffsubsync(subtitle_path, video_path, proc_sink=_sink)
         elif engine == "alass":
-            result = sync_with_alass(subtitle_path, reference_path)
+            result = sync_with_alass(subtitle_path, reference_path, proc_sink=_sink)
         else:
             raise ValueError(f"Unknown engine: {engine!r}")
         _update_job(job_id, "completed", result=result)
+        update_activity_status(activity_row, "success")
     except Exception as exc:
         logger.exception("Sync job %s failed", job_id)
         _update_job(job_id, "failed", error=str(exc))
     finally:
+        with _jobs_lock:
+            _job_status = _jobs.get(job_id, {}).get("status")
+            err = _jobs.get(job_id, {}).get("error")
+            _job_procs.pop(job_id, None)
+        if _job_status == "cancelled":
+            update_activity_status(activity_row, "cancelled")
+        elif _job_status == "failed":
+            update_activity_status(activity_row, "failed", {"error": err})
         if cleanup_ref:
             with contextlib.suppress(OSError):
                 os.unlink(cleanup_ref)
+
+
+@bp.route("/video-sync/jobs/<job_id>/stop", methods=["POST"])
+def stop_sync_job(job_id: str):
+    """Kill the ffsubsync/alass child of a running sync job.
+
+    Terminate, then kill after a ~5s grace period. The job lands in
+    ``cancelled`` (socketio ``sync_job_update``). Bulk auto-sync fans out one
+    job per sidecar, so each child can be stopped individually.
+    ---
+    post:
+      tags:
+        - Tools
+      summary: Stop a running video-sync job
+      responses:
+        202:
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        404:
+          description: Unknown job
+        409:
+          description: Job not running
+    """
+    with _jobs_lock:
+        entry = _jobs.get(job_id)
+        if entry is None:
+            return jsonify({"error": "Job not found"}), 404
+        if entry.get("status") != "running":
+            return jsonify({"error": "Job is not running"}), 409
+        proc = _job_procs.get(job_id)
+
+    if proc is not None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        proc.wait()
+
+    with _jobs_lock:
+        if _jobs.get(job_id, {}).get("status") != "running":
+            return jsonify({"error": "Job already finished"}), 409
+        _jobs[job_id] = {"status": "cancelled", "result": None, "error": "stopped by user"}
+
+    try:
+        from app import socketio
+
+        socketio.emit(
+            "sync_job_update",
+            {"job_id": job_id, "status": "cancelled", "result": None, "error": "stopped by user"},
+        )
+    except Exception as exc:
+        logger.debug("SocketIO emit sync_job_update failed: %s", exc)
+
+    logger.info("Video sync job %s cancelled by user", job_id)
+    return jsonify({"status": "cancelling"}), 202
 
 
 @bp.route("/video-sync/engines", methods=["GET"])

@@ -16,6 +16,9 @@ from datetime import UTC, datetime
 logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
+# Set by request_stop(); checked between candidate iterations in _execute.
+# Restores already applied stay applied — the pass is resumable via resume_at.
+_stop_event = threading.Event()
 
 
 @dataclass
@@ -36,6 +39,7 @@ class RepairState:
     deferred: int = 0
     local_only: bool = False
     quota_exhausted: bool = False
+    cancelled: bool = False
     resume_at: str | None = None
     started_at: str | None = None
     finished_at: str | None = None
@@ -58,6 +62,19 @@ def is_running() -> bool:
     return _state.running
 
 
+def request_stop() -> bool:
+    """Ask the running repair pass to stop at its next candidate boundary.
+
+    Returns False when no pass is running. Restores already applied stay
+    applied; the pass reports ``cancelled: true`` in the state snapshot.
+    """
+    with _lock:
+        if not _state.running:
+            return False
+        _stop_event.set()
+        return True
+
+
 def start(
     app,
     *,
@@ -76,6 +93,7 @@ def start(
     with _lock:
         if _state.running:
             return False
+        _stop_event.clear()
         _state = RepairState(
             running=True,
             dry_run=dry_run,
@@ -83,6 +101,15 @@ def start(
             local_only=local_only,
             started_at=datetime.now(UTC).isoformat(),
         )
+
+    from db.activity import log_activity, update_activity_status
+    from db.models.activity import EVENT_REPAIR
+
+    activity_row = log_activity(
+        EVENT_REPAIR,
+        status="running",
+        details={"dry_run": dry_run, "local_only": local_only},
+    )
 
     def _run():
         with app.app_context():
@@ -94,6 +121,18 @@ def start(
             finally:
                 _state.running = False
                 _state.finished_at = datetime.now(UTC).isoformat()
+                if _state.error:
+                    update_activity_status(activity_row, "failed", {"error": _state.error})
+                elif _state.cancelled:
+                    update_activity_status(
+                        activity_row, "cancelled", {"done": _state.done, "total": _state.total}
+                    )
+                else:
+                    update_activity_status(
+                        activity_row,
+                        "success",
+                        {"done": _state.done, "repaired": _state.repaired},
+                    )
 
     try:
         threading.Thread(target=_run, name="subtitle-repair", daemon=True).start()
@@ -131,6 +170,12 @@ def _execute(
     for candidate, outcome in iter_repairs(
         report.candidates, dry_run=dry_run, local_only=local_only
     ):
+        # User stop: leave the remaining candidates untouched; restores
+        # already applied stay applied and the pass stays resumable.
+        if _stop_event.is_set():
+            _state.cancelled = True
+            logger.info("repair: stopped by user after %d/%d candidates", _state.done, _state.total)
+            break
         _state.last_file = candidate.file_path
         if outcome.quota_spent and not _state.quota_exhausted:
             _state.quota_exhausted = True

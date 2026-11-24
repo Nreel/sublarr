@@ -29,6 +29,8 @@ interface UseWebSocketOptions {
   onProviderStateChanged?: (data: unknown) => void
   onProviderBudgetUpdated?: (data: unknown) => void
   onSubtitleHealthComplete?: (data: unknown) => void
+  onRemuxJobUpdate?: (data: unknown) => void
+  onSyncJobUpdate?: (data: unknown) => void
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
@@ -80,6 +82,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       ['provider_state_changed', 'onProviderStateChanged'],
       ['provider_budget_updated', 'onProviderBudgetUpdated'],
       ['subtitle_health_complete', 'onSubtitleHealthComplete'],
+      ['remux_job_update', 'onRemuxJobUpdate'],
+      ['sync_job_update', 'onSyncJobUpdate'],
     ]
 
     // Store named handler references so only this hook's listeners are removed on cleanup

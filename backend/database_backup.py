@@ -429,11 +429,17 @@ def _emit_backup_failure_notification(exc: Exception) -> None:
 
 def _run_one_backup(backup: "DatabaseBackup", notify_on_failure: bool) -> None:
     """Run a single backup + rotation. Captures failures locally."""
+    from db.activity import log_activity, update_activity_status
+    from db.models.activity import EVENT_BACKUP
+
+    activity_row = log_activity(EVENT_BACKUP, status="running", details={"kind": "auto_backup"})
     try:
         backup.create_backup(label=_label_for(datetime.now(UTC)))
         backup.rotate()
+        update_activity_status(activity_row, "success")
     except Exception as exc:
         logger.error("Scheduled backup failed: %s", exc, exc_info=True)
+        update_activity_status(activity_row, "failed", {"error": str(exc)})
         if notify_on_failure:
             _emit_backup_failure_notification(exc)
 

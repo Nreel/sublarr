@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from db.activity import log_activity, update_activity_status
+from db.models.activity import EVENT_WHISPER
 from db.whisper import create_whisper_job, update_whisper_job
 from whisper.audio import extract_audio_to_wav, get_audio_track_by_index, select_audio_track
 from whisper.base import TranscriptionResult
@@ -54,6 +56,11 @@ class WhisperQueue:
         self._jobs: dict[str, WhisperJob] = {}
         self._lock = threading.Lock()
         self._max_concurrent = max_concurrent
+        # Per-job cancellation flags set by cancel_job(); checked between
+        # phases in _run_job (the transcribe call itself is not interruptible).
+        self._cancel_flags: dict[str, threading.Event] = {}
+        # activity_log row ids (written at submit, terminal status on finish).
+        self._activity_rows: dict[str, int | None] = {}
 
     def submit(
         self,
@@ -94,6 +101,14 @@ class WhisperQueue:
 
         with self._lock:
             self._jobs[job_id] = job
+            self._cancel_flags[job_id] = threading.Event()
+            # Unified activity log: running row, terminal status on finish.
+            self._activity_rows[job_id] = log_activity(
+                EVENT_WHISPER,
+                file_path=file_path,
+                status="running",
+                details={"job_id": job_id},
+            )
 
         # Persist to DB
         try:
@@ -134,6 +149,9 @@ class WhisperQueue:
     def cancel_job(self, job_id: str) -> bool:
         """Cancel a job (best-effort, cannot interrupt active transcription).
 
+        Sets the per-job flag so the worker stops at its next phase boundary;
+        a queued job is marked ``cancelled`` immediately.
+
         Args:
             job_id: Job to cancel
 
@@ -146,6 +164,9 @@ class WhisperQueue:
                 return False
             if job.status in ("completed", "failed", "cancelled"):
                 return False
+            flag = self._cancel_flags.get(job_id)
+            if flag is not None:
+                flag.set()
             job.status = "cancelled"
 
         # Update DB
@@ -183,7 +204,9 @@ class WhisperQueue:
                 # Check if cancelled while waiting
                 with self._lock:
                     job = self._jobs.get(job_id)
-                    if not job or job.status == "cancelled":
+                    flag = self._cancel_flags.get(job_id)
+                    if not job or job.status == "cancelled" or (flag and flag.is_set()):
+                        update_activity_status(self._activity_rows.get(job_id), "cancelled")
                         return
 
                 now = datetime.now(UTC)
@@ -216,6 +239,10 @@ class WhisperQueue:
                 self._update_job(job_id, progress=0.10)
                 self._emit_progress(socketio, job_id, "extracting", 0.10, "Audio extracted")
 
+                if self._cancel_requested(job_id):
+                    self._finish_cancelled(job_id, socketio)
+                    return
+
                 # Phase 2: Transcription (10-95%)
                 self._update_job(job_id, status="transcribing", phase="transcribing")
                 self._emit_progress(
@@ -234,6 +261,12 @@ class WhisperQueue:
 
                 if not result.success:
                     raise RuntimeError(result.error or "Transcription failed")
+
+                if self._cancel_requested(job_id):
+                    # The user stopped the job while transcribing: skip the
+                    # transcript save entirely and land in "cancelled".
+                    self._finish_cancelled(job_id, socketio)
+                    return
 
                 # Phase 3: Saving (95-100%)
                 self._update_job(job_id, status="saving", progress=0.95, phase="saving")
@@ -298,6 +331,11 @@ class WhisperQueue:
                     phase="completed",
                     completed_at=datetime.now(UTC),
                 )
+                update_activity_status(
+                    self._activity_rows.get(job_id),
+                    "success",
+                    {"backend_name": result.backend_name, "segment_count": result.segment_count},
+                )
                 self._emit_progress(socketio, job_id, "completed", 1.0, "Transcription complete")
 
                 try:
@@ -334,6 +372,9 @@ class WhisperQueue:
                 error=error_msg,
                 completed_at=datetime.now(UTC),
             )
+            update_activity_status(
+                self._activity_rows.get(job_id), "failed", {"error": error_msg[:500]}
+            )
 
             # Persist failure to DB
             try:
@@ -360,6 +401,9 @@ class WhisperQueue:
                 logger.debug("Could not emit the whisper failure event", exc_info=True)
 
         finally:
+            with self._lock:
+                self._cancel_flags.pop(job_id, None)
+                self._activity_rows.pop(job_id, None)
             # Clean up temp audio file
             if temp_audio_path and os.path.exists(temp_audio_path):
                 try:
@@ -367,6 +411,24 @@ class WhisperQueue:
                     logger.debug("Cleaned up temp audio: %s", temp_audio_path)
                 except OSError as e:
                     logger.warning("Failed to clean up temp audio %s: %s", temp_audio_path, e)
+
+    def _cancel_requested(self, job_id: str) -> bool:
+        """True if the user cancelled this job (flag set or status marked)."""
+        with self._lock:
+            flag = self._cancel_flags.get(job_id)
+            job = self._jobs.get(job_id)
+        return bool(flag and flag.is_set()) or (job is not None and job.status == "cancelled")
+
+    def _finish_cancelled(self, job_id: str, socketio) -> None:
+        """Land a stopped job in "cancelled" without saving its result."""
+        self._update_job(job_id, status="cancelled", phase="cancelled")
+        update_activity_status(self._activity_rows.get(job_id), "cancelled")
+        try:
+            update_whisper_job(job_id, status="cancelled")
+        except Exception as e:
+            logger.error("Failed to persist cancelled job %s: %s", job_id, e)
+        self._emit_progress(socketio, job_id, "cancelled", 0.0, "Cancelled by user")
+        logger.info("Whisper job %s cancelled at phase boundary", job_id)
 
     def _update_job(self, job_id: str, **kwargs):
         """Update in-memory job state."""

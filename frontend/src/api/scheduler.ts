@@ -33,6 +33,13 @@ export async function runNow(id: string): Promise<{ status: string; oneshot_id: 
   return data
 }
 
+/** Abort the run of a job in flight (scheduled or run-now) without pausing
+ *  the job — the schedule keeps firing afterwards. */
+export async function stopScheduledJob(id: string): Promise<{ status: string }> {
+  const { data } = await api.post(`/scheduler/jobs/${encodeURIComponent(id)}/stop`)
+  return data
+}
+
 export async function pauseJob(id: string): Promise<{ status: string }> {
   const { data } = await api.post(`/scheduler/jobs/${encodeURIComponent(id)}/pause`)
   return data

@@ -13,6 +13,15 @@ EVENT_DELETE = "delete"
 EVENT_SCAN = "scan"
 EVENT_SEARCH = "search"
 EVENT_TRANSLATE = "translate"
+EVENT_WHISPER = "whisper"
+EVENT_REMUX = "remux"
+EVENT_SYNC = "sync"
+EVENT_CLEANUP = "cleanup"
+EVENT_BACKUP = "backup"
+EVENT_HOOK = "hook"
+EVENT_AUTOMATION = "automation"
+EVENT_ANIDB = "anidb"
+EVENT_REPAIR = "repair"
 
 
 class ActivityLog(db.Model):

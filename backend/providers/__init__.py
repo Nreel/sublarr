@@ -23,6 +23,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from circuit_breaker import CircuitBreaker
+from db.circuit_breaker import persist_breaker_state
 from providers.base import (
     ProviderAuthError,  # noqa: F401 — re-exported for callers
     ProviderRateLimitError,  # noqa: F401 — re-exported for callers
@@ -206,6 +207,7 @@ class ProviderManager(SearchCoordinatorMixin, ConfigResolvingMixin, StatusReport
                         name=name,
                         failure_threshold=self.settings.circuit_breaker_failure_threshold,
                         cooldown_seconds=self.settings.circuit_breaker_cooldown_seconds,
+                        persist_fn=persist_breaker_state,
                     )
                     logger.info("Provider initialized successfully: %s", name)
             except Exception as e:
@@ -242,6 +244,7 @@ class ProviderManager(SearchCoordinatorMixin, ConfigResolvingMixin, StatusReport
                         name=name,
                         failure_threshold=self.settings.circuit_breaker_failure_threshold,
                         cooldown_seconds=self.settings.circuit_breaker_cooldown_seconds,
+                        persist_fn=persist_breaker_state,
                     )
                     logger.info("Provider initialized successfully (fallback): %s", name)
             except Exception as e:
@@ -405,6 +408,7 @@ class ProviderManager(SearchCoordinatorMixin, ConfigResolvingMixin, StatusReport
                         name=name,
                         failure_threshold=self.settings.circuit_breaker_failure_threshold,
                         cooldown_seconds=self.settings.circuit_breaker_cooldown_seconds,
+                        persist_fn=persist_breaker_state,
                     )
                     logger.info("Provider %s enabled (added to pool)", name)
             except Exception as e:

@@ -252,6 +252,14 @@ export async function getRemuxJob(
   return data;
 }
 
+/** Abort a remux job in flight (terminates ffmpeg, keeps the backup). */
+export async function stopRemuxJob(
+  jobId: string
+): Promise<{ status: string; job_id: string }> {
+  const { data } = await api.post(`/remux/jobs/${jobId}/stop`);
+  return data;
+}
+
 export async function restoreRemuxBackup(
   backupPath: string,
   videoPath: string
