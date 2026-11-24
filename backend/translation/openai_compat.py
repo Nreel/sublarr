@@ -401,9 +401,24 @@ class OpenAICompatBackend(LLMBackend):
         return payload
 
     def _sdk_create(self, body: dict) -> dict:
-        """One ``chat.completions.create`` call, returned as a plain dict."""
+        """One ``chat.completions.create`` call, returned as a plain dict.
+
+        llama.cpp-only fields (``cache_prompt``, ``chat_template_kwargs``) are
+        not part of the OpenAI parameter list — the SDK rejects unknown kwargs
+        before the request is sent (``Completions.create() got an unexpected
+        keyword argument 'cache_prompt'``, 2026-11-24). They go through
+        ``extra_body``, which merges them into the JSON body the server
+        receives; generic OpenAI-compatible servers ignore unknown fields
+        there, so the extra keys cost nothing.
+        """
         client = self._get_client()
-        completion = client.chat.completions.create(**body)
+        body = dict(body)
+        extra_body = {
+            key: body.pop(key)
+            for key in ("cache_prompt", "chat_template_kwargs")
+            if key in body
+        }
+        completion = client.chat.completions.create(**body, extra_body=extra_body)
         # The SDK returns a pydantic model; convert to dict for parse step.
         if hasattr(completion, "model_dump"):
             return completion.model_dump()

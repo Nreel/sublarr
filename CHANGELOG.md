@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.24.2] - 2026-11-24
+
+### Fixed
+- **openai_compat requests died before the network** — 1.24.0's llama.cpp
+  tuning passed `cache_prompt` (and `chat_template_kwargs` after a
+  reasoning-only reply) as direct kwargs to the OpenAI SDK's
+  `chat.completions.create()`, which rejects unknown kwargs pre-flight
+  (`Completions.create() got an unexpected keyword argument 'cache_prompt'`).
+  Every batch of every llama.cpp/LM Studio/vLLM setup failed without sending a
+  request, and five failures opened the translation circuit breaker. The
+  llama-only fields now go through `extra_body`, which merges them into the
+  JSON body the server receives; generic OpenAI-compatible servers ignore
+  unknown fields there as before.
+
 ## [1.24.1] - 2026-11-24
 
 ### Fixed

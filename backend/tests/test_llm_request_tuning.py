@@ -253,6 +253,21 @@ class TestRequestBodyFlags:
         payload = backend._build_request([{"role": "user", "content": "x"}], max_tokens=100)
         assert payload["cache_prompt"] is True
 
+    def test_llama_only_fields_go_via_extra_body_not_sdk_kwargs(self, app):
+        """The SDK rejects unknown kwargs before the request leaves (2026-11-24:
+        every openai_compat batch died on Completions.create() got an unexpected
+        keyword argument 'cache_prompt'). llama.cpp reads them from the body,
+        which extra_body merges in."""
+        backend = _openai_backend()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _completion("Hallo")
+        backend._client = mock_client
+        with app.app_context():
+            backend.translate_batch(["Hello"], "en", "de")
+        sent = mock_client.chat.completions.create.call_args.kwargs
+        assert "cache_prompt" not in sent
+        assert sent["extra_body"]["cache_prompt"] is True
+
     def test_first_attempt_never_asks_for_json(self, app):
         backend = _openai_backend()
         mock_client = MagicMock()
@@ -335,7 +350,7 @@ class TestThinkingSwitch:
         assert raw["choices"][0]["message"]["content"] == "Hallo"
         calls = [c.kwargs for c in mock_client.chat.completions.create.call_args_list]
         assert "chat_template_kwargs" not in calls[0]
-        assert calls[1]["chat_template_kwargs"] == {"enable_thinking": False}
+        assert calls[1]["extra_body"]["chat_template_kwargs"] == {"enable_thinking": False}
         assert backend._thinking_disabled is True
 
     def test_thinking_off_is_kept_for_the_next_batch(self):
@@ -349,9 +364,9 @@ class TestThinkingSwitch:
         )
         raw = backend._call_api(payload, timeout_s=120)
         assert raw["choices"][0]["message"]["content"] == "Hallo"
-        assert mock_client.chat.completions.create.call_args.kwargs["chat_template_kwargs"] == {
-            "enable_thinking": False
-        }
+        assert mock_client.chat.completions.create.call_args.kwargs["extra_body"][
+            "chat_template_kwargs"
+        ] == {"enable_thinking": False}
 
     def test_rejected_chat_template_kwargs_is_dropped_and_reasked_once(self):
         backend = _openai_backend()
@@ -366,8 +381,9 @@ class TestThinkingSwitch:
         raw = backend._call_api({"model": "gpt-4o-mini", "messages": []}, timeout_s=120)
         assert raw["choices"][0]["message"]["content"] == "Hallo"
         calls = [c.kwargs for c in mock_client.chat.completions.create.call_args_list]
-        assert calls[1]["chat_template_kwargs"] == {"enable_thinking": False}
+        assert calls[1]["extra_body"]["chat_template_kwargs"] == {"enable_thinking": False}
         assert "chat_template_kwargs" not in calls[2]
+        assert "chat_template_kwargs" not in calls[2]["extra_body"]
         assert backend._thinking_disabled is False
 
     def test_content_reply_is_not_mistaken_for_reasoning(self):
