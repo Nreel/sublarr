@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-11-24
+
 ### Added
 - **Crucial-state rollup in the footer and `/health`** — `GET /api/v1/health` (authenticated body) now leads with `states {backend, database, sonarr, radarr, jellyfin}` (`ok|down|not_configured|timeout`, database `ok|problem`), derived from the probes already gathered — no extra HTTP calls; Jellyfin comes from a new `media_server_by_type` summary in the media-servers probe. The footer's health block replaced the single `● Online` dot with a five-dot row (backend · db · Sonarr · Radarr · Jellyfin) that links to `/health`; every footer block now carries a hover `title` describing its state and links to its page (automation → `/settings/automation`, throttled providers → `/providers`, activity → `/activity`). Batch search/probe/extract state dicts and the wanted scanner now record `started_at` (UTC ISO) at run start, exposed on their `/status` endpoints, so the always-visible activity block names the activity that started *last* (`No activity` when idle) instead of hiding; the always-visible providers block shows a green `No throttled providers` dot when nothing is circuit-open, rate-limited or auto-disabled. `/providers` gained a header link to `/settings/providers`.
 - **Operational activities now appear in `/activity`** — running remux, video-sync, whisper, cleanup, scheduled AniDB sync, subtitle automation, repair, backup and hook runs are persisted as `activity_log` rows (created `running`, updated to `success`/`failed`/`cancelled` at completion), so every background activity is visible in History with a status badge; Unified History gained filter pills for the new kinds.
