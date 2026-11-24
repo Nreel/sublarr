@@ -105,3 +105,27 @@ def test_names_ending_in_ed_before_english_stay_dialogue():
 
     assert signs == set()
     assert dialog == {"Fred English", "Ted Eng", "Neo Ed Smith"}
+
+
+def test_dialogue_names_in_other_languages_are_not_bucketed_as_signs():
+    """Prod 2026-11-24: bare ``logo`` matched inside Spanish ``Diálogos``.
+    The fansub's dialogue style became a sign, so the episode shipped with
+    every dialogue line still in Spanish under a ``[RU]`` Title, reported as
+    a successful translation. Ambiguous sign words now match only as whole
+    words, and names are accent-folded first, so Romance dialogue names
+    reach the dialog bucket; Cyrillic ``Диалог`` matches directly."""
+    dialog, signs = classify_styles(
+        _subs("Diálogos", "Dialogos", "Dialoghi", "Диалог", "Pensamientos", "Narración")
+    )
+
+    assert signs == set()
+    assert dialog == {"Diálogos", "Dialogos", "Dialoghi", "Диалог", "Pensamientos", "Narración"}
+
+
+def test_whole_word_sign_names_stay_signs():
+    """The word-bounded ambiguous words still catch real sign styles."""
+    _dialog, signs = classify_styles(
+        _subs("Logo", "Logos", "Screen Text", "Note Cards", "Letter Box")
+    )
+
+    assert signs == {"Logo", "Logos", "Screen Text", "Note Cards", "Letter Box"}

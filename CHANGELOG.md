@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Fansub dialogue styles named in other languages no longer fall into the
+  signs bucket** — `SIGNS_PATTERNS` matched ambiguous words as substrings, so
+  `logo` hit Spanish `Diálogos`: the episode's dialogue was never sent to the
+  translator, the file was written with source-language text under a `[RU]`
+  Title, and the run reported success. Ambiguous sign words (`logo`, `note`,
+  `card`, `board`, `screen`, `letter`, `song`) now match only as whole words
+  (plural allowed); style names are accent-folded before matching
+  (`Diálogos` → `Dialogos`, `Narración` → `Narracion`), and `DIALOG_PATTERNS`
+  gained the `dialog` root and Cyrillic `диалог`. Erring toward dialog is
+  deliberate: a missed sign gets translated, while dialogue bucketed as a
+  sign stays untranslated and is deleted by `cleanup_signs`.
+
 ## [1.23.3] - 2026-11-23
 
 ### Changed

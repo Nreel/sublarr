@@ -15,6 +15,7 @@ continues to work unchanged.
 
 import logging
 import re
+import unicodedata
 
 from ass_drawing import holds_language
 from ass_lexer import lex
@@ -48,13 +49,35 @@ SIGNS_PATTERNS = re.compile(
     r"|(?:^|[\s_.\]-])(?:op|ed)[\s_.-]+(?:english|eng|kanji|jp|jpn|lyrics|karaoke|roma?)"
     r"(?![a-z0-9])"
     # "title" but not "Subtitle": that is a dialogue style (prod 2026-11-08).
-    r"|song|karaoke|(?<!sub)title|note|insert|logo|screen|board|card|letter",
+    r"|karaoke|(?<!sub)title|insert"
+    # Ambiguous words only as whole words (plural allowed). A substring
+    # match collides with dialogue style names in other languages: prod
+    # 2026-11-24 found "logo" inside Spanish "Diálogos", which turned every
+    # dialogue line of a fansub into a kept sign and shipped Spanish under a
+    # [RU] tag. Erring toward dialog is the safe direction — a missed sign
+    # gets translated; a dialogue wrongly bucketed as a sign stays source
+    # language and is even deleted by cleanup_signs.
+    r"|(?<![a-z])(?:logo|card|note|board|screen|letter|song)s?(?![a-z])",
     re.IGNORECASE,
 )
+# Accent-folded names (see _fold_name) feed both patterns, so Romance fansub
+# dialogue names match: "Diálogos"→"dialog" (prod 2026-11-24). Cyrillic
+# "диалог" goes in directly — folding leaves Cyrillic untouched.
 DIALOG_PATTERNS = re.compile(
-    r"default|main|dialogue|italic|flashback|narrat|top|alt|internal|thought",
+    r"default|main|dialog|italic|flashback|narrat|narrac|top|alt|internal|thought|диалог",
     re.IGNORECASE,
 )
+
+
+def _fold_name(name: str) -> str:
+    """Strip accents so Latin-script style names match the ASCII patterns.
+
+    ``Diálogos`` → ``Dialogos``, ``Narración`` → ``Narracion``. Cyrillic and
+    other non-Latin names pass through unchanged.
+    """
+    decomposed = unicodedata.normalize("NFD", name)
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
 
 # ASS override tag pattern - matches {...} blocks
 OVERRIDE_TAG_RE = re.compile(r"\{[^}]*\}")
@@ -86,12 +109,13 @@ def classify_styles(subs):
         style_lines[style_name].append(event.text)
 
     for style_name in style_lines:
-        # Check explicit patterns first
-        if SIGNS_PATTERNS.search(style_name):
+        # Check explicit patterns first, on the accent-folded name.
+        folded = _fold_name(style_name)
+        if SIGNS_PATTERNS.search(folded):
             signs_styles.add(style_name)
             continue
 
-        if DIALOG_PATTERNS.search(style_name):
+        if DIALOG_PATTERNS.search(folded):
             dialog_styles.add(style_name)
             continue
 
