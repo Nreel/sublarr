@@ -131,6 +131,8 @@ export interface BatchExtractStatus {
   failed: number
   skipped: number
   current_item: string | null
+  /** UTC ISO timestamp of the running batch, or null when nothing runs. */
+  started_at?: string | null
 }
 
 export async function getBatchExtractStatus(): Promise<BatchExtractStatus> {
@@ -219,6 +221,8 @@ export interface BatchProbeStatus {
   skipped: number
   failed: number
   current_item: string | null
+  /** UTC ISO timestamp of the running batch, or null when nothing runs. */
+  started_at?: string | null
 }
 
 export async function getBatchProbeStatus(): Promise<BatchProbeStatus> {
@@ -239,6 +243,9 @@ export interface ScannerStatus {
   progress: { current: number; total: number; phase: string; added: number; updated: number }
   last_scan_at: string | null
   last_search_at: string | null
+  /** UTC ISO timestamp of the running scan / search, or null when idle. */
+  scan_started_at?: string | null
+  search_started_at?: string | null
   last_summary: Record<string, unknown> | null
 }
 

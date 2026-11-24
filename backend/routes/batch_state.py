@@ -6,6 +6,7 @@ importing from translate.py and wanted.py.
 """
 
 import threading
+from datetime import UTC, datetime
 
 
 def serialize_batch_state(state: dict) -> dict:
@@ -14,9 +15,10 @@ def serialize_batch_state(state: dict) -> dict:
 
 
 def begin_run(state: dict) -> None:
-    """Reset cancellation for a new run. Caller must hold the state's lock."""
+    """Reset cancellation and stamp the run start. Caller must hold the state's lock."""
     state["cancelled"] = False
     state["cancel_event"] = threading.Event()
+    state["started_at"] = datetime.now(UTC).isoformat()
 
 
 def request_cancel(state: dict) -> bool:
@@ -38,6 +40,7 @@ from services.translation_jobs import _memory_stats, stats_lock  # noqa: F401
 
 batch_state = {
     "running": False,
+    "started_at": None,
     "total": 0,
     "processed": 0,
     "succeeded": 0,
@@ -57,6 +60,7 @@ batch_lock = threading.Lock()
 
 retranslate_batch_state = {
     "running": False,
+    "started_at": None,
     "total": 0,
     "processed": 0,
     "succeeded": 0,
@@ -71,6 +75,7 @@ retranslate_lock = threading.Lock()
 
 wanted_batch_state = {
     "running": False,
+    "started_at": None,
     "total": 0,
     "processed": 0,
     "found": 0,
@@ -86,6 +91,7 @@ wanted_batch_lock = threading.Lock()
 
 _batch_extract_state = {
     "running": False,
+    "started_at": None,
     "total": 0,
     "processed": 0,
     "succeeded": 0,
@@ -101,6 +107,7 @@ _batch_extract_lock = threading.Lock()
 
 _batch_probe_state = {
     "running": False,
+    "started_at": None,
     "total": 0,
     "processed": 0,
     "found": 0,

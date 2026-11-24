@@ -383,7 +383,7 @@ class TestHealthCheckMediaServers:
     def test_healthy_servers(self):
         manager = MagicMock()
         manager.health_check_all.return_value = [
-            {"name": "plex", "healthy": True, "message": "ok"},
+            {"name": "plex", "type": "plex", "healthy": True, "message": "ok", "enabled": True},
         ]
         with patch(
             "mediaserver.get_media_server_manager",
@@ -394,12 +394,13 @@ class TestHealthCheckMediaServers:
             result, overall = _health_check_media_servers()
             assert result["media_servers"] == "1/1 healthy"
             assert result["media_server:plex"] == "ok"
+            assert result["media_server_by_type"] == {"plex": "ok"}
 
     def test_mixed_servers(self):
         manager = MagicMock()
         manager.health_check_all.return_value = [
-            {"name": "plex", "healthy": True, "message": "ok"},
-            {"name": "jellyfin", "healthy": False, "message": "timeout"},
+            {"name": "plex", "type": "plex", "healthy": True, "message": "ok", "enabled": True},
+            {"name": "jellyfin", "type": "jellyfin", "healthy": False, "message": "timeout", "enabled": True},
         ]
         with patch(
             "mediaserver.get_media_server_manager",
@@ -410,6 +411,22 @@ class TestHealthCheckMediaServers:
             result, overall = _health_check_media_servers()
             assert result["media_servers"] == "1/2 healthy"
             assert result["media_server:jellyfin"] == "unhealthy: timeout"
+            assert result["media_server_by_type"] == {"plex": "ok", "jellyfin": "down"}
+
+    def test_disabled_type_not_configured(self):
+        manager = MagicMock()
+        manager.health_check_all.return_value = [
+            {"name": "jellyfin", "type": "jellyfin", "healthy": False, "message": "disabled", "enabled": False},
+            {"name": "plex", "type": "plex", "healthy": True, "message": "ok", "enabled": True},
+        ]
+        with patch(
+            "mediaserver.get_media_server_manager",
+            return_value=manager,
+        ):
+            from routes.system.health import _health_check_media_servers
+
+            result, overall = _health_check_media_servers()
+            assert result["media_server_by_type"] == {"jellyfin": "not_configured", "plex": "ok"}
 
     def test_none_configured(self):
         manager = MagicMock()

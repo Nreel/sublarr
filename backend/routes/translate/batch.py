@@ -253,6 +253,7 @@ def batch_start():
                 with batch_lock:
                     batch_state["running"] = False
                     batch_state["current_file"] = None
+                    batch_state["started_at"] = None
                     snapshot = dict(batch_state)
 
                 emit_event("batch_complete", snapshot)
@@ -290,6 +291,7 @@ def batch_start():
             batch_state.update(
                 {
                     "running": False,
+                    "started_at": None,
                     "total": 0,
                     "processed": 0,
                     "succeeded": 0,

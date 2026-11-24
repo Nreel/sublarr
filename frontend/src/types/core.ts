@@ -38,8 +38,25 @@ export interface AuthStatus {
   authenticated: boolean
 }
 
+/** Per-service probe outcome reported by /health for the footer state row. */
+export type ServiceHealthState = 'ok' | 'down' | 'not_configured' | 'timeout'
+
+/**
+ * The five crucial states the footer shows as dots. Present only on an
+ * authenticated /health request, alongside `version`/`services`; an anonymous
+ * response carries just `status`, so this stays optional.
+ */
+export interface HealthStates {
+  backend: 'alive'
+  database: 'ok' | 'problem'
+  sonarr: ServiceHealthState
+  radarr: ServiceHealthState
+  jellyfin: ServiceHealthState
+}
+
 export interface HealthStatus {
   status: 'healthy' | 'unhealthy'
+  states?: HealthStates
   // version + services are only present on an authenticated request; an
   // anonymous /health response returns just `status`. Optional so consumers
   // null-guard instead of dereferencing undefined.

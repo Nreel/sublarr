@@ -267,6 +267,7 @@ def wanted_batch_search():
                     snapshot = dict(wanted_batch_state)
                     wanted_batch_state["running"] = False
                     wanted_batch_state["current_item"] = None
+                    wanted_batch_state["started_at"] = None
 
                 emit_event("batch_complete", snapshot)
 

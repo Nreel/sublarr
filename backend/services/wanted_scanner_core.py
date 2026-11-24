@@ -114,6 +114,10 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
         self._progress = {"current": 0, "total": 0, "phase": "", "added": 0, "updated": 0}
         self._last_scan_at = None
         self._last_search_at = None
+        # Start (not completion) stamps of the currently running pass; the
+        # footer shows the newest one while a scan/search is in flight.
+        self._scan_started_at = None
+        self._search_started_at = None
         self._scheduler_started_at = None
         self._last_summary = {}
         self._last_scan_timestamp = None
@@ -151,6 +155,14 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
         return self._last_search_at.isoformat() if self._last_search_at else None
 
     @property
+    def scan_started_at(self):
+        return self._scan_started_at
+
+    @property
+    def search_started_at(self):
+        return self._search_started_at
+
+    @property
     def scheduler_started_at(self):
         return self._scheduler_started_at.isoformat() if self._scheduler_started_at else None
 
@@ -170,6 +182,7 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             return {"error": "scan_already_running"}
 
         self._scanning = True
+        self._scan_started_at = datetime.now(UTC).isoformat()
         self._cancel_event.clear()
         try:
             result = self._scan_all_locked(incremental)
@@ -418,6 +431,7 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             return {"error": "scan_already_running"}
 
         self._scanning = True
+        self._scan_started_at = datetime.now(UTC).isoformat()
         start = time.time()
 
         try:
@@ -463,6 +477,7 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             return {"error": "scan_already_running"}
 
         self._scanning = True
+        self._scan_started_at = datetime.now(UTC).isoformat()
         start = time.time()
 
         try:
@@ -616,6 +631,7 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             return {"error": "search_already_running"}
 
         self._searching = True
+        self._search_started_at = datetime.now(UTC).isoformat()
         self._cancel_event.clear()
 
         try:

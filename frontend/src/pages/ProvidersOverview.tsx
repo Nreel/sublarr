@@ -8,6 +8,7 @@
  */
 
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import { Server } from 'lucide-react'
 import { useProviders, useBudgetState, useTestProvider } from '@/hooks/useApi'
 import type { ProviderInfo, ProviderStatusReason } from '@/types/providers'
@@ -232,11 +233,19 @@ export function ProvidersOverviewPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1>{t('providers_page.title')}</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-          {t('providers_page.subtitle')}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1>{t('providers_page.title')}</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+            {t('providers_page.subtitle')}
+          </p>
+        </div>
+        <Link
+          to="/settings/providers"
+          style={{ fontSize: '12px', color: 'var(--accent)' }}
+        >
+          {t('providers_page.settings_link')}
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

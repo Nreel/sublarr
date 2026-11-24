@@ -1,6 +1,7 @@
 """Wanted batch-extract route — extracts embedded subtitles for many items at once."""
 
 import logging
+from datetime import UTC, datetime
 
 from flask import current_app, jsonify, request
 
@@ -109,6 +110,7 @@ def _run_batch_extract(item_ids, auto_translate, app):
             logger.debug("Could not remove the DB session after the batch extract", exc_info=True)
         with _batch_extract_lock:
             _batch_extract_state["running"] = False
+            _batch_extract_state["started_at"] = None
             snapshot = dict(_batch_extract_state)
         emit_event("batch_extract_completed", snapshot)
 
@@ -235,6 +237,7 @@ def batch_extract():
         if _batch_extract_state["running"]:
             return jsonify({"error": "Batch extraction already running"}), 409
         _batch_extract_state["running"] = True
+        _batch_extract_state["started_at"] = datetime.now(UTC).isoformat()
 
     app = current_app._get_current_object()
     submit_background(_run_batch_extract, item_ids, auto_translate, app)

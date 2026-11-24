@@ -103,6 +103,8 @@ export interface WantedBatchStatus {
   failed: number
   skipped: number
   current_item: string | null
+  /** UTC ISO timestamp of the running batch, or null when nothing runs. */
+  started_at?: string | null
 }
 
 // ─── Filter Presets & Batch Actions ──────────────────────────────────────────

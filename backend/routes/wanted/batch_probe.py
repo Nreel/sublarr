@@ -17,6 +17,7 @@ import logging
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import UTC, datetime
 
 from flask import current_app, jsonify, request
 
@@ -76,6 +77,7 @@ def _finalize_batch_probe(start_time: float) -> None:
     duration_ms = int((time.time() - start_time) * 1000)
     with _batch_probe_lock:
         _batch_probe_state["running"] = False
+        _batch_probe_state["started_at"] = None
         snapshot = dict(_batch_probe_state)
     emit_event("batch_probe_completed", {**snapshot, "duration_ms": duration_ms})
 
@@ -269,6 +271,7 @@ def batch_probe():
         if _batch_probe_state["running"]:
             return jsonify({"error": "Batch probe already running"}), 409
         _batch_probe_state["running"] = True
+        _batch_probe_state["started_at"] = datetime.now(UTC).isoformat()
 
     try:
         page = get_wanted_items(page=1, per_page=5000, series_id=series_id)
@@ -276,11 +279,13 @@ def batch_probe():
     except Exception:
         with _batch_probe_lock:
             _batch_probe_state["running"] = False
+            _batch_probe_state["started_at"] = None
         raise
 
     if not items:
         with _batch_probe_lock:
             _batch_probe_state["running"] = False
+            _batch_probe_state["started_at"] = None
         return jsonify({"status": "nothing_to_probe", "total_items": 0})
 
     app = current_app._get_current_object()

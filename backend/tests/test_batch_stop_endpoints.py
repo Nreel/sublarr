@@ -56,3 +56,27 @@ def test_cancel_running_run_sets_event(client, path, state, lock):
         with lock:
             state["running"] = False
             state["cancelled"] = False
+
+
+@pytest.mark.parametrize("path, state, lock", BATCHES)
+def test_begin_run_stamps_started_at(client, path, state, lock):
+    """Every batch dict carries a UTC ISO started_at, passed through /status serialization."""
+    from datetime import UTC, datetime
+
+    from routes.batch_state import serialize_batch_state
+
+    with lock:
+        state["running"] = True
+        begin_run(state)
+        stamp = state["started_at"]
+    try:
+        assert stamp is not None
+        assert datetime.fromisoformat(stamp).tzinfo is not None
+        serialized = serialize_batch_state(state)
+        assert serialized["started_at"] == stamp
+        assert "cancel_event" not in serialized
+    finally:
+        with lock:
+            state["running"] = False
+            state["cancelled"] = False
+            state["started_at"] = None

@@ -437,7 +437,7 @@ def retranslate_batch():
                 )
             finally:
                 with retranslate_lock:
-                    retranslate_batch_state.update({"running": False, "current_file": None})
+                    retranslate_batch_state.update({"running": False, "current_file": None, "started_at": None})
 
     try:
         submit_background(_run_retranslate)
@@ -448,6 +448,7 @@ def retranslate_batch():
             retranslate_batch_state.update(
                 {
                     "running": False,
+                    "started_at": None,
                     "total": 0,
                     "processed": 0,
                     "succeeded": 0,

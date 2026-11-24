@@ -80,6 +80,7 @@
     "last_failure": "Last failure",
     "consecutive_failures": "{{count}} consecutive failures",
     "test": "Test",
+    "settings_link": "Provider settings",
     "testing": "Testing…",
     "test_failed": "Provider test failed",
     "status": {

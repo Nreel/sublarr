@@ -144,10 +144,41 @@ def _health_check_media_servers():
             for h in ms_health:
                 key = f"media_server:{h['name']}"
                 out[key] = h["message"] if h["healthy"] else f"unhealthy: {h['message']}"
+            # Per-type rollup for the footer states block (no extra HTTP call):
+            # "ok" when an enabled instance of the type answers, "down" when
+            # enabled instances exist but none answer, "not_configured" when
+            # nothing of that type is enabled.
+            by_type: dict[str, str] = {}
+            for h in ms_health:
+                t = h.get("type")
+                if not t:
+                    continue
+                if not h.get("enabled", True):
+                    by_type.setdefault(t, "not_configured")
+                elif h["healthy"]:
+                    by_type[t] = "ok"
+                elif by_type.get(t) != "ok":
+                    by_type[t] = "down"
+            out["media_server_by_type"] = by_type
             return out, None
         return {"media_servers": "none configured"}, None
     except Exception:
         return {"media_servers": "error"}, None
+
+
+def _service_state(value: str | None) -> str:
+    """Map a service probe entry to the footer state enum.
+
+    ``None`` means the probe never returned within the liveness budget, which
+    the gather records as an explicit "timeout" entry; both read as timeout.
+    """
+    if value is None or value == "timeout":
+        return "timeout"
+    if value == "not configured":
+        return "not_configured"
+    if value.startswith("unhealthy") or value.startswith("error"):
+        return "down"
+    return "ok"
 
 
 def _caller_is_authenticated() -> bool:
@@ -204,6 +235,13 @@ def health():
                   status:
                     type: string
                     enum: [healthy, unhealthy]
+                  states:
+                    type: object
+                    description: >-
+                      Authenticated callers only, first field. Footer state rollup
+                      derived from the probes below: backend "alive"; database
+                      "ok"|"problem"; sonarr/radarr/jellyfin
+                      "ok"|"down"|"not_configured"|"timeout".
                   version:
                     type: string
                   services:
@@ -274,6 +312,17 @@ def health():
 
     body: dict = {"status": "healthy" if healthy else "unhealthy"}
     if _caller_is_authenticated():
+        # Footer states block — derived from the probes already gathered, so
+        # no extra HTTP calls. Informational only: states never flip
+        # ``status``/status_code (service probes report overall=None).
+        by_type = service_status.get("media_server_by_type") or {}
+        body["states"] = {
+            "backend": "alive",
+            "database": "problem" if migration_problem is not None else "ok",
+            "sonarr": _service_state(service_status.get("sonarr")),
+            "radarr": _service_state(service_status.get("radarr")),
+            "jellyfin": by_type.get("jellyfin", "not_configured"),
+        }
         body["version"] = __version__
         body["services"] = service_status
         if migration_problem is not None:

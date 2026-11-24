@@ -157,3 +157,16 @@ def test_health_detailed_status_matches_health_when_migration_failed(failed_migr
     liveness = failed_migration_client.get("/api/v1/health").get_json()
     assert detailed["status"] == "unhealthy"
     assert liveness["status"] == "unhealthy"
+
+
+def test_health_authenticated_states_database_ok(client):
+    client.application.extensions.pop(ms.EXTENSION_KEY, None)
+    body = client.get("/api/v1/health").get_json()
+    assert "states" in body
+    assert body["states"]["database"] == "ok"
+
+
+def test_health_authenticated_states_database_problem(failed_migration_client):
+    body = failed_migration_client.get("/api/v1/health").get_json()
+    assert set(body) == {"status", "states", "version", "services", "reason"}
+    assert body["states"]["database"] == "problem"

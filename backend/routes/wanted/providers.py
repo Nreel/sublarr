@@ -23,6 +23,8 @@ def scanner_status():
             "progress": scanner.scan_progress,
             "last_scan_at": scanner.last_scan_at,
             "last_search_at": scanner.last_search_at,
+            "scan_started_at": scanner.scan_started_at,
+            "search_started_at": scanner.search_started_at,
             "last_summary": scanner.last_summary,
         }
     )
