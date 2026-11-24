@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.24.1] - 2026-11-24
+
+### Fixed
+- **Dead translation backend chains no longer split the batch tree** — when
+  no backend ran (`translate_with_fallback` reports `backend_name="none"`:
+  empty chain, unregistered backend, or every circuit breaker OPEN),
+  `translator.manager._translate_batch_or_split` now raises immediately with
+  the chain's own message instead of halving the batch down to single lines
+  (the 2026-11-24 `Batch 1aaaaaa failed … circuit breakers open` storm —
+  ~40 warnings and 2^depth re-asks of the same dead chain). Transient backend
+  errors and verifier-index failures still split as before.
+- **Footer activity block reports running translations** — the footer's
+  activity dot only covered scan/batch-search/probe/extract runs, so a
+  translation job ran while it showed `No activity`. Running jobs from the
+  live queue snapshot (`GET /translation/queue`) now surface as `Translating`
+  (en/de `status.translating`), newest-start wins when runs overlap; idle
+  hover text now reads "No scan, batch or translation activity running".
+
 ## [1.24.0] - 2026-11-24
 
 ### Added
