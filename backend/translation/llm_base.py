@@ -10,6 +10,7 @@ TranslationBackend directly — the LLM-specific concerns don't apply.
 
 from __future__ import annotations
 
+import inspect
 import logging
 import time
 from abc import abstractmethod
@@ -20,7 +21,14 @@ from decimal import Decimal
 from translation.base import TranslationBackend, TranslationContentError, TranslationResult
 from translation.concurrency import ConcurrencyTimeoutError, get_concurrency
 from translation.cost_tracker import calculate_llm_cost_micro_usd
-from translation.llm_utils import find_line_shift, repair_line_mapping, strip_invented_hard_breaks
+from translation.llm_utils import (
+    batch_token_budget,
+    find_line_shift,
+    formality_clause,
+    history_block,
+    repair_line_mapping,
+    strip_invented_hard_breaks,
+)
 from translation.prompt_safety import enforce_batch_size, escape_for_prompt
 from translator.events import write_translation_event
 
@@ -41,6 +49,39 @@ class ContentFilterError(TranslationContentError, RuntimeError):
 
 class JobCancelledError(RuntimeError):
     """Raised when a batch is skipped due to a cancel request on its job."""
+
+
+def _accepts_kwarg(fn, name: str) -> bool:
+    """Whether ``fn`` accepts ``name`` — declared, or swallowed by ``**kwargs``.
+
+    ``_assemble_messages`` is a subclass hook, and a backend that has not been
+    updated for it must still be callable: passing a keyword the hook does not
+    take would raise TypeError inside a translation that otherwise works.
+    """
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+    if name in params:
+        return True
+    return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+
+
+def _settings_value(name: str) -> object | None:
+    """Optional tuning knob from settings, read defensively.
+
+    Deliberately ``getattr`` rather than a registered config key: the knobs
+    (``max_tokens``, ``temperature``, ``translation_formality``) are opt-in,
+    and an install that never set one must send nothing extra rather than fail
+    on a key that does not exist.
+    """
+    try:
+        from config import get_settings
+
+        return getattr(get_settings(), name, None)
+    except Exception as exc:
+        logger.debug("Could not read settings.%s: %s", name, exc)
+        return None
 
 
 @dataclass
@@ -115,6 +156,8 @@ class LLMBackend(TranslationBackend):
         *,
         lookback: list[str] | None = None,
         lookahead: list[str] | None = None,
+        history: list[tuple[str, str]] | None = None,
+        retry_temperature: float | None = None,
         job_id: str | None = None,
     ) -> TranslationResult:
         """Orchestrate: concurrency + API call + cost tracking + event write.
@@ -128,6 +171,19 @@ class LLMBackend(TranslationBackend):
         attach surrounding subtitle lines as context for pronoun resolution
         and narrative coherence across batch boundaries. They are forwarded
         to :meth:`_attempt` → :meth:`_assemble_messages`.
+
+        ``history`` is the finished ``(source, translation)`` pairs of the
+        lines already accepted for this file. SubtitleEdit feeds the previous
+        *translations*, not the previous source lines: names, pronouns and
+        register are decided in the output, so only the output tells the model
+        what it has already committed to. Backends whose ``_assemble_messages``
+        does not take it receive nothing extra.
+
+        ``retry_temperature`` overrides the request temperature for the retries
+        made inside this call. The batching layer passes it when it re-asks a
+        batch that failed as a whole — one warmer request for the intact batch
+        is cheaper than the tree of requests a split creates — and an
+        untouched batch keeps the configured temperature.
         """
         started_at = datetime.now(UTC)
         started_mono = time.monotonic()
@@ -142,6 +198,26 @@ class LLMBackend(TranslationBackend):
         # is rejected here, surfaces as PromptBatchTooLargeError, and
         # never reaches the model.
         enforce_batch_size(lines)
+
+        # Subclasses may override the verify hooks with the older keyword set
+        # (Ollama's own line-count retry), and tests patch those overrides —
+        # pass the new extras only where a hook accepts them. A backend that
+        # does not accept ``retry_temperature`` keeps its cold retry; the warm
+        # re-ask of a failed batch happens one level up, in the batching layer.
+        verify_extras: dict[str, object] = {}
+        if history and _accepts_kwarg(self._verify_line_count, "history"):
+            verify_extras["history"] = history
+        if retry_temperature is not None and _accepts_kwarg(
+            self._verify_line_count, "retry_temperature"
+        ):
+            verify_extras["retry_temperature"] = retry_temperature
+        align_extras: dict[str, object] = {}
+        if history and _accepts_kwarg(self._verify_line_alignment, "history"):
+            align_extras["history"] = history
+        if retry_temperature is not None and _accepts_kwarg(
+            self._verify_line_alignment, "retry_temperature"
+        ):
+            align_extras["retry_temperature"] = retry_temperature
 
         try:
             with get_concurrency().slot(self.name, timeout_s=self.timeout_s):
@@ -159,6 +235,8 @@ class LLMBackend(TranslationBackend):
                     series_context,
                     lookback=lookback,
                     lookahead=lookahead,
+                    history=history,
+                    retry_temperature=retry_temperature,
                 )
                 resp = self._verify_line_count(
                     resp,
@@ -169,6 +247,7 @@ class LLMBackend(TranslationBackend):
                     series_context,
                     lookback=lookback,
                     lookahead=lookahead,
+                    **verify_extras,
                 )
                 resp = self._verify_line_alignment(
                     resp,
@@ -179,6 +258,7 @@ class LLMBackend(TranslationBackend):
                     series_context,
                     lookback=lookback,
                     lookahead=lookahead,
+                    **align_extras,
                 )
         except ConcurrencyTimeoutError as exc:
             status = "timeout"
@@ -280,19 +360,36 @@ class LLMBackend(TranslationBackend):
         *,
         lookback: list[str] | None = None,
         lookahead: list[str] | None = None,
+        history: list[tuple[str, str]] | None = None,
+        retry_temperature: float | None = None,
     ) -> LLMResponse:
-        """Build + call + parse once. Used by :meth:`translate_batch`."""
+        """Build + call + parse once. Used by :meth:`translate_batch`.
+
+        ``retry_temperature`` reaches the request through
+        :meth:`_apply_attempt_policy`, which every backend gets before the
+        payload goes out — the strict retry of a batch the manager re-asks
+        warm is where a different temperature actually helps.
+        """
+        assemble_kwargs: dict[str, object] = {
+            "series_context": series_context,
+            "strict": is_retry,
+            "lookback": lookback,
+            "lookahead": lookahead,
+        }
+        if history and _accepts_kwarg(self._assemble_messages, "history"):
+            assemble_kwargs["history"] = history
+
         messages = self._assemble_messages(
             lines,
             source_lang,
             target_lang,
             glossary_entries,
-            series_context=series_context,
-            strict=is_retry,
-            lookback=lookback,
-            lookahead=lookahead,
+            **assemble_kwargs,
         )
-        payload = self._build_request(messages, max_tokens=self._estimate_max_tokens(lines))
+        payload = self._build_request(messages, max_tokens=self._max_tokens_for(lines))
+        payload = self._apply_attempt_policy(
+            payload, strict=is_retry, retry_temperature=retry_temperature
+        )
         raw = self._call_api(payload, timeout_s=self.timeout_s)
         resp = self._parse_response(raw)
         # Every LLM backend passes through here, which is why the repair lives
@@ -309,6 +406,31 @@ class LLMBackend(TranslationBackend):
             raise ContentFilterError(f"{self.name} refused with finish_reason=content_filter")
         return resp
 
+    def _apply_attempt_policy(
+        self,
+        payload: dict,
+        *,
+        strict: bool = False,
+        retry_temperature: float | None = None,
+    ) -> dict:
+        """Adjust the outgoing request for the attempt that is about to be made.
+
+        The base handles the two shapes the LLM backends send: a flat
+        ``temperature`` (OpenAI-compatible, ChatGPT, DeepSeek, Mistral) and a
+        nested ``options`` dict (Ollama). ``strict`` marks the retry after a
+        line-count or alignment failure; providers add their own ladder on top
+        of it (see ``OpenAICompatBackend._apply_attempt_policy`` for
+        ``response_format`` and the thinking-switch).
+        """
+        if retry_temperature is None:
+            return payload
+        if isinstance(payload.get("temperature"), (int, float)):
+            payload["temperature"] = retry_temperature
+        options = payload.get("options")
+        if isinstance(options, dict) and isinstance(options.get("temperature"), (int, float)):
+            payload["options"] = {**options, "temperature": retry_temperature}
+        return payload
+
     def _verify_line_count(
         self,
         resp: LLMResponse,
@@ -320,6 +442,8 @@ class LLMBackend(TranslationBackend):
         *,
         lookback: list[str] | None = None,
         lookahead: list[str] | None = None,
+        history: list[tuple[str, str]] | None = None,
+        retry_temperature: float | None = None,
     ) -> LLMResponse:
         """Retry once on line-count mismatch; raise if still wrong.
 
@@ -345,6 +469,8 @@ class LLMBackend(TranslationBackend):
             is_retry=True,
             lookback=lookback,
             lookahead=lookahead,
+            history=history,
+            retry_temperature=retry_temperature,
         )
         if len(resp_retry.translations) != len(lines):
             # Sum tokens so the error-case event captures full spend
@@ -375,6 +501,8 @@ class LLMBackend(TranslationBackend):
         *,
         lookback: list[str] | None = None,
         lookahead: list[str] | None = None,
+        history: list[tuple[str, str]] | None = None,
+        retry_temperature: float | None = None,
     ) -> LLMResponse:
         """Retry once when the lines came back against the wrong sources.
 
@@ -411,6 +539,8 @@ class LLMBackend(TranslationBackend):
             is_retry=True,
             lookback=lookback,
             lookahead=lookahead,
+            history=history,
+            retry_temperature=retry_temperature,
         )
         # Sum onto the response the caller is still holding as well: when this
         # method raises, that is the one the event row is written from, and it
@@ -448,6 +578,7 @@ class LLMBackend(TranslationBackend):
         *,
         lookback: list[str] | None = None,
         lookahead: list[str] | None = None,
+        history: list[tuple[str, str]] | None = None,
     ) -> list[dict]:
         """Build OpenAI-style messages list.
 
@@ -459,6 +590,10 @@ class LLMBackend(TranslationBackend):
         can resolve pronouns and keep terminology consistent across batch
         boundaries. The lines are explicitly marked as context-only — the
         model must not translate or repeat them.
+
+        ``history`` adds the finished ``(source, translation)`` pairs of the
+        earlier batches, also context-only: register and names are decided in
+        the output, so the output is what has to be shown.
         """
         # P3: every untrusted field (subtitle lines, series_context,
         # glossary terms from DB, lookback/lookahead context) goes through
@@ -467,18 +602,14 @@ class LLMBackend(TranslationBackend):
         # as DB rows, so we still treat them as untrusted at this boundary.
         safe_lines = [escape_for_prompt(line) for line in lines]
 
+        # Stable-first ordering, for KV reuse: whatever repeats verbatim
+        # across batches (direction, glossary, synopsis, register) goes first,
+        # the rolling history next, and the per-batch count/strictness and the
+        # lines themselves last. A server that reuses a prompt prefix then
+        # reuses the instruction block instead of re-reading it every batch.
         system_parts = [
             f"You translate subtitles from {source_lang} to {target_lang}.",
-            f"Translate exactly {len(safe_lines)} lines, one per line, in the same order.",
         ]
-        if series_context:
-            system_parts.append(f"Context: {escape_for_prompt(series_context)}")
-        if strict:
-            system_parts.append(
-                "STRICT: your response MUST contain exactly "
-                f"{len(safe_lines)} lines — no more, no fewer. "
-                "Do NOT add commentary or numbering."
-            )
         if glossary_entries:
             terms = ", ".join(
                 f"{escape_for_prompt(e.get('source', e.get('source_term', '')), max_chars=100)}"
@@ -487,6 +618,24 @@ class LLMBackend(TranslationBackend):
                 for e in glossary_entries
             )
             system_parts.append(f"Glossary: {terms}")
+        if series_context:
+            system_parts.append(f"Context: {escape_for_prompt(series_context)}")
+        formality = formality_clause(_settings_value("translation_formality"))
+        if formality:
+            system_parts.append(formality.strip())
+        if history:
+            block = history_block(history)
+            if block:
+                system_parts.append(block.strip())
+        system_parts.append(
+            f"Translate exactly {len(safe_lines)} lines, one per line, in the same order."
+        )
+        if strict:
+            system_parts.append(
+                "STRICT: your response MUST contain exactly "
+                f"{len(safe_lines)} lines — no more, no fewer. "
+                "Do NOT add commentary or numbering."
+            )
 
         # Add context window (Phase A4) for LLMs to see surrounding lines.
         # Lookback/lookahead carry the same trust level as the lines being
@@ -516,6 +665,23 @@ class LLMBackend(TranslationBackend):
         ]
 
     def _estimate_max_tokens(self, lines: list[str]) -> int:
-        """Rough heuristic: output ~1.5x input chars / 4 chars-per-token + 200 slack."""
-        total_chars = sum(len(line) for line in lines)
-        return max(200, int(total_chars * 1.5 / 4) + 200)
+        """Token cap for one batch — see :func:`batch_token_budget`.
+
+        SubtitleEdit #13830: the cap is what makes a looping model run out of
+        *tokens* instead of running out of the context window. The old
+        heuristic (1.5x input chars / 4) sized the cap by the input, which is
+        not the reply: a batch whose answer wraps into two lines per source
+        line needs room for the wrapping, and a batch that loops needs a cap
+        it can actually hit.
+        """
+        return batch_token_budget(lines)
+
+    def _max_tokens_for(self, lines: list[str]) -> int:
+        """Explicit ``settings.max_tokens`` wins over the computed budget."""
+        explicit = _settings_value("max_tokens")
+        if explicit is not None:
+            try:
+                return max(1, int(explicit))
+            except (TypeError, ValueError):
+                logger.debug("settings.max_tokens is not a number: %r", explicit)
+        return self._estimate_max_tokens(lines)

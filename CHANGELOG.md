@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Content-based language guards in the translation flows** — a track tag
+  is no longer trusted blindly, and a saved file is no longer assumed to be
+  in its target language. Before the LLM call, the collected dialogue text is
+  detected (lingua, ≤200 lines): when the content is already in the target
+  language the run refuses without spending a request, and when the content
+  disagrees with the tag the detected language is used as the source
+  direction (logged). After translation, the output is detected before it is
+  written: text that reads as the source rather than the target — the 2026-11-24
+  bug where Spanish fansubs were echoed and saved under a `[RU]` tag — is
+  refused and the existing target file stays untouched. Detection is
+  inconclusive by design on short/ambiguous samples and never blocks a
+  legitimate translation. SubtitleEdit runs its `LanguageAutoDetect` on the
+  source only (`--translate-from`); the whole-file target check is new here.
+- **SubtitleEdit batch verification guards** — batch results are screened
+  before reaching the cache or the file: few echoes (≤ `max(1, n/5)`) are now
+  accepted and the echoed lines re-asked individually (names and call-outs
+  legitimately read the same in both languages; whole batches no longer die
+  on them), a duplicated translation across different sources fails the batch
+  (silent line-shift corruption), placeholder/`<translation of line` leak/JSON
+  structure replies fail, and a reply whose line is > `4 × median expansion ×
+  source length` (floor 80 chars) fails the runaway loop check.
+- **Batch size governor and cut-before-bad-line splitting** — a failed batch
+  gets one warmer re-ask (+0.3 temperature, cap 1.0) before subdividing, then
+  splits right before the reported bad line instead of halving blindly; the
+  working chunk size is remembered and grows back after two clean batches
+  (clamped 1..50).
+- **Recent-translation history in prompts** — the last 12 `(source →
+  translation)` pairs accompany later batches so names, pronouns and formality
+  stay consistent; the prompt is ordered instructions/glossary/synopsis-first
+  for KV-cache reuse. A formality clause (`settings.translation_formality`:
+  `formal`/`informal`) is appended when set.
+- **LLM request tuning for local endpoints** — per-batch token budget
+  `200 + Σ(32 + 2·len)` (a looping model runs out of tokens instead of filling
+  the context window, SubtitleEdit #13830), temperature floor 0.2 when no
+  explicit temperature is set (llama.cpp's 0.8 default drifts terminology),
+  `cache_prompt: true` for llama.cpp KV reuse, `response_format json_object`
+  on the strict count retry only with degradation on servers that reject it,
+  `enable_thinking: false` re-ask when a reply comes back reasoning-only,
+  bare `host:port` / `/v1` endpoint URLs completed to the full completion
+  path, and transport errors lead with the endpoint actually used (#12907).
+- **Lyric-aware chunking and CJK re-break skip** — batches never cross music
+  symbol lines (`♩♪♫♬🎵🎶`); `fix_line_breaks` keeps spacing intact for CJK/Thai
+  targets and lyric lines.
+
 ### Fixed
 - **Fansub dialogue styles named in other languages no longer fall into the
   signs bucket** — `SIGNS_PATTERNS` matched ambiguous words as substrings, so

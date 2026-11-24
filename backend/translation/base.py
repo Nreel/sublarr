@@ -73,6 +73,8 @@ class TranslationBackend(ABC):
         *,
         lookback: list[str] | None = None,
         lookahead: list[str] | None = None,
+        history: list[tuple[str, str]] | None = None,
+        retry_temperature: float | None = None,
         job_id: str | None = None,
     ) -> TranslationResult:
         """Translate a batch of subtitle lines.
@@ -93,6 +95,13 @@ class TranslationBackend(ABC):
                 IGNORE this argument — the context is LLM-specific.
             lookahead: Optional lines AFTER the batch, same semantics as
                 ``lookback`` (context only, never translated).
+            history: Finished ``(source, translation)`` pairs from the earlier
+                batches of the same file, context only. LLM-specific: a backend
+                that does not declare it simply does not receive it —
+                ``TranslationManager`` probes the signature before passing it.
+            retry_temperature: Temperature for a request that is a retry of a
+                batch which failed as a whole. Same LLM-only semantics as
+                ``history``.
 
         Returns:
             TranslationResult with translated_lines in same order as input

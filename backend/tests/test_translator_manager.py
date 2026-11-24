@@ -272,6 +272,13 @@ class TestTranslateInBatches:
             )
 
     def test_a_chunk_mismatch_is_retried_in_halves_before_it_raises(self):
+        """A failing batch gets one warmer re-ask first, then splits.
+
+        SubtitleEdit retries once at temperature +0.3 before subdividing: a
+        count mismatch can be a sampling artifact, and splitting costs whole
+        extra requests. So the sequence is the batch, the warm re-ask of the
+        same batch, then the cut — never blind halving.
+        """
         from translator.manager import _translate_in_batches
 
         manager = MagicMock()
@@ -281,7 +288,7 @@ class TestTranslateInBatches:
             _translate_in_batches(manager, ["A", "B"], "en", "de", ["ollama"], None, batch_size=2)
 
         sizes = [len(call.args[0]) for call in manager.translate_with_fallback.call_args_list]
-        assert sizes == [2, 1], "the failing batch must be halved before giving up"
+        assert sizes == [2, 2, 1], "the batch must be re-asked warm, then cut, before giving up"
 
     def test_single_batch_count_mismatch_raises(self):
         from translator.manager import _translate_in_batches

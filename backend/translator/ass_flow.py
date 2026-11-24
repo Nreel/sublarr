@@ -378,6 +378,24 @@ def translate_ass(
         # retries used to read settings.source_language directly, so a job
         # with an explicit source silently changed language mid-file.
         src_lang = source_language or settings.source_language
+        # Content-based direction guard (prod bug 2026-11-24: a Spanish fansub
+        # under a [RU] tag was echoed by the LLM instead of translated). The
+        # track tag lies; the dialogue does not. SubtitleEdit auto-detects the
+        # source only (--translate-from); we trust content for the direction
+        # and additionally refuse non-target output below.
+        from translator._helpers import ALREADY_TARGET_LANGUAGE, resolve_source_language
+
+        tagged_src = src_lang
+        src_lang, lang_reason = resolve_source_language(tagged_src, dialog_texts, tgt_lang)
+        if lang_reason == ALREADY_TARGET_LANGUAGE:
+            logger.warning("Dialogue is already in target language %s — not translating", tgt_lang)
+            return _core._fail_result(lang_reason, reason=lang_reason)
+        if lang_reason:
+            logger.warning(
+                "source track tagged %s but content detected %s — translating from detected language",
+                tagged_src,
+                src_lang,
+            )
         # Access _translate_with_manager via package namespace for test patching
         _tw_manager = _core._pkg()._translate_with_manager
         translated_texts, translation_result = _tw_manager(
@@ -433,6 +451,17 @@ def translate_ass(
         info_title = subs.info.get("Title", "")
         if not info_title.startswith(f"[{lang_tag}]"):
             subs.info["Title"] = f"[{lang_tag}] {info_title}"
+
+        # Whole-file target check (prod bug 2026-11-24): an echo or a
+        # mislabelled direction leaves output in a language the .{lang} file
+        # promises not to contain. Refuse before anything is written, so the
+        # existing target file stays untouched.
+        from translator._helpers import guard_output_language
+
+        refusal = guard_output_language(dialog_texts, translated_texts, tgt_lang)
+        if refusal:
+            logger.warning("Output language guard: %s", refusal)
+            return _core._fail_result(refusal)
 
         _core.check_disk_space(output_path)
         # Repaired and sanitized in memory before anything is written: strips
@@ -556,6 +585,20 @@ def _translate_external_ass(
         # retries used to read settings.source_language directly, so a job
         # with an explicit source silently changed language mid-file.
         src_lang = source_language or settings.source_language
+        # Content-based direction guard (prod bug 2026-11-24, see translate_ass).
+        from translator._helpers import ALREADY_TARGET_LANGUAGE, resolve_source_language
+
+        tagged_src = src_lang
+        src_lang, lang_reason = resolve_source_language(tagged_src, dialog_texts, tgt_lang)
+        if lang_reason == ALREADY_TARGET_LANGUAGE:
+            logger.warning("Dialogue is already in target language %s — not translating", tgt_lang)
+            return _core._fail_result(lang_reason, reason=lang_reason)
+        if lang_reason:
+            logger.warning(
+                "source track tagged %s but content detected %s — translating from detected language",
+                tagged_src,
+                src_lang,
+            )
         _tw_manager = _core._pkg()._translate_with_manager
         translated_texts, translation_result = _tw_manager(
             dialog_texts,
@@ -638,6 +681,15 @@ def _translate_external_ass(
         info_title = subs.info.get("Title", "")
         if not info_title.startswith(f"[{lang_tag}]"):
             subs.info["Title"] = f"[{lang_tag}] {info_title}"
+
+        # Whole-file target check (prod bug 2026-11-24, see translate_ass):
+        # refuse non-target output before anything is written.
+        from translator._helpers import guard_output_language
+
+        refusal = guard_output_language(dialog_texts, translated_texts, tgt_lang)
+        if refusal:
+            logger.warning("Output language guard: %s", refusal)
+            return _core._fail_result(refusal)
 
         _core.check_disk_space(output_path)
         # Repaired and sanitized in memory before anything is written (see above).

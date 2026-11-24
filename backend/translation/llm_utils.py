@@ -8,6 +8,7 @@ parsing, and CJK hallucination detection.
 import logging
 import re
 from collections import Counter
+from urllib.parse import urlsplit, urlunsplit
 
 from translation.prompt_safety import MAX_LINE_CHARS, escape_for_prompt
 
@@ -29,6 +30,157 @@ _SCORE_RE = re.compile(r"\b(100|[1-9]?\d)\b")
 
 # Default quality score when LLM evaluation fails or is not available
 DEFAULT_QUALITY_SCORE = 50
+
+# --- Request tuning (ported from SubtitleEdit) ---
+
+# SubtitleEdit #13830: an output cap is what stops a looping model from
+# filling the whole context window with its own repetition. The cap has to be
+# sized per batch — too small truncates a legitimate batch, too large lets a
+# runaway reply run until the context is exhausted. Per line we allow the line
+# itself twice plus a fixed per-line overhead for numbering/ separators, and
+# 200 tokens of slack for the reply's framing.
+_PER_LINE_TOKEN_OVERHEAD = 32
+_PER_LINE_TOKEN_MULTIPLIER = 2
+_TOKEN_BUDGET_SLACK = 200
+
+# Floor for chat requests that carry no explicit temperature. llama.cpp
+# answers a request without ``temperature`` at its own default (0.8), and at
+# 0.8 the terminology drifts line to line — glossary terms come back in two
+# spellings inside one episode. SubtitleEdit's curated precedence is
+# user value -> curated value -> this floor; an explicit 0.0 from the operator
+# is honoured, silence is never forwarded to the server's default.
+MIN_CHAT_TEMPERATURE = 0.2
+
+# Chat-completions suffix the SDK appends itself; used to turn a completed
+# endpoint back into a base URL.
+_COMPLETIONS_SUFFIX = "/chat/completions"
+
+# Register the operator picked for this install. Anime subtitles are addressed
+# informally by default; a formal install ("Sie"/"vous"/"usted") must say so
+# in every batch, because a model that never sees the register mixes it inside
+# one episode. Any other value (including None) sends nothing.
+FORMALITY_CLAUSES = {
+    "formal": 'Use formal address (e.g. German "Sie", French "vous", Spanish "usted").',
+    "informal": 'Use informal address (e.g. German "du", French "tu", Spanish "tú").',
+}
+
+
+def batch_token_budget(lines: list[str]) -> int:
+    """Token budget for one batch's reply: ``200 + sum(32 + 2 * len(line))``.
+
+    SubtitleEdit #13830 — a looping model must run out of *tokens* instead of
+    running out of the context window: the request carries an explicit
+    ``max_tokens`` so a reply that starts repeating itself is cut off at the
+    cap rather than consuming the whole window.
+    """
+    return _TOKEN_BUDGET_SLACK + sum(
+        _PER_LINE_TOKEN_OVERHEAD + _PER_LINE_TOKEN_MULTIPLIER * len(line) for line in lines
+    )
+
+
+def resolve_chat_temperature(
+    explicit: float | None,
+    *,
+    floor: float = MIN_CHAT_TEMPERATURE,
+    curated: float | None = None,
+) -> float:
+    """Pick the temperature to send, never leaving the server's default in play.
+
+    Precedence (SubtitleEdit's curated ladder): the operator's explicit value
+    wins as-is — including a deliberate ``0.0`` — then the backend's curated
+    default, which is only ever raised to the floor, and finally the floor
+    itself when nothing was configured.
+    """
+    if explicit is not None:
+        return float(explicit)
+    if curated is not None:
+        return max(float(floor), float(curated))
+    return float(floor)
+
+
+def complete_endpoint(url: str, default_url: str) -> str:
+    """Complete a half-given endpoint URL to ``default_url``'s full path.
+
+    Operators type what the server's docs show, not what the wire needs:
+
+    >>> complete_endpoint("localhost:1234", "https://api.openai.com/v1/chat/completions")
+    'https://localhost:1234/v1/chat/completions'
+    >>> complete_endpoint("http://localhost:1234/", "https://api.openai.com/v1/chat/completions")
+    'http://localhost:1234/v1/chat/completions'
+    >>> complete_endpoint("http://localhost:1234/v1", "https://api.openai.com/v1/chat/completions")
+    'http://localhost:1234/v1/chat/completions'
+    >>> complete_endpoint("http://gw.internal/llm/v1/chat", "https://api.openai.com/v1/chat/completions")
+    'http://gw.internal/llm/v1/chat'
+
+    A bare ``host:port`` gets the default's scheme plus its path (write the
+    scheme out explicitly — ``http://host:port`` — for a plain-HTTP local
+    server); a bare origin (``http(s)://host[:port]`` with no path, or just
+    ``/``) gets the default's path appended; a path that is a *segment prefix*
+    of the default path (``/v1``, ``/openai/v1``) is completed to the default's
+    full path; a genuine custom path is left untouched, because only the
+    operator knows where their proxy mounts the endpoint.
+    """
+    url = (url or "").strip()
+    if not url:
+        return default_url
+
+    default = urlsplit(default_url)
+
+    if "://" in url:
+        parts = urlsplit(url)
+        scheme, netloc, path = parts.scheme, parts.netloc, parts.path
+    else:
+        # No scheme: "host:port" or "host:port/path".
+        host_part, _, rest = url.partition("/")
+        if not host_part:
+            return default_url
+        scheme, netloc, path = default.scheme, host_part, f"/{rest}" if rest else ""
+
+    # A trailing slash is a separator, not a path of its own.
+    if path.endswith("/") and path != "/":
+        path = path[:-1]
+    if path == "" or path == "/":
+        return urlunsplit((scheme, netloc, default.path, "", ""))
+    # Prefix only counts at a path-segment boundary, so "/v" is not read as a
+    # truncated "/v1/chat/completions".
+    if default.path.startswith(path) and (
+        len(path) == len(default.path) or default.path[len(path)] == "/"
+    ):
+        return urlunsplit((scheme, netloc, default.path, "", ""))
+    return url
+
+
+def formality_clause(formality: str | None) -> str:
+    """Prompt clause for the configured register, or ``""`` for none/unset.
+
+    Non-strings (a knob saved as a number, a stray object) send nothing: the
+    register is read with ``getattr`` and is not validated at the config layer.
+    """
+    if not isinstance(formality, str):
+        return ""
+    clause = FORMALITY_CLAUSES.get(formality.strip().lower())
+    return f"{clause}\n\n" if clause else ""
+
+
+def history_block(history: list[tuple[str, str]]) -> str:
+    """Render finished translations as a context-only prompt block.
+
+    SubtitleEdit feeds the *previous translations*, not the previous source
+    lines: names, pronouns and register are decided in the output, and the
+    model only sees them if the output is shown. Marked as context so the
+    lines are not retranslated or repeated into the batch.
+    """
+    lines = [
+        f"{_escape_subtitle_line(src)} -> {_escape_subtitle_line(tr)}"
+        for src, tr in history
+        if (src or tr)
+    ]
+    if not lines:
+        return ""
+    return (
+        "Recent translations (context only \u2014 names, pronouns, formality; "
+        "do NOT re-translate or repeat them):\n" + "\n".join(lines) + "\n\n"
+    )
 
 
 def has_cjk_hallucination(text: str) -> bool:
@@ -403,6 +555,8 @@ def build_prompt_with_glossary(
     lines: list[str],
     *,
     strict: bool = False,
+    history: list[tuple[str, str]] | None = None,
+    formality: str | None = None,
 ) -> str:
     """Build a translation prompt with glossary terms prepended.
 
@@ -422,6 +576,10 @@ def build_prompt_with_glossary(
         lines: List of subtitle lines to translate
         strict: Harden the line-count constraint — used by the retry after a
             count mismatch, so the retry does not re-send an identical prompt
+        history: Finished ``(source, translation)`` pairs from earlier batches,
+            rendered as a context-only block just before the numbered lines.
+        formality: ``"formal"`` / ``"informal"`` register clause appended to the
+            template; anything else (including ``None``) sends nothing.
 
     Returns:
         Complete prompt with optional glossary prefix, the expected line
@@ -538,7 +696,14 @@ def build_prompt_with_glossary(
     else:
         body = escaped_lines[0]
 
-    return glossary_str + prompt_template + constraint + body
+    # Stable-first ordering, so a server that reuses its KV prefix reuses the
+    # instruction block too: glossary and template (same every batch) come
+    # first, then the register clause, then the rolling history — history moves
+    # once per batch, the subtitle lines move every batch, so the parts that
+    # change sit closest to the end.
+    extra = formality_clause(formality) + history_block(history or [])
+    head = prompt_template.rstrip() + "\n\n" if extra else prompt_template
+    return glossary_str + head + extra + constraint + body
 
 
 def build_translation_prompt(
@@ -549,6 +714,8 @@ def build_translation_prompt(
     prompt_template: str | None = None,
     *,
     strict: bool = False,
+    history: list[tuple[str, str]] | None = None,
+    formality: str | None = None,
 ) -> str:
     """Build a complete translation prompt for LLM backends.
 
@@ -563,16 +730,36 @@ def build_translation_prompt(
         prompt_template: Optional explicit prompt template
         strict: Harden the line-count constraint (used by the retry after a
             count mismatch)
+        history: Finished ``(source, translation)`` pairs from earlier batches,
+            placed just before the lines to translate (see
+            :func:`build_prompt_with_glossary`).
+        formality: Register to use; ``None`` reads ``settings.translation_formality``
+            when the template came from config, and sends nothing otherwise.
 
     Returns:
         Complete prompt ready to send to an LLM
     """
+    settings = None
     if prompt_template is None:
         from config import get_settings
 
-        prompt_template = get_settings().get_prompt_template(source_lang, target_lang)
+        settings = get_settings()
+        prompt_template = settings.get_prompt_template(source_lang, target_lang)
 
-    return build_prompt_with_glossary(prompt_template, glossary_entries, lines, strict=strict)
+    if formality is None and settings is not None:
+        # Read defensively rather than registering a config key: an install
+        # that never chose a register sends no clause and keeps the default
+        # (informal) behaviour of the template.
+        formality = getattr(settings, "translation_formality", None)
+
+    return build_prompt_with_glossary(
+        prompt_template,
+        glossary_entries,
+        lines,
+        strict=strict,
+        history=history,
+        formality=formality,
+    )
 
 
 def build_evaluation_prompt(

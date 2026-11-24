@@ -315,12 +315,45 @@ def restore_tags(translated_text, tag_info, original_clean_length=None):
     return "".join(result)
 
 
-def fix_line_breaks(text):
+#: Language codes whose scripts never get length-based line re-breaking.
+_NO_REBREAK_LANGS = frozenset({"zh", "ja", "ko", "th", "zho", "jpn", "kor", "tha"})
+
+#: CJK ideographs, kana, Hangul, and Thai characters (plus hangul jamo).
+_CJK_CHARS = re.compile(
+    r"[\u3400-\u9fff\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7A3\u1100-\u11FF\u0E00-\u0E7F]"
+)
+
+
+def fix_line_breaks(text, *, target_lang: str | None = None):
     """Fix line breaks after translation.
 
     The model sometimes converts \\N to \\n or literal newlines.
+
+    ``target_lang`` opts out of the one length-reformatting step this module
+    performs — collapsing runs of spaces. SubtitleEdit never re-breaks lyric
+    lines or CJK (zh/ja/ko/th) targets, where spacing is significant or absent,
+    so for those the syntax repair (\\n → \\N, whitespace trim) still runs and
+    the space-collapse is skipped. The same skip applies to lines carrying
+    music glyphs (♩♪♫♬🎵🎶). Callers that length-reformat translated text —
+    re-wrapping, re-breaking — must apply the same rule and pass ``target_lang``
+    here so the guards stay in one place. Default ``None`` keeps the previous
+    behaviour for non-CJK text.
     """
     text = text.replace("\n", "\\N")
     text = re.sub(r"(?<!\\)\\n", r"\\N", text)
-    text = re.sub(r"  +", " ", text)
+    if not _skip_space_collapse(text, target_lang):
+        text = re.sub(r"  +", " ", text)
     return text.strip()
+
+
+def _skip_space_collapse(text: str, target_lang: str | None) -> bool:
+    """Whether the length-reformatting step must be left alone."""
+    if target_lang:
+        code = target_lang.strip().lower().partition("-")[0].partition("_")[0]
+        if code in _NO_REBREAK_LANGS:
+            return True
+    # Lazy import: keeps ass_utils importable without pulling the translation
+    # package (and its manager singleton) into every module that uses tags.
+    from translation.context_windower import has_music_symbols
+
+    return bool(_CJK_CHARS.search(text)) or has_music_symbols(text)

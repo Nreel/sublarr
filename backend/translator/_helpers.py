@@ -557,6 +557,127 @@ def _skip_result(reason, output_path=None):
     }
 
 
+# --- Content-based language guards (prod bug 2026-11-24) -------------------
+#
+# A Spanish fansub carried a [RU] language tag, the flow trusted the tag, and
+# the LLM echoed the Spanish lines instead of translating them — the result
+# was saved under .ru.ass. SubtitleEdit runs LanguageAutoDetect on the SOURCE
+# only (--translate-from); it has no whole-file check of the TARGET output.
+# We add both: trust content over the tag for the direction, and refuse an
+# output that does not read as the target language.
+
+#: Lines joined into the detector sample, newest-first is not needed: the
+#: dialog list is already the flow's own payload, not raw file bytes.
+_CONTENT_SAMPLE_LINES = 200
+#: Fewer characters than this give no verdict (same reasoning as
+#: subtitle_language.MIN_CHARS: openings and one-liner samples carry little
+#: signal, and a false verdict must never block a legitimate translation).
+_CONTENT_MIN_CHARS = 300
+#: One oversized line must not carry the whole sample to the detector.
+_CONTENT_SAMPLE_CHARS = 6000
+
+#: ``resolve_source_language`` reason for dialogue already in the target
+#: language: translating it would be a same-language round-trip.
+ALREADY_TARGET_LANGUAGE = "content already in target language"
+
+
+def _content_sample(texts: list[str]) -> str:
+    """Up to ``_CONTENT_SAMPLE_LINES`` non-empty lines, collapsed and joined."""
+    lines: list[str] = []
+    for text in texts:
+        line = " ".join((text or "").split())
+        if not line or (lines and lines[-1] == line):
+            continue
+        lines.append(line)
+        if len(lines) >= _CONTENT_SAMPLE_LINES:
+            break
+    return " ".join(lines)[:_CONTENT_SAMPLE_CHARS]
+
+
+def detect_content_language(texts: list[str]) -> str | None:
+    """ISO 639-1 code the dialogue reads as, or None when inconclusive.
+
+    Uses the same lingua detector as ``subtitle_language.language_mismatch``
+    (25-language builder, confidence gate ``DETECTED_MIN``). Never raises:
+    a detector fault means "no verdict", not a failed translation.
+    """
+    from config_language_data import normalize_language_code
+
+    sample = _content_sample(texts)
+    if len(sample) < _CONTENT_MIN_CHARS:
+        return None
+    try:
+        import subtitle_language
+
+        detector = subtitle_language._get_detector()
+        values = {
+            subtitle_language._codes[v.language]: v.value
+            for v in detector.compute_language_confidence_values(sample)
+        }
+    except Exception as exc:  # noqa: BLE001 — no verdict rather than a failed translation
+        logger.debug("Content language detection skipped: %s", exc)
+        return None
+    if not values:
+        return None
+    top = max(values, key=values.get)
+    if values[top] < subtitle_language.DETECTED_MIN:
+        return None
+    return normalize_language_code(top)
+
+
+def resolve_source_language(
+    tagged_src: str, texts: list[str], target_lang: str
+) -> tuple[str, str | None]:
+    """Translation direction from content, not from the track's language tag.
+
+    Returns ``(source_code, reason_or_None)``:
+      - inconclusive detection or content == the tag → keep ``tagged_src``.
+      - content already in ``target_lang`` → refusal reason
+        ``ALREADY_TARGET_LANGUAGE`` (the caller must not ask the LLM).
+      - content in some other language → the detected code with a reason
+        naming the tag; the caller translates from the detected language.
+    """
+    from config_language_data import normalize_language_code
+
+    detected = detect_content_language(texts)
+    if detected is None:
+        return tagged_src, None
+    tagged = normalize_language_code(tagged_src or "").split("-", 1)[0]
+    target = normalize_language_code(target_lang or "").split("-", 1)[0]
+    if detected == tagged:
+        return tagged_src, None
+    if detected == target:
+        return detected, ALREADY_TARGET_LANGUAGE
+    return detected, f"tagged {tagged_src}, content detected {detected}"
+
+
+def guard_output_language(
+    originals: list[str], translated: list[str], target_lang: str
+) -> str | None:
+    """Refusal message when the output reads as a non-target language, else None.
+
+    The whole-file target check SubtitleEdit does not have: an echo or a
+    mislabelled direction leaves dialogue in a language the target file
+    promises not to contain. ``originals`` distinguishes a verbatim echo in
+    the message. Inconclusive detection never refuses — a legitimate
+    translation of a short or mixed file passes.
+    """
+    from config_language_data import normalize_language_code
+
+    target = normalize_language_code(target_lang or "").split("-", 1)[0]
+    if not target:
+        return None
+    detected = detect_content_language(translated)
+    if detected is None or detected == target:
+        return None
+    message = (
+        f"translated output detected as {detected}, not target {target_lang} — refusing to save"
+    )
+    if translated == originals:
+        message += " (verbatim echo of the source)"
+    return message
+
+
 def _fail_result(error, reason=None):
     """Create a failure result dict.
 

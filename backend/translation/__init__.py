@@ -5,6 +5,7 @@ instances with lazy creation, delegates translation calls with fallback chains,
 and tracks per-backend statistics via circuit breakers.
 """
 
+import inspect
 import logging
 import threading
 import time
@@ -13,6 +14,24 @@ from circuit_breaker import CircuitBreaker
 from translation.base import TranslationBackend, TranslationContentError, TranslationResult
 
 logger = logging.getLogger(__name__)
+
+
+def _accepts_kwarg(fn, name: str) -> bool:
+    """Whether ``fn`` takes ``name`` — declared, or swallowed by ``**kwargs``.
+
+    ``history`` and ``retry_temperature`` are LLM-only extras. Rule-based
+    backends (DeepL, Google, LibreTranslate, MyMemory) have nothing to do with
+    them, and forwarding a keyword their ``translate_batch`` does not accept
+    would raise TypeError inside a fallback chain that was about to succeed on
+    that very backend.
+    """
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+    if name in params:
+        return True
+    return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
 
 
 class TranslationManager:
@@ -116,6 +135,8 @@ class TranslationManager:
         *,
         lookback: list[str] | None = None,
         lookahead: list[str] | None = None,
+        history: list[tuple[str, str]] | None = None,
+        retry_temperature: float | None = None,
     ) -> TranslationResult:
         """Try each backend in the fallback chain until one succeeds.
 
@@ -132,6 +153,12 @@ class TranslationManager:
                 context-only (LLM backends consume; rule-based backends
                 ignore). See :meth:`TranslationBackend.translate_batch`.
             lookahead: Optional lookahead lines, same semantics as lookback.
+            history: Finished ``(source, translation)`` pairs of the earlier
+                batches of this file, forwarded to backends whose
+                ``translate_batch`` accepts it (LLM backends only).
+            retry_temperature: Warmer temperature for this request, used by the
+                batching layer when it re-asks a batch that failed as a whole;
+                forwarded only to backends that take it.
 
         Returns:
             TranslationResult from the first successful backend,
@@ -169,6 +196,14 @@ class TranslationManager:
 
             try:
                 start_time = time.time()
+                # LLM-only extras reach only the backends that take them.
+                extras: dict[str, object] = {}
+                if history and _accepts_kwarg(backend.translate_batch, "history"):
+                    extras["history"] = history
+                if retry_temperature is not None and _accepts_kwarg(
+                    backend.translate_batch, "retry_temperature"
+                ):
+                    extras["retry_temperature"] = retry_temperature
                 cap = getattr(backend, "max_batch_size", 0) or 0
                 if cap and len(lines) > cap:
                     result = self._translate_capped(
@@ -181,6 +216,7 @@ class TranslationManager:
                         lookahead=lookahead,
                         job_id=job_id,
                         cap=cap,
+                        **extras,
                     )
                 else:
                     result = backend.translate_batch(
@@ -191,6 +227,7 @@ class TranslationManager:
                         lookback=lookback,
                         lookahead=lookahead,
                         job_id=job_id,
+                        **extras,
                     )
                 elapsed_ms = (time.time() - start_time) * 1000
 
@@ -256,6 +293,8 @@ class TranslationManager:
         lookahead: list[str] | None,
         job_id: str | None,
         cap: int,
+        history: list[tuple[str, str]] | None = None,
+        retry_temperature: float | None = None,
     ) -> TranslationResult:
         """Translate a batch oversized for this backend as sub-requests.
 
@@ -272,6 +311,15 @@ class TranslationManager:
             characters_used=0,
             success=True,
         )
+        # Same gate as the caller's: a sub-request must not ask a backend for
+        # an extra it has never accepted.
+        extras: dict[str, object] = {}
+        if history and _accepts_kwarg(backend.translate_batch, "history"):
+            extras["history"] = history
+        if retry_temperature is not None and _accepts_kwarg(
+            backend.translate_batch, "retry_temperature"
+        ):
+            extras["retry_temperature"] = retry_temperature
         for i in range(0, len(lines), cap):
             chunk = lines[i : i + cap]
             result = backend.translate_batch(
@@ -282,6 +330,7 @@ class TranslationManager:
                 lookback=lookback,
                 lookahead=lookahead,
                 job_id=job_id,
+                **extras,
             )
             if not result.success:
                 return result
