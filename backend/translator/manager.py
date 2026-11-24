@@ -230,6 +230,20 @@ class BatchFailure(RuntimeError):  # noqa: N818 — name is SubtitleEdit's, call
         self.echo_indices = list(echo_indices or [])
 
 
+def _no_backend_ran(result) -> bool:
+    """True when the failure means no backend was reached, not a bad batch.
+
+    ``translate_with_fallback`` sets ``backend_name="none"`` only on the
+    ``attempted == 0`` path (translation/__init__.py): empty chain, every
+    backend unregistered, or every breaker OPEN. Splitting cannot fix that —
+    each piece re-asks the same dead chain, so a halving tree costs 2^depth
+    requests plus one warning per cut and ends in the same error text.
+    """
+    return getattr(result, "backend_name", "") == "none" or (result.error or "").startswith(
+        "No usable translation backend"
+    )
+
+
 class BatchSizeGovernor:
     """Shrink the batch after a failure, grow it back after clean ones.
 
@@ -528,6 +542,12 @@ def _translate_batch_or_split(
     failure = None
     if not result.success:
         failure = result.error
+        if _no_backend_ran(result):
+            # A chain with no live backend reads the same on every request:
+            # no warmer retry, no split. Raise now, with the batch label and
+            # the chain's own message, so the log names the real cause
+            # instead of ~40 halving warnings and a leaf label like 1aaaa.
+            raise RuntimeError(f"Translation failed on batch {label}: {failure}")
     else:
         try:
             _verify_batch(

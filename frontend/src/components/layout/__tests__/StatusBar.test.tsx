@@ -9,6 +9,7 @@ import {
   useWantedBatchProbeStatus,
 } from '@/hooks/useWantedApi'
 import { useSchedulerJobs } from '@/hooks/useSchedulerJobs'
+import { useTranslationQueue } from '@/hooks/useTranslationQueue'
 
 // Minimal i18next stand-in: defaults win, and {{placeholders}} are filled from
 // the options object so hover-text assertions can compare exact strings.
@@ -60,6 +61,10 @@ vi.mock('@/hooks/useProvidersApi', () => ({
   useProviderHealth: vi.fn(() => ({ data: { providers: [] } })),
 }))
 
+vi.mock('@/hooks/useTranslationQueue', () => ({
+  useTranslationQueue: vi.fn(() => ({ data: { active: [], recent: [] } })),
+}))
+
 import { StatusBar } from '../StatusBar'
 
 /** The footer is made of <Link>s, so every render needs a router. */
@@ -101,6 +106,7 @@ describe('StatusBar', () => {
       },
     })
     vi.mocked(useProviderHealth).mockReturnValue({ data: { providers: [] } })
+    vi.mocked(useTranslationQueue).mockReturnValue({ data: { active: [], recent: [] } })
   })
 
   // ─── Version / update popover ───────────────────────────────────────────────
@@ -366,7 +372,7 @@ describe('StatusBar', () => {
     expect(activity).toBeInTheDocument()
     expect(activity).toHaveTextContent('No activity')
     expect(activity).toHaveAttribute('href', '/activity')
-    expect(activity).toHaveAttribute('title', 'No scan or batch activity running')
+    expect(activity).toHaveAttribute('title', 'No scan, batch or translation activity running')
     expect(activity.firstElementChild).toHaveStyle({ backgroundColor: 'var(--text-muted)' })
     expect(activity.firstElementChild).not.toHaveStyle({ animation: 'dotGlow 1.5s ease-in-out infinite' })
   })
@@ -423,6 +429,77 @@ describe('StatusBar', () => {
     renderBar()
     const activity = screen.getByTestId('status-bar-scanning')
     expect(activity).toHaveTextContent('Extracting')
+  })
+
+  it('labels a running translation job and reports its start time', () => {
+    vi.mocked(useTranslationQueue).mockReturnValue({
+      data: {
+        active: [
+          {
+            job_id: 'j1',
+            file_path: '/media/Show.mkv',
+            source_lang: 'ja',
+            target_lang: 'es',
+            backend: 'openai_compat',
+            progress: { done: 12, total: 40, pct: 30 },
+            started_at: '2026-11-24T12:05:00Z',
+            eta_seconds: 60,
+            cost_so_far_micro_usd: 0,
+            cancel_requested: false,
+          },
+        ],
+        recent: [],
+      },
+    })
+    renderBar()
+    const activity = screen.getByTestId('status-bar-scanning')
+    expect(activity).toHaveTextContent('Translating')
+    expect(activity.firstElementChild).toHaveStyle({ animation: 'dotGlow 1.5s ease-in-out infinite' })
+    const title = activity.getAttribute('title') ?? ''
+    expect(title.startsWith('Last activity: Translating, started ')).toBe(true)
+  })
+
+  it('names Translating when it started after an overlapping scan', () => {
+    vi.mocked(useScannerStatus).mockReturnValue({
+      data: { is_scanning: true, is_searching: false, scan_started_at: '2026-11-24T11:30:00Z' },
+    })
+    vi.mocked(useTranslationQueue).mockReturnValue({
+      data: {
+        active: [
+          {
+            job_id: 'j1',
+            file_path: '/media/Show.mkv',
+            source_lang: 'ja',
+            target_lang: 'es',
+            backend: 'openai_compat',
+            progress: { done: 1, total: 40, pct: 2.5 },
+            started_at: '2026-11-24T12:00:00Z',
+            eta_seconds: null,
+            cost_so_far_micro_usd: 0,
+            cancel_requested: false,
+          },
+          {
+            job_id: 'j2',
+            file_path: '/media/Show2.mkv',
+            source_lang: 'ja',
+            target_lang: 'es',
+            backend: 'openai_compat',
+            progress: { done: 0, total: 20, pct: 0 },
+            started_at: '2026-11-24T12:10:00Z',
+            eta_seconds: null,
+            cost_so_far_micro_usd: 0,
+            cancel_requested: false,
+          },
+        ],
+        recent: [],
+      },
+    })
+    renderBar()
+    const activity = screen.getByTestId('status-bar-scanning')
+    expect(activity).toHaveTextContent('Translating')
+    const title = activity.getAttribute('title') ?? ''
+    expect(title.startsWith('Last activity: Translating, started ')).toBe(true)
+    expect(title).not.toContain('Scanning')
   })
 
   it('every footer block carries a hover description', () => {

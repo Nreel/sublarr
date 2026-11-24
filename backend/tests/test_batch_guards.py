@@ -44,9 +44,9 @@ LONG_LINES = [
 ]
 
 
-def _result(lines, success=True, error=None):
+def _result(lines, success=True, error=None, backend_name="fake"):
     return TranslationResult(
-        success=success, translated_lines=list(lines), backend_name="fake", error=error
+        success=success, translated_lines=list(lines), backend_name=backend_name, error=error
     )
 
 
@@ -382,6 +382,24 @@ class TestSplitAtBadIndex:
         )
         assert [len(r) for r in stub.requests[:3]] == [6, 3, 3]
         assert lines == [f"T_{line}" for line in LONG_LINES[:6]]
+
+    def test_a_dead_backend_chain_fails_fast_without_splitting(self, no_cache):
+        """attempted == 0 (unregistered or all breakers OPEN) reads the same
+        on every request: halving only re-asks the dead chain 2^depth times."""
+
+        dead = (
+            "No usable translation backend in fallback chain ['openai_compat'] "
+            "(none registered/configured, or all circuit breakers open). "
+            "Check the language profile's translation_backend / fallback_chain."
+        )
+        stub = _Stub(
+            respond=lambda lines, n: _result([], success=False, error=dead, backend_name="none")
+        )
+        with pytest.raises(RuntimeError, match="batch 1: No usable translation backend"):
+            _translate_batch_or_split(
+                stub, LONG_LINES[:6], "ja", "es", ["openai_compat"], None, False, "1"
+            )
+        assert stub.requests == [LONG_LINES[:6]]  # one ask; no warmer retry, no split
 
     def test_a_warmer_retry_before_the_split(self, no_cache):
         """SubtitleEdit RetryTemperatureBump: one warmer request for the whole

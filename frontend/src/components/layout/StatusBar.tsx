@@ -5,6 +5,7 @@ import { useHealth, useUpdateInfo } from '@/hooks/useApi'
 import { formatVersion } from '@/lib/version'
 import { useProviderHealth } from '@/hooks/useProvidersApi'
 import { useAutomationState } from '@/hooks/useAutomationState'
+import { useTranslationQueue } from '@/hooks/useTranslationQueue'
 
 /** Dot colour per state value reported by /health. */
 const STATE_COLOR: Record<string, string> = {
@@ -48,6 +49,7 @@ export function StatusBar() {
   const { state: automationState, pausedJobIds, scannerStatus, batchSearch, batchProbe } =
     useAutomationState(60_000)
   const { data: providerHealth } = useProviderHealth(60_000)
+  const { data: queue } = useTranslationQueue()
   const [popoverOpen, setPopoverOpen] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
 
@@ -135,6 +137,16 @@ export function StatusBar() {
   if (scannerStatus?.is_searching) {
     activities.push({ label: t('status.searching', 'Searching'), started_at: scannerStatus?.search_started_at ?? null })
   }
+  // Live translation jobs come from the queue snapshot; the footer names one
+  // "Translating" activity with the newest job's start time.
+  const activeTranslations = queue?.active ?? []
+  if (activeTranslations.length > 0) {
+    const newestStart = activeTranslations.reduce<string | null>((latest, job) => {
+      if (!latest) return job.started_at
+      return Date.parse(job.started_at) > Date.parse(latest) ? job.started_at : latest
+    }, null)
+    activities.push({ label: t('status.translating', 'Translating'), started_at: newestStart })
+  }
   // Several runs can overlap; the footer names the one that started last.
   const latestActivity = activities.reduce<Activity | null>((latest, a) => {
     if (!latest) return a
@@ -149,7 +161,7 @@ export function StatusBar() {
         time: latestActivity.started_at ? formatStartedAt(latestActivity.started_at) : '—',
         defaultValue: 'Last activity: {{label}}, started {{time}}',
       })
-    : t('status.activity_title_none', 'No scan or batch activity running')
+    : t('status.activity_title_none', 'No scan, batch or translation activity running')
 
   const throttledTitle =
     throttledProviders.length > 0
