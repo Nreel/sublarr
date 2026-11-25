@@ -13,6 +13,26 @@ export function formatDuration(seconds: number): string {
   return `${hours}h ${mins}m`
 }
 
+/**
+ * Exact wall-clock time a record was written — date plus time to the second,
+ * locale-aware, 24-hour. Health surfaces use this instead of `formatRelativeTime`
+ * so a failure reads as a timestamp rather than a coarse "5h ago".
+ */
+export function formatTimestamp(isoString: string | null | undefined, locale?: string): string {
+  if (!isoString) return '—'
+  const date = new Date(isoString)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleString(locale ?? (typeof navigator !== 'undefined' ? navigator.language : 'en'), {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+}
+
 export function formatRelativeTime(isoString: string): string {
   const date = new Date(isoString)
   const now = new Date()

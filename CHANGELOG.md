@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Health page shows exact timestamps** — every time column on `/health`
+  (`problems.updated_at`, provider `last_failure_at`, translation
+  `recent_errors.started_at`, `pipeline_errors.created_at`, scheduler/whisper/
+  sync/ops/hook/backup rows) rendered coarse relative labels ("just now",
+  "5h ago") via `formatRelativeTime`; they now render the record's wall-clock
+  time to the second (`formatTimestamp`, locale-aware, 24-hour). Other pages
+  keep relative labels.
+- **New failures reached `/health/library` up to 60 s late, twice over** — the
+  route was response-cached for `settings.response_cache_ttl_secs` (60 s) and
+  nothing invalidated that cache when a failure was recorded, so the Health
+  page's 60 s poll could serve a body that predates the failure (~2 minutes,
+  and "Refreshes automatically every minute" read as false). The route no
+  longer caches: each request reads the bounded 7-day window live, so a
+  recorded failure appears on the next poll.
+
 ## [1.24.2] - 2026-11-24
 
 ### Fixed

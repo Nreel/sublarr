@@ -207,6 +207,24 @@ class TestLibraryHealthService:
         assert len(body["problems"]) == 120
         assert body["totals"]["problems"] == 120
 
+    def test_failures_recorded_after_a_read_surface_on_the_next_read(self, client):
+        # /health/library is deliberately not response-cached: a failure written
+        # after one poll must show up on the next poll, not stay hidden until
+        # the cache TTL expires.
+        assert client.get("/api/v1/health/library").get_json()["totals"]["problems"] == 0
+
+        _add_wanted(
+            client.application,
+            "Late Failure",
+            status="failed",
+            error="boom",
+            file_path="/m/late.mkv",
+        )
+
+        body = client.get("/api/v1/health/library").get_json()
+        assert body["totals"]["problems"] == 1
+        assert body["problems"][0]["error"] == "boom"
+
     def test_provider_health_merges_breaker_and_stats(self, client):
         app = client.application
         _add_provider_stats(app, "goodprov", searches=100, hits=60)

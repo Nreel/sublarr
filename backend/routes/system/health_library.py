@@ -4,16 +4,19 @@ import logging
 
 from flask import jsonify
 
-from cache_response import cached_get
 from routes.system import bp
 
 logger = logging.getLogger(__name__)
 
 
 @bp.route("/health/library", methods=["GET"])
-@cached_get()
 def health_library():
     """Library health overview.
+
+    Deliberately not response-cached: this is the live "where does it hurt"
+    view, and a cached body hides failures recorded after the cache was
+    written. The Health page polls it once a minute; the read is bounded
+    (7-day window, per-section row caps).
     ---
     get:
       tags:

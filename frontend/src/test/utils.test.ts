@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatDuration, formatRelativeTime, truncatePath, cn } from '@/lib/utils'
+import { formatDuration, formatRelativeTime, formatTimestamp, truncatePath, cn } from '@/lib/utils'
 
 describe('formatDuration', () => {
   it('formats seconds', () => {
@@ -12,6 +12,24 @@ describe('formatDuration', () => {
 
   it('formats hours', () => {
     expect(formatDuration(3665)).toBe('1h 1m')
+  })
+})
+
+describe('formatTimestamp', () => {
+  it('renders exact date and time to the second', () => {
+    // No timezone suffix → parsed as local time, so the assertion holds in any TZ.
+    expect(formatTimestamp('2026-11-25T14:32:07', 'en-US')).toBe('11/25/2026, 14:32:07')
+  })
+
+  it('keeps seconds precision instead of a coarse relative label', () => {
+    const utc = formatTimestamp('2026-11-25T14:32:07.000Z', 'en-US')
+    expect(utc).toMatch(/\d{2}:\d{2}:\d{2}$/)
+    expect(utc).not.toContain('ago')
+  })
+
+  it('renders a placeholder for missing or invalid input', () => {
+    expect(formatTimestamp(null)).toBe('—')
+    expect(formatTimestamp('not-a-date')).toBe('—')
   })
 })
 

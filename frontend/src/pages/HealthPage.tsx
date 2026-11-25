@@ -23,7 +23,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useLibraryHealth } from '@/hooks/useApi';
 import { type HealthPipelineError, type HealthProblemRow, type HealthProviderRow, type HealthTranslationBackend, type HealthTranslationError, type HealthSchedulerError, type HealthWhisperError, type HealthSyncError, type HealthOpsError, type HealthHookError, type HealthBackupError } from '@/api/system/healthLibrary';
 import { problemBadgeSpec, TIER_COLOR } from '@/lib/healthProblems';
-import { formatRelativeTime, formatProviderName } from '@/lib/utils';
+import { formatTimestamp, formatProviderName } from '@/lib/utils';
 
 type T = (key: string) => string;
 
@@ -188,7 +188,7 @@ function ProblemRow({ item, t }: { item: HealthProblemRow; t: T }) {
         className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
         style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
       >
-        {item.updated_at ? formatRelativeTime(item.updated_at) : ''}
+        {formatTimestamp(item.updated_at)}
       </td>
     </tr>
   );
@@ -325,7 +325,7 @@ function TranslationBackendRow({ b, t }: { b: HealthTranslationBackend; t: T }) 
         className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
         style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
       >
-        {b.last_failure_at ? formatRelativeTime(b.last_failure_at) : '—'}
+        {formatTimestamp(b.last_failure_at)}
       </td>
     </tr>
   );
@@ -366,7 +366,7 @@ function TranslationErrorRow({ e, t }: { e: HealthTranslationError; t: T }) {
         className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
         style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
       >
-        {e.started_at ? formatRelativeTime(e.started_at) : ''}
+        {formatTimestamp(e.started_at)}
       </td>
     </tr>
   );
@@ -404,7 +404,7 @@ function TranslationPipelineErrorRow({ e, t }: { e: HealthPipelineError; t: T })
         className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
         style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
       >
-        {e.created_at ? formatRelativeTime(e.created_at) : ''}
+        {formatTimestamp(e.created_at)}
       </td>
     </tr>
   );
@@ -449,7 +449,7 @@ function SchedulerErrorRow({ e, t }: { e: HealthSchedulerError; t: T }) {
         className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
         style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
       >
-        {e.started_at ? formatRelativeTime(e.started_at) : ''}
+        {formatTimestamp(e.started_at)}
       </td>
       <td
         className="px-3 py-2 text-xs hidden sm:table-cell"
@@ -491,7 +491,7 @@ function WhisperErrorRow({ e }: { e: HealthWhisperError }) {
         className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
         style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
       >
-        {e.completed_at ? formatRelativeTime(e.completed_at) : ''}
+        {formatTimestamp(e.completed_at)}
       </td>
     </tr>
   );
@@ -528,7 +528,7 @@ function SyncErrorRow({ e }: { e: HealthSyncError }) {
         className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
         style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
       >
-        {e.started_at ? formatRelativeTime(e.started_at) : ''}
+        {formatTimestamp(e.started_at)}
       </td>
     </tr>
   );
@@ -564,7 +564,7 @@ function OpsErrorRow({ e, t }: { e: HealthOpsError; t: T }) {
         className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
         style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
       >
-        {e.created_at ? formatRelativeTime(e.created_at) : ''}
+        {formatTimestamp(e.created_at)}
       </td>
     </tr>
   );
@@ -591,7 +591,7 @@ function HookErrorRow({ e }: { e: HealthHookError }) {
         className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
         style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
       >
-        {e.created_at ? formatRelativeTime(e.created_at) : ''}
+        {formatTimestamp(e.created_at)}
       </td>
     </tr>
   );
@@ -620,7 +620,7 @@ function BackupErrorRow({ e, t }: { e: HealthBackupError; t: T }) {
         className="px-3 py-2 text-xs tabular-nums hidden lg:table-cell"
         style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
       >
-        {e.created_at ? formatRelativeTime(e.created_at) : ''}
+        {formatTimestamp(e.created_at)}
       </td>
     </tr>
   );
