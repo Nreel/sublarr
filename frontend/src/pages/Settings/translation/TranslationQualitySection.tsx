@@ -32,6 +32,10 @@ export function TranslationQualitySection() {
     ? Number((config as Record<string, unknown>)['batch_size'] ?? 15)
     : 15
 
+  const evalMode = config
+    ? String((config as Record<string, unknown>)['translation_quality_mode'] ?? 'per_line')
+    : 'per_line'
+
   const [localThreshold, setLocalThreshold] = useState<number>(threshold)
   const [localMaxRetries, setLocalMaxRetries] = useState<number>(maxRetries)
   const [localTemperature, setLocalTemperature] = useState<number>(temperature)
@@ -50,6 +54,18 @@ export function TranslationQualitySection() {
         onError: () => toast(t('translation_quality.toast_save_failed'), 'error'),
       },
     )
+  }
+
+  const handleModeChange = (value: string) => {
+    if (value !== evalMode) {
+      updateConfig.mutate(
+        { translation_quality_mode: value },
+        {
+          onSuccess: () => toast(t('translation_quality.toast_eval_mode_saved')),
+          onError: () => toast(t('translation_quality.toast_eval_mode_failed'), 'error'),
+        },
+      )
+    }
   }
 
   const handleThresholdBlur = () => {
@@ -129,6 +145,28 @@ export function TranslationQualitySection() {
           onChange={handleEnabledChange}
           disabled={updateConfig.isPending}
         />
+      </SettingRow>
+
+      <SettingRow
+        label={t('translation_quality.eval_mode')}
+        helpText={t('translation_quality.eval_mode_help')}
+      >
+        <select
+          value={evalMode}
+          disabled={!enabled || updateConfig.isPending}
+          onChange={(e) => handleModeChange(e.target.value)}
+          className="w-24 px-3 py-2 rounded-md text-sm transition-all duration-150 focus:outline-none"
+          style={{
+            backgroundColor: 'var(--bg-primary)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-primary)',
+            fontSize: '13px',
+            opacity: enabled ? 1 : 0.5,
+          }}
+        >
+          <option value="per_line">{t('translation_quality.eval_mode_per_line')}</option>
+          <option value="batched">{t('translation_quality.eval_mode_batched')}</option>
+        </select>
       </SettingRow>
 
       <SettingRow

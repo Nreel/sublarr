@@ -558,7 +558,7 @@ class OpenAICompatBackend(LLMBackend):
                     raise _endpoint_error(endpoint, retry_exc) from retry_exc
         return raw
 
-    def _call_openai(self, prompt: str) -> str:
+    def _call_openai(self, prompt: str, max_tokens: int = 64) -> str:
         """Raw single-prompt call used by the quality evaluator.
 
         ``TranslationManager._call_backend_raw`` looks for exactly this
@@ -566,8 +566,11 @@ class OpenAICompatBackend(LLMBackend):
         ``evaluate_line_quality`` returned None for every
         OpenAI-compatible backend — the quality gate silently never ran
         for LM Studio / vLLM / Azure-OpenAI setups.
+
+        ``max_tokens`` stays 64 for the single-pair score; batched
+        evaluation raises it so a reply of N integers is not truncated.
         """
-        payload = self._build_request([{"role": "user", "content": prompt}], max_tokens=64)
+        payload = self._build_request([{"role": "user", "content": prompt}], max_tokens=max_tokens)
         payload["temperature"] = 0.0
         raw = self._call_api(payload, self._request_timeout)
         choices = raw.get("choices") or []

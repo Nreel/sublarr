@@ -160,6 +160,7 @@ export type TranslationActiveJob = {
   eta_seconds: number | null
   cost_so_far_micro_usd: number
   cancel_requested: boolean
+  phase?: string
 }
 
 export type TranslationRecentJob = {

@@ -20,7 +20,8 @@
     "clear_success": "{{n}} wartende Jobs abgebrochen",
     "clear_failed": "Wartende Jobs konnten nicht geleert werden",
     "lines": "{{done}}/{{total}} Zeilen",
-    "eta": "{{seconds}}s verbleibend"
+    "eta": "{{seconds}}s verbleibend",
+    "phase_quality": "Qualitätsprüfung läuft"
   },
   "title": "Übersetzungen",
   "filter": {

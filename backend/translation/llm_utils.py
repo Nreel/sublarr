@@ -816,3 +816,68 @@ def parse_quality_score(response_text: str) -> int:
         return max(0, min(100, score))
     except (ValueError, OverflowError):
         return DEFAULT_QUALITY_SCORE
+
+
+def build_evaluation_batch_prompt(
+    pairs: list[tuple[str, str]],
+    source_lang: str,
+    target_lang: str,
+) -> str:
+    """Build a quality evaluation prompt for several translation pairs at once.
+
+    Used by ``translation_quality_mode="batched"``: one request scores N
+    numbered pairs instead of N separate requests. The reply must be N
+    integers in the given order — ``parse_quality_scores`` verifies that and
+    the caller falls back to per-pair evaluation when it does not hold.
+
+    Args:
+        pairs: ``(source_text, translated_text)`` pairs, evaluation order fixed
+        source_lang: ISO 639-1 source language code
+        target_lang: ISO 639-1 target language code
+
+    Returns:
+        Prompt string asking for exactly ``len(pairs)`` integers, 0-100
+    """
+    lines = []
+    for i, (source_text, translated_text) in enumerate(pairs, start=1):
+        safe_source = _escape_subtitle_line(source_text)
+        safe_translated = _escape_subtitle_line(translated_text)
+        lines.append(
+            f"{i}. Original ({source_lang}): {safe_source}\n"
+            f"   Translation ({target_lang}): {safe_translated}"
+        )
+    return (
+        f"Rate the quality of each of these {len(pairs)} subtitle translations "
+        f"from {source_lang} to {target_lang} on a scale from 0 to 100, where 100 "
+        f"is a perfect translation. Reply with exactly {len(pairs)} integers, one "
+        f"per line, in the numbered order, and nothing else.\n\n" + "\n".join(lines)
+    )
+
+
+def parse_quality_scores(response_text: str, n: int) -> list[int] | None:
+    """Parse exactly ``n`` quality scores (0-100) from a batched evaluation reply.
+
+    Strict by design: a wrong count means scores could land on the wrong
+    lines, so it returns None and the caller re-evaluates that chunk per
+    line instead of guessing an alignment.
+
+    Args:
+        response_text: Raw LLM response, expected to be ``n`` integers
+        n: Exact number of scores the prompt asked for
+
+    Returns:
+        List of ``n`` clamped integers, or None if the reply does not parse
+    """
+    matches = _SCORE_RE.findall(response_text.strip())
+    if len(matches) != n:
+        logger.debug(
+            "Batch quality scores unusable (%d of %d) for response: %r",
+            len(matches),
+            n,
+            response_text[:120],
+        )
+        return None
+    try:
+        return [max(0, min(100, int(m))) for m in matches]
+    except (ValueError, OverflowError):
+        return None

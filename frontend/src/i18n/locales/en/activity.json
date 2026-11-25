@@ -20,7 +20,8 @@
     "clear_success": "{{n}} queued jobs cancelled",
     "clear_failed": "Failed to clear queued jobs",
     "lines": "{{done}}/{{total}} lines",
-    "eta": "{{seconds}}s remaining"
+    "eta": "{{seconds}}s remaining",
+    "phase_quality": "quality check in progress"
   },
   "title": "Translations",
   "filter": {

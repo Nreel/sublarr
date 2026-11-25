@@ -95,6 +95,7 @@
       "eta_unknown": "Restzeit unbekannt",
       "eta_seconds": "~{{n}}s verbleibend",
       "eta_minutes": "~{{n}}m verbleibend",
+      "phase_quality": "Qualitätsprüfung",
       "load_error": "Warteschlange konnte nicht geladen werden."
     }
   },
@@ -1876,7 +1877,13 @@
     "threshold_help": "Zeilen, die unter diesem Wert liegen, werden wiederholt. Standard: 50.",
     "max_retries_help": "Maximale Wiederholungsversuche pro Zeile, wenn die Qualität unter der Schwelle liegt. Standard: 2.",
     "temperature_help": "LLM-Sampling-Temperatur. Niedrigere Werte sind deterministischer; 0,1–0,3 für Übersetzungen empfohlen. Standard: 0.3.",
-    "batch_size_help": "Anzahl der Untertitelzeilen, die pro Anfrage an das LLM gesendet werden. Kleinere Batches sind langsamer, benötigen aber weniger Kontext. Standard: 15."
+    "batch_size_help": "Anzahl der Untertitelzeilen, die pro Anfrage an das LLM gesendet werden. Kleinere Batches sind langsamer, benötigen aber weniger Kontext. Standard: 15.",
+    "eval_mode": "Modus der Qualitätsbewertung",
+    "eval_mode_per_line": "Pro Zeile",
+    "eval_mode_batched": "Gebündelt",
+    "eval_mode_help": "Wie der Qualitätspass das Modell nach der Übersetzung fragt. „Pro Zeile“: eine Anfrage pro Zeile – präzise, aber langsam bei großen Dateien. „Gebündelt“: eine Anfrage bewertet eine Batch-Größe an Zeilen; eine Antwort, die nicht aligniert, fällt für diesen Block auf pro Zeile zurück. Wiederholungen bleiben pro Zeile. Standard: Pro Zeile.",
+    "toast_eval_mode_saved": "Bewertungsmodus gespeichert",
+    "toast_eval_mode_failed": "Speichern des Bewertungsmodus fehlgeschlagen"
   },
   "connections_media_servers": {
     "api_key": "API-Key",

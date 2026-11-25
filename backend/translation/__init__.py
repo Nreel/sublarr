@@ -448,7 +448,81 @@ class TranslationManager:
         )
         return DEFAULT_QUALITY_SCORE
 
-    def _call_backend_raw(self, backend, prompt: str) -> "str | None":
+    def evaluate_lines_quality(
+        self,
+        pairs: list[tuple[str, str]],
+        source_lang: str,
+        target_lang: str,
+        fallback_chain: list[str],
+    ) -> "list[int] | None":
+        """Score several source/translation pairs in one LLM request.
+
+        ``translation_quality_mode="batched"`` path: mirrors
+        ``evaluate_line_quality`` (same breaker rules, same LLM-only backend
+        restriction) but asks for ``len(pairs)`` integers in one reply. The
+        reply is accepted only when it parses to exactly ``len(pairs)``
+        scores — a wrong count returns None so the caller re-evaluates the
+        chunk per line rather than mapping scores onto the wrong lines.
+
+        Returns:
+            List of scores aligned with ``pairs``, or None when no backend
+            answered with a usable shape.
+        """
+        from translation.llm_utils import (
+            build_evaluation_batch_prompt,
+            parse_quality_scores,
+        )
+
+        _LLM_BACKENDS = {"ollama", "openai_compat"}
+
+        prompt = build_evaluation_batch_prompt(pairs, source_lang, target_lang)
+
+        for backend_name in fallback_chain:
+            if backend_name not in _LLM_BACKENDS:
+                continue
+
+            cb = self._get_circuit_breaker(backend_name)
+            if not cb.allow_request():
+                continue
+
+            backend = self.get_backend(backend_name)
+            if backend is None:
+                continue
+
+            try:
+                raw_response = self._call_backend_raw(
+                    backend, prompt, max_tokens=max(64, 4 * len(pairs) + 16)
+                )
+            except Exception as exc:
+                cb.record_failure()
+                self._record_failure(backend_name, str(exc))
+                logger.debug("Batched quality eval failed via %s: %s", backend_name, exc)
+                continue
+
+            if raw_response is None:
+                # Backend exposes no raw call — not a health statement.
+                continue
+
+            cb.record_success()
+            scores = parse_quality_scores(raw_response, len(pairs))
+            if scores is None:
+                # It answered; only the shape of the answer was unusable.
+                # Content must not count towards the breaker (same rule as
+                # TranslationContentError in translate_with_fallback).
+                logger.debug(
+                    "Batched quality eval returned an unusable answer via %s", backend_name
+                )
+                continue
+
+            logger.debug("Batched quality eval via %s: %d scores", backend_name, len(scores))
+            return scores
+
+        logger.debug("No LLM backend available for batched quality eval")
+        return None
+
+    def _call_backend_raw(
+        self, backend, prompt: str, max_tokens: int = 64
+    ) -> "str | None":
         """Call a backend with a raw prompt and return the raw text response.
 
         Supports Ollama (_call_ollama) and OpenAI-compatible (_call_openai) backends.
@@ -457,6 +531,9 @@ class TranslationManager:
         Args:
             backend: A TranslationBackend instance
             prompt: Raw prompt string to send to the LLM
+            max_tokens: Reply cap; single-pair evaluation keeps the 64 default,
+                batched evaluation raises it so N integers are not truncated.
+                Ollama's raw call caps well above any batch size already.
 
         Returns:
             Raw response text or None if unsupported
@@ -464,7 +541,7 @@ class TranslationManager:
         if hasattr(backend, "_call_ollama"):
             return backend._call_ollama(prompt)
         if hasattr(backend, "_call_openai"):
-            return backend._call_openai(prompt)
+            return backend._call_openai(prompt, max_tokens=max_tokens)
         return None
 
     def invalidate_backend(self, name: str) -> None:

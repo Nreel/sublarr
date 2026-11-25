@@ -95,6 +95,7 @@
       "eta_unknown": "ETA unknown",
       "eta_seconds": "~{{n}}s remaining",
       "eta_minutes": "~{{n}}m remaining",
+      "phase_quality": "quality check",
       "load_error": "Could not load queue state."
     }
   },
@@ -1876,7 +1877,13 @@
     "threshold_help": "Lines scoring below this value are retried. Default: 50.",
     "max_retries_help": "Max retry attempts per line when quality is below threshold. Default: 2.",
     "temperature_help": "LLM sampling temperature. Lower values are more deterministic; 0.1–0.3 recommended for translation. Default: 0.3.",
-    "batch_size_help": "Number of subtitle lines sent to the LLM per request. Smaller batches are slower but use less context. Default: 15."
+    "batch_size_help": "Number of subtitle lines sent to the LLM per request. Smaller batches are slower but use less context. Default: 15.",
+    "eval_mode": "Quality scoring mode",
+    "eval_mode_per_line": "Per line",
+    "eval_mode_batched": "Batched",
+    "eval_mode_help": "How the quality pass asks the model after translation. 'Per line': one request per line — precise but slow on big files. 'Batched': one request scores a batch-size chunk of lines; a reply that does not align falls back to per-line for that chunk. Retries stay per line. Default: Per line.",
+    "toast_eval_mode_saved": "Scoring mode saved",
+    "toast_eval_mode_failed": "Failed to save scoring mode"
   },
   "connections_media_servers": {
     "api_key": "API Key",

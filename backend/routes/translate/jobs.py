@@ -172,6 +172,7 @@ def _attach_line_progress(jobs: list) -> None:
             "eta_seconds": snap["eta_seconds"],
             "backend": snap["backend"],
             "cost_so_far_micro_usd": snap["cost_so_far_micro_usd"],
+            "phase": snap["phase"],
         }
 
 

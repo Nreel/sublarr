@@ -52,6 +52,12 @@ class _JobState:
     started_mono: float = field(default_factory=time.monotonic)
     cancel_requested: bool = False
     cost_micro_usd: int = 0
+    # "translating" while batches run; "quality" during the post-translation
+    # per-line scoring pass (translator.quality), which never advances
+    # done_lines — without this the UI reads 100%/0s for the whole pass.
+    phase: str = "translating"
+    eval_done: int = 0
+    quality_started_mono: float | None = None
 
 
 @dataclass
@@ -105,6 +111,8 @@ class QueueState:
         cost_micro_usd_delta: int = 0,
         backend: str | None = None,
         total_lines: int | None = None,
+        phase: str | None = None,
+        eval_done: int | None = None,
     ) -> None:
         with self._lock:
             state = self._active.get(job_id)
@@ -118,6 +126,12 @@ class QueueState:
                 state.backend = backend
             if total_lines:
                 state.total_lines = total_lines
+            if phase is not None:
+                state.phase = phase
+                if phase == "quality" and state.quality_started_mono is None:
+                    state.quality_started_mono = time.monotonic()
+            if eval_done is not None:
+                state.eval_done = eval_done
 
     def cancel(self, job_id: str) -> None:
         with self._lock:
@@ -171,7 +185,18 @@ class QueueState:
         pct = (state.done_lines / state.total_lines * 100.0) if state.total_lines else 0.0
         elapsed = time.monotonic() - state.started_mono
         eta = None
-        if state.done_lines > 0 and elapsed > 0.05:
+        if state.phase == "quality":
+            # Batch translation is finished; the remaining work is the
+            # per-line scoring pass. Its ETA comes from the scoring rate —
+            # the translation rate would report 0 once done == total.
+            if state.quality_started_mono is not None:
+                q_elapsed = time.monotonic() - state.quality_started_mono
+                if state.eval_done > 0 and q_elapsed > 0.05:
+                    rate = state.eval_done / q_elapsed
+                    remaining = state.total_lines - state.eval_done
+                    if rate > 0:
+                        eta = max(0, int(remaining / rate))
+        elif state.done_lines > 0 and elapsed > 0.05:
             rate = state.done_lines / elapsed
             remaining = state.total_lines - state.done_lines
             if rate > 0:
@@ -187,6 +212,8 @@ class QueueState:
                 "total": state.total_lines,
                 "pct": round(pct, 1),
             },
+            "phase": state.phase,
+            "eval_done": state.eval_done,
             "started_at": state.started_at.isoformat(),
             "eta_seconds": eta,
             "cost_so_far_micro_usd": state.cost_micro_usd,

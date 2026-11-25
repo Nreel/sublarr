@@ -65,6 +65,9 @@ const TranslationJobRow = memo(function TranslationJobRow({
             style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
           >
             <span>{t('translations.lines', { done: progress.done, total: progress.total })}</span>
+            {progress.phase === 'quality' && (
+              <span>{t('translations.phase_quality')}</span>
+            )}
             {progress.eta_seconds != null && (
               <span>{t('translations.eta', { seconds: progress.eta_seconds })}</span>
             )}

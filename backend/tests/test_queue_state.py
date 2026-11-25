@@ -170,3 +170,35 @@ def test_thread_safety_stress():
 
     assert q.active_snapshot() == []
     assert len(q.recent_snapshot()) == 20
+
+
+def test_quality_phase_progress_and_eta():
+    """After translation completes, the quality phase must report real
+    progress; the old state showed 100% / ~0s remaining while scoring
+    requests kept going (prod 2026-11-25)."""
+    import time
+
+    from translation.queue_state import QueueState
+
+    q = QueueState()
+    q.register_job(
+        job_id="abc",
+        file_path="/x/a.mkv",
+        source_lang="en",
+        target_lang="de",
+        backend="claude",
+        total_lines=1000,
+    )
+    snap = q.active_snapshot()[0]
+    assert snap["phase"] == "translating"
+    assert snap["eval_done"] == 0
+
+    q.update_progress("abc", done=1000)
+    q.update_progress("abc", phase="quality")
+    time.sleep(0.1)
+    q.update_progress("abc", eval_done=10)
+    snap = q.active_snapshot()[0]
+    assert snap["phase"] == "quality"
+    assert snap["eval_done"] == 10
+    assert snap["progress"]["pct"] == 100.0
+    assert snap["eta_seconds"] is not None and snap["eta_seconds"] > 0

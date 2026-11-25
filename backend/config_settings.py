@@ -833,6 +833,17 @@ class UISettings(BaseModel):
         le=5,
         description="How often a single low-scoring line may be retried.",
     )
+    translation_quality_mode: str = Field(
+        default="per_line",
+        pattern=r"^(per_line|batched)$",
+        description=(
+            "How the quality pass asks the model. 'per_line': one request per "
+            "line scored (precise, one call per line). 'batched': score chunks "
+            "of batch_size lines per request (far fewer requests); a reply "
+            "that does not parse to exactly one score per line falls back to "
+            "per-line for that chunk. Retries are always per line."
+        ),
+    )
     # Read by base_path.PrefixMiddleware, which strips it from the request path,
     # and injected into the served index.html as <base href>. Deliberately read
     # off this settings object rather than through get_config_entry: the

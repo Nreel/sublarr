@@ -7,6 +7,7 @@ export interface JobLineProgress {
   eta_seconds: number | null
   backend: string
   cost_so_far_micro_usd: number
+  phase?: string
 }
 
 export interface Job {

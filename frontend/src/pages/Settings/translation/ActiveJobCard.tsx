@@ -62,6 +62,7 @@ export function ActiveJobCard({
                 {job.progress.pct.toFixed(1)}%)
               </span>
               <span>
+                {job.phase === 'quality' && `${t('translation.queue.phase_quality')} · `}
                 {formatEta(job.eta_seconds, t)} · ${costUsd}
               </span>
             </div>
