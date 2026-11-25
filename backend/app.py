@@ -506,7 +506,7 @@ def create_app(testing=False):
                 # PRAGMA takes no bind parameters (SQLite rejects `busy_timeout=?`),
                 # so the setting is coerced to int before interpolating; exec_driver_sql
                 # avoids the semgrep `avoid-sqlalchemy-text` ERROR on dynamic text().
-                conn.exec_driver_sql(f"PRAGMA busy_timeout={int(settings.sqlite_busy_timeout_ms)}")
+                conn.exec_driver_sql(f"PRAGMA busy_timeout={int(settings.sqlite_busy_timeout_ms)}")  # sql-identifiers-only
                 conn.commit()
 
             # Diagnostic: the #1 cause of "Sublarr is painfully slow" reports is

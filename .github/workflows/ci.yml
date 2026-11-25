@@ -114,6 +114,12 @@ jobs:
         run: |
           python tools/test_lint_no_exception_text_in_responses.py
           python tools/lint_no_exception_text_in_responses.py
+      - name: Lint (security invariants — no SQL string building, no shell)
+        if: matrix.shard == 1
+        working-directory: ./backend
+        run: |
+          python tools/test_lint_security_invariants.py
+          python tools/lint_security_invariants.py
 
       - name: Type check (mypy)
         if: matrix.shard == 1
