@@ -22,6 +22,7 @@ from error_handler import DuplicateSubtitleError
 from providers import get_provider_manager
 from providers.base import SubtitleFormat
 from services.media_ids import movie_key_for_item, series_key_for_item
+from services.profile_service import normalize_source_tag
 from services.scheduler.cancellation import abort_requested
 from translator.errors import TranslationAbortedError
 from upgrade_scorer import should_upgrade
