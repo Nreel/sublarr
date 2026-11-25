@@ -637,7 +637,7 @@ def _defer_source_translation(ctx: dict, source_path: str, fmt: str) -> dict | N
             file_path=file_path,
             target_language=target_lang,
             task_type=SubtitleAutomationQueueEntry.TASK_SIDECAR_TRANSLATE,
-            source_language=getattr(settings, "source_language", None),
+            source_language=_ctx_source_language(ctx) or None,
         )
     except Exception as exc:  # noqa: BLE001 — a queue fault must not lose the item
         logger.warning(
@@ -1651,6 +1651,7 @@ def _search_flipped_item(
         ),
         "query": query,
         "source_query": source_query,
+        "source_language": source_lang,
         "ass_had_results": False,
         "dry_run": dry_run,
         "allow_translate_fallback": allow_translate_fallback,
