@@ -80,7 +80,7 @@ def _run_sync(
 ) -> None:
     _update_job(job_id, "running")
 
-    from db.activity import log_activity, update_activity_status
+    from db.activity import log_activity, update_activity_progress, update_activity_status
     from db.models.activity import EVENT_SYNC
 
     activity_row = log_activity(
@@ -88,6 +88,20 @@ def _run_sync(
         file_path=subtitle_path,
         status="running",
         details={"job_id": job_id, "engine": engine},
+    )
+
+    try:
+        from app import socketio
+    except Exception:
+        socketio = None
+    update_activity_progress(
+        activity_row,
+        done=0,
+        total=1,
+        current=os.path.basename(subtitle_path),
+        phase="syncing",
+        event_type=EVENT_SYNC,
+        socketio=socketio,
     )
 
     def _sink(proc: subprocess.Popen) -> None:

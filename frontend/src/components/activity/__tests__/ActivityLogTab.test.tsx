@@ -125,6 +125,28 @@ describe('ActivityLogTab', () => {
     expect(mockStopScheduledJob).toHaveBeenCalledWith('anidb_sync', expect.anything())
   })
 
+  it('shows a live bar and the current item for running rows with details.progress', () => {
+    mockUseActivity.mockReturnValue({
+      data: {
+        data: [
+          { id: 20, event_type: 'repair', status: 'running', file_path: null,
+            details: { dry_run: true, progress: { done: 7, total: 30, current: 'One Piece - S01E01.mkv', phase: 'repairing' } },
+            created_at: '2026-11-17T12:00:00Z' },
+          { id: 21, event_type: 'whisper', status: 'running', file_path: '/media/Film.mkv',
+            details: { job_id: 'wh-9' }, created_at: '2026-11-17T12:01:00Z' },
+        ],
+        total: 2, page: 1, per_page: 50, total_pages: 1,
+      },
+      isLoading: false,
+    })
+    render(<BrowserRouter><ActivityLogTab /></BrowserRouter>)
+    expect(screen.getByTestId('activity-progress-current-20')).toHaveTextContent('One Piece - S01E01.mkv')
+    expect(screen.getByTestId('activity-progress-label-20')).toHaveTextContent('repairing · 7/30')
+    // Rows without details.progress keep their old plain label
+    expect(screen.queryByTestId('activity-progress-current-21')).not.toBeInTheDocument()
+    expect(screen.getByTestId('activity-row-21')).toHaveTextContent('Film')
+  })
+
   it('renders no stop buttons on terminal rows', () => {
     mockUseActivity.mockReturnValue(SAMPLE_DATA)
     render(<BrowserRouter><ActivityLogTab /></BrowserRouter>)

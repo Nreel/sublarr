@@ -1,11 +1,16 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useHealth, useUpdateInfo } from '@/hooks/useApi'
+import { useHealth, useUpdateInfo, useWantedBatchExtractStatus } from '@/hooks/useApi'
 import { formatVersion } from '@/lib/version'
 import { useProviderHealth } from '@/hooks/useProvidersApi'
 import { useAutomationState } from '@/hooks/useAutomationState'
 import { useTranslationQueue } from '@/hooks/useTranslationQueue'
+import { useWhisperQueue } from '@/hooks/useTranslationApi'
+import type { WhisperJob } from '@/types/translation'
+
+/** Whisper job statuses that mean a transcription is in flight. */
+const WHISPER_ACTIVE_STATUSES: WhisperJob['status'][] = ['extracting', 'loading', 'transcribing', 'saving']
 
 /** Dot colour per state value reported by /health. */
 const STATE_COLOR: Record<string, string> = {
@@ -50,6 +55,8 @@ export function StatusBar() {
     useAutomationState(60_000)
   const { data: providerHealth } = useProviderHealth(60_000)
   const { data: queue } = useTranslationQueue()
+  const { data: batchExtract } = useWantedBatchExtractStatus()
+  const { data: whisperJobs } = useWhisperQueue()
   const [popoverOpen, setPopoverOpen] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
 
@@ -57,8 +64,14 @@ export function StatusBar() {
   const states = health?.states
   const isScanning = scannerStatus?.is_scanning ?? false
   const isBatchSearching = batchSearch?.running ?? false
-  const isBatchExtracting = batchProbe?.running ?? false
+  // The batch-probe run probes embedded subtitle streams; the separate
+  // extract run pulls them out (Queue tab: Batch Probe / Batch Extract).
+  const isBatchProbing = batchProbe?.running ?? false
+  const isBatchExtracting = batchExtract?.running ?? false
   const hasUpdate = updateInfo?.available === true
+  const whisperActive = (whisperJobs as WhisperJob[] | undefined)?.filter(
+    (job) => WHISPER_ACTIVE_STATUSES.includes(job.status),
+  ) ?? []
 
   const throttledProviders = useMemo(() => {
     const items = providerHealth?.providers ?? []
@@ -125,8 +138,11 @@ export function StatusBar() {
           : t('status.automation_title_idle', 'Nothing running; the scheduler fires on its next scheduled run')
 
   const activities: Activity[] = []
+  if (isBatchProbing) {
+    activities.push({ label: t('status.batch_probing', 'Batch probe'), started_at: batchProbe?.started_at ?? null })
+  }
   if (isBatchExtracting) {
-    activities.push({ label: t('status.extracting', 'Extracting'), started_at: batchProbe?.started_at ?? null })
+    activities.push({ label: t('status.batch_extracting', 'Batch extract'), started_at: batchExtract?.started_at ?? null })
   }
   if (isBatchSearching) {
     activities.push({ label: t('status.batch_searching', 'Batch search'), started_at: batchSearch?.started_at ?? null })
@@ -146,6 +162,15 @@ export function StatusBar() {
       return Date.parse(job.started_at) > Date.parse(latest) ? job.started_at : latest
     }, null)
     activities.push({ label: t('status.translating', 'Translating'), started_at: newestStart })
+  }
+  // Whisper transcriptions report through /whisper/queue; the footer names
+  // one "Transcribing" activity with the newest in-flight job's start time.
+  if (whisperActive.length > 0) {
+    const newestWhisperStart = whisperActive.reduce<string | null>((latest, job) => {
+      if (!latest) return job.started_at
+      return Date.parse(job.started_at) > Date.parse(latest) ? job.started_at : latest
+    }, null)
+    activities.push({ label: t('status.transcribing', 'Transcribing'), started_at: newestWhisperStart })
   }
   // Several runs can overlap; the footer names the one that started last.
   const latestActivity = activities.reduce<Activity | null>((latest, a) => {

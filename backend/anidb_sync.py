@@ -44,6 +44,8 @@ sync_state = {
     "last_run": None,
     "last_result": None,
     "error": None,
+    "progress": 0,
+    "total": 0,
 }
 _sync_state_lock = threading.Lock()
 
@@ -121,8 +123,13 @@ def _expand_range_mapping(mapping_el) -> list[tuple[int, int]]:
     return pairs
 
 
-def _process_xml(xml_bytes: bytes, app) -> dict:
-    """Parse the anime-list XML and upsert mappings into the DB."""
+def _process_xml(xml_bytes: bytes, app, *, progress_cb=None) -> dict:
+    """Parse the anime-list XML and upsert mappings into the DB.
+
+    ``progress_cb(done, total, current)`` receives every anime consumed
+    (bad ids included, so ``done`` reaches ``total``), throttled to every
+    5 items or ~1s, plus one final call when the loop finishes.
+    """
     series_processed = 0
     mappings_upserted = 0
     skipped = 0
@@ -140,19 +147,35 @@ def _process_xml(xml_bytes: bytes, app) -> dict:
             "error": f"XML parse error: {exc}",
         }
 
+    anime_list = root.findall("anime")
+    total = len(anime_list)
+    last_title = ""
+    last_emit = time.monotonic()
+
+    def _emit(done: int, current: str) -> None:
+        nonlocal last_emit
+        if progress_cb is None:
+            return
+        if done % 5 == 0 or time.monotonic() - last_emit >= 1.0:
+            progress_cb(done, total, current)
+            last_emit = time.monotonic()
+
     with app.app_context():
         from db.repositories.anidb import AnidbRepository
 
         repo = AnidbRepository()
 
-        for anime in root.findall("anime"):
+        for index, anime in enumerate(anime_list, 1):
             tvdb_id_str = anime.get("tvdbid", "").strip()
             if not tvdb_id_str or not tvdb_id_str.isdigit():
                 skipped += 1
+                _emit(index, anime.get("title") or "")
                 continue
 
             tvdb_id = int(tvdb_id_str)
             series_processed += 1
+            last_title = anime.get("title") or str(tvdb_id)
+            _emit(index, last_title)
 
             mapping_list = anime.find("mapping-list")
             if mapping_list is None:
@@ -221,6 +244,9 @@ def _process_xml(xml_bytes: bytes, app) -> dict:
                                     "Further upsert failures in this run are counted, not logged."
                                 )
 
+    if progress_cb is not None:
+        progress_cb(total, total, last_title)
+
     logger.info(
         "AniDB sync complete: %d series processed, %d mappings upserted "
         "(%d from season ranges), %d skipped, %d failed",
@@ -267,10 +293,29 @@ def run_sync(app) -> dict:
         sync_state["running"] = True
         sync_state["error"] = None
 
-    from db.activity import log_activity, update_activity_status
+    from db.activity import log_activity, update_activity_progress, update_activity_status
     from db.models.activity import EVENT_ANIDB
 
     activity_row = log_activity(EVENT_ANIDB, status="running", details={"kind": "anidb_sync"})
+
+    try:
+        from app import socketio as sio
+    except Exception:  # pragma: no cover - socketio unavailable outside the app
+        sio = None
+
+    def _progress(done: int, total: int, current: str) -> None:
+        with _sync_state_lock:
+            sync_state["progress"] = done
+            sync_state["total"] = total
+        update_activity_progress(
+            activity_row,
+            done=done,
+            total=total,
+            current=current,
+            phase="syncing",
+            event_type=EVENT_ANIDB,
+            socketio=sio,
+        )
 
     start = time.monotonic()
     result = {"series_processed": 0, "mappings_upserted": 0, "skipped": 0, "error": None}
@@ -278,7 +323,7 @@ def run_sync(app) -> dict:
         anime_list_url = get_settings().anime_list_url
         logger.info("Starting AniDB absolute episode sync from %s", anime_list_url)
         xml_bytes = _fetch_xml(anime_list_url)
-        result = _process_xml(xml_bytes, app)
+        result = _process_xml(xml_bytes, app, progress_cb=_progress)
     except requests.RequestException as exc:
         result["error"] = f"Network error fetching anime-list: {exc}"
         logger.error("AniDB sync failed: %s", exc)

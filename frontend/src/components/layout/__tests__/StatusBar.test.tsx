@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { useHealth, useUpdateInfo } from '@/hooks/useApi'
+import { useHealth, useUpdateInfo, useWantedBatchExtractStatus } from '@/hooks/useApi'
 import { useProviderHealth } from '@/hooks/useProvidersApi'
+import { useWhisperQueue } from '@/hooks/useTranslationApi'
 import {
   useScannerStatus,
   useWantedBatchStatus,
@@ -38,6 +39,11 @@ vi.mock('@/hooks/useApi', () => ({
     data: { status: 'healthy', version: '0.41.8', states: HEALTHY_STATES },
   })),
   useUpdateInfo: vi.fn(() => ({ data: null })),
+  useWantedBatchExtractStatus: vi.fn(() => ({ data: { running: false } })),
+}))
+
+vi.mock('@/hooks/useTranslationApi', () => ({
+  useWhisperQueue: vi.fn(() => ({ data: [] })),
 }))
 
 vi.mock('@/hooks/useWantedApi', () => ({
@@ -97,6 +103,8 @@ describe('StatusBar', () => {
     vi.mocked(useScannerStatus).mockReturnValue({ data: { is_scanning: false, is_searching: false } })
     vi.mocked(useWantedBatchStatus).mockReturnValue({ data: { running: false } })
     vi.mocked(useWantedBatchProbeStatus).mockReturnValue({ data: { running: false } })
+    vi.mocked(useWantedBatchExtractStatus).mockReturnValue({ data: { running: false } })
+    vi.mocked(useWhisperQueue).mockReturnValue({ data: [] })
     vi.mocked(useSchedulerJobs).mockReturnValue({
       data: {
         jobs: [
@@ -398,7 +406,7 @@ describe('StatusBar', () => {
     expect(activity.firstElementChild).toHaveStyle({ animation: 'dotGlow 1.5s ease-in-out infinite' })
     const title = activity.getAttribute('title') ?? ''
     expect(title.startsWith('Last activity: Scanning, started ')).toBe(true)
-    expect(title).not.toContain('Extracting')
+    expect(title).not.toContain('Batch probe')
   })
 
   it('labels a batch search run and reports its start time', () => {
@@ -422,13 +430,34 @@ describe('StatusBar', () => {
     expect(activity).toHaveTextContent('Searching')
   })
 
-  it('labels an embedded-sub extraction run', () => {
+  it('labels a batch probe run', () => {
     vi.mocked(useWantedBatchProbeStatus).mockReturnValue({
       data: { running: true, started_at: '2026-11-24T12:00:00Z' },
     })
     renderBar()
     const activity = screen.getByTestId('status-bar-scanning')
-    expect(activity).toHaveTextContent('Extracting')
+    expect(activity).toHaveTextContent('Batch probe')
+  })
+
+  it('labels a batch extract run', () => {
+    vi.mocked(useWantedBatchExtractStatus).mockReturnValue({
+      data: { running: true, started_at: '2026-11-24T12:00:00Z' },
+    })
+    renderBar()
+    const activity = screen.getByTestId('status-bar-scanning')
+    expect(activity).toHaveTextContent('Batch extract')
+  })
+
+  it('labels an in-flight whisper transcription', () => {
+    vi.mocked(useWhisperQueue).mockReturnValue({
+      data: [
+        { id: 'w1', file_path: '/media/Film.mkv', status: 'transcribing', started_at: '2026-11-24T12:00:00Z' },
+        { id: 'w2', file_path: '/media/Old.mkv', status: 'completed', started_at: '2026-11-24T11:00:00Z' },
+      ],
+    })
+    renderBar()
+    const activity = screen.getByTestId('status-bar-scanning')
+    expect(activity).toHaveTextContent('Transcribing')
   })
 
   it('labels a running translation job and reports its start time', () => {

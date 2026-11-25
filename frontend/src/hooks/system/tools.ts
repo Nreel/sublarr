@@ -40,5 +40,9 @@ export function useActivity(page = 1, perPage = 50, eventType?: string) {
     queryKey: ['activity', page, perPage, eventType],
     queryFn: () => getActivity(page, perPage, eventType),
     staleTime: 30_000,
+    // Rows with live progress (details.progress) must refresh even when the
+    // socket stays quiet; poll only while the current page has a running row.
+    refetchInterval: (query) =>
+      query.state.data?.data.some((entry) => entry.status === 'running') ? 3000 : false,
   })
 }

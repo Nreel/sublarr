@@ -288,6 +288,10 @@ def batch_probe():
             _batch_probe_state["started_at"] = None
         return jsonify({"status": "nothing_to_probe", "total_items": 0})
 
+    # Reset counters before spawning: a status poll between the 202 and the
+    # worker's own init must never show the previous run's counters.
+    _init_batch_probe_state(len(items))
+
     app = current_app._get_current_object()
     submit_background(_run_batch_probe, items, app)
     return jsonify({"status": "started", "total_items": len(items)}), 202

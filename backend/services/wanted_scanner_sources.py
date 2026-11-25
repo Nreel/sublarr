@@ -216,13 +216,14 @@ class _WantedScanSourcesMixin:
         total_updated = 0
         all_paths = set()
 
-        self._progress = {
-            "current": 0,
-            "total": len(series_list),
-            "phase": f"Sonarr ({instance_name})",
-            "added": 0,
-            "updated": 0,
-        }
+        # Progress is cumulative across instances: the bar spans the whole
+        # pass, so this instance adds its item count to the running total
+        # instead of restarting it.
+        base = self._progress["current"]
+        added_base = self._progress["added"]
+        updated_base = self._progress["updated"]
+        self._progress["total"] = base + len(series_list)
+        self._progress["phase"] = "scanning"
         if self._socketio:
             self._socketio.emit("wanted_scan_progress", dict(self._progress))
 
@@ -269,7 +270,14 @@ class _WantedScanSourcesMixin:
             if not failed:
                 self._mark_done(key, paths)
                 self._episode_fingerprints[key] = _episode_file_stats(series)
-            self._progress.update({"current": idx, "added": total_added, "updated": total_updated})
+            self._progress.update(
+                {
+                    "current": base + idx,
+                    "added": added_base + total_added,
+                    "updated": updated_base + total_updated,
+                    "current_item": series.get("title") or str(series_id),
+                }
+            )
             if self._socketio:
                 self._socketio.emit("wanted_scan_progress", dict(self._progress))
             if yield_ms > 0:
@@ -330,13 +338,12 @@ class _WantedScanSourcesMixin:
         total_updated = 0
         all_paths = set()
 
-        self._progress = {
-            "current": 0,
-            "total": len(movies),
-            "phase": f"Radarr ({instance_name})",
-            "added": 0,
-            "updated": 0,
-        }
+        # Cumulative across instances, exactly as the Sonarr twin above.
+        base = self._progress["current"]
+        added_base = self._progress["added"]
+        updated_base = self._progress["updated"]
+        self._progress["total"] = base + len(movies)
+        self._progress["phase"] = "scanning"
         if self._socketio:
             self._socketio.emit("wanted_scan_progress", dict(self._progress))
 
@@ -375,7 +382,14 @@ class _WantedScanSourcesMixin:
             all_paths.update(paths)
             if not failed:
                 self._mark_done(key, paths)
-            self._progress.update({"current": idx, "added": total_added, "updated": total_updated})
+            self._progress.update(
+                {
+                    "current": base + idx,
+                    "added": added_base + total_added,
+                    "updated": updated_base + total_updated,
+                    "current_item": movie.get("title") or str(movie.get("id")),
+                }
+            )
             if self._socketio:
                 self._socketio.emit("wanted_scan_progress", dict(self._progress))
             if yield_ms > 0:
@@ -400,7 +414,43 @@ class _WantedScanSourcesMixin:
             if not hasattr(self, "_standalone_scanner"):
                 self._standalone_scanner = StandaloneScanner()
 
-            summary = self._standalone_scanner.scan_all_folders()
+            # scan_all_folders walks the enabled folders internally; tick the
+            # cumulative pass progress per folder without changing its
+            # semantics — one watched folder is its unit, like a series or
+            # movie is for the Sonarr/Radarr loops.
+            base = self._progress["current"]
+            self._progress["phase"] = "scanning"
+            try:
+                from db.standalone import get_watched_folders
+
+                self._progress["total"] = base + len(get_watched_folders(enabled_only=True))
+            except Exception:
+                logger.debug("Could not count standalone folders for progress", exc_info=True)
+            scan_folder = self._standalone_scanner._scan_folder
+            done = 0
+
+            def _ticked_folder(folder):
+                nonlocal done
+                done += 1
+                current = base + done
+                # A coalesced extra pass re-walks the folders: grow the total
+                # instead of pushing current past it.
+                self._progress.update(
+                    {
+                        "current": current,
+                        "total": max(self._progress["total"], current),
+                        "current_item": folder.get("path") or folder.get("name") or "standalone",
+                    }
+                )
+                if self._socketio:
+                    self._socketio.emit("wanted_scan_progress", dict(self._progress))
+                return scan_folder(folder)
+
+            self._standalone_scanner._scan_folder = _ticked_folder
+            try:
+                summary = self._standalone_scanner.scan_all_folders()
+            finally:
+                del self._standalone_scanner._scan_folder
             added = summary.get("wanted_added", 0)
 
             scanned_paths = set()

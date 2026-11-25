@@ -240,7 +240,7 @@ export async function startBatchProbe(seriesId?: number): Promise<{ status: stri
 export interface ScannerStatus {
   is_scanning: boolean
   is_searching: boolean
-  progress: { current: number; total: number; phase: string; added: number; updated: number }
+  progress: { current: number; total: number; phase: string; added: number; updated: number; current_item?: string | null }
   last_scan_at: string | null
   last_search_at: string | null
   /** UTC ISO timestamp of the running scan / search, or null when idle. */

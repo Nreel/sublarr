@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useActivity, useStopRemuxJob, useStopVideoSyncJob, useCancelWhisperJob, useStopCleanupScan, useStopScheduledJob, useStopRepair } from '@/hooks/useSystemApi'
 import { StatusBadge } from '@/components/shared/StatusBadge'
+import { ProgressBar } from '@/components/shared/ProgressBar'
 import { toast } from '@/components/shared/Toast'
 import { parseMediaTitle, formatRelativeTime } from '@/lib/utils'
 import type { ActivityEntry } from '@/api/system/activity'
@@ -26,6 +27,27 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
 }
 
 const PER_PAGE = 50
+
+/** Live progress written by the runners into details["progress"] while a row is running. */
+interface RowProgress {
+  done: number
+  total: number
+  current: string
+  phase: string
+}
+
+function rowProgress(entry: ActivityEntry): RowProgress | null {
+  if (entry.status !== 'running') return null
+  const raw = entry.details?.progress
+  if (typeof raw !== 'object' || raw === null) return null
+  const p = raw as Record<string, unknown>
+  return {
+    done: typeof p.done === 'number' ? p.done : 0,
+    total: typeof p.total === 'number' ? p.total : 0,
+    current: typeof p.current === 'string' ? p.current : '',
+    phase: typeof p.phase === 'string' ? p.phase : '',
+  }
+}
 
 function TypeBadge({ entry }: { entry: ActivityEntry }) {
   return (
@@ -62,6 +84,7 @@ function ActivityRow({
 }) {
   const { t } = useTranslation('activity')
   const media = entry.file_path ? parseMediaTitle(entry.file_path) : null
+  const progress = rowProgress(entry)
 
   return (
     <div
@@ -78,24 +101,37 @@ function ActivityRow({
       <TypeBadge entry={entry} />
 
       <span
-        style={{
-          flex: 1,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          color: 'var(--text-primary)',
-        }}
+        style={{ flex: 1, minWidth: 0, color: 'var(--text-primary)' }}
         title={entry.file_path ?? undefined}
       >
-        {media ? (
-          <>
+        {progress ? (
+          <span style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+            <span
+              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              data-testid={`activity-progress-current-${entry.id}`}
+            >
+              {progress.current || t('history.progress_running', 'Running')}
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              <ProgressBar value={progress.done} max={progress.total} showLabel={false} className="min-w-0 flex-1" />
+              <span
+                data-testid={`activity-progress-label-${entry.id}`}
+                style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}
+              >
+                {progress.phase ? t(`history.phase_${progress.phase}`, progress.phase) : ''}
+                {progress.total > 0 ? ` · ${progress.done}/${progress.total}` : ''}
+              </span>
+            </span>
+          </span>
+        ) : media ? (
+          <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {media.title}
             {media.episodeCode && (
               <span style={{ color: 'var(--text-muted)', marginLeft: '5px', fontSize: '11px' }}>
                 {media.episodeCode}
               </span>
             )}
-          </>
+          </span>
         ) : (
           <span style={{ color: 'var(--text-muted)' }}>
             {t('queue.scanner_running', 'Wanted scan')}

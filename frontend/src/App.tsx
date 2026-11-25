@@ -131,6 +131,33 @@ function GlobalWebSocketListener() {
     onSyncJobUpdate: () => {
       void queryClient.invalidateQueries({ queryKey: ['activity'] })
     },
+    // Live progress ticks written by the runners into activity rows
+    // (whisper/remux/sync/automation/repair/dedup); the History tab's
+    // running rows re-read details.progress on each invalidation.
+    onActivityProgress: () => {
+      void queryClient.invalidateQueries({ queryKey: ['activity'] })
+    },
+    onWhisperProgress: () => {
+      void queryClient.invalidateQueries({ queryKey: ['whisper-queue'] })
+      void queryClient.invalidateQueries({ queryKey: ['activity'] })
+    },
+    // Dedup scan: the scan status endpoint and the cleanup activity row.
+    onScanProgress: () => {
+      void queryClient.invalidateQueries({ queryKey: ['cleanup-scan-status'] })
+      void queryClient.invalidateQueries({ queryKey: ['activity'] })
+    },
+    onScanComplete: () => {
+      void queryClient.invalidateQueries({ queryKey: ['cleanup-scan-status'] })
+      void queryClient.invalidateQueries({ queryKey: ['activity'] })
+    },
+    onScanError: () => {
+      void queryClient.invalidateQueries({ queryKey: ['cleanup-scan-status'] })
+      void queryClient.invalidateQueries({ queryKey: ['activity'] })
+    },
+    // Rows land in the activity log as runs start and finish.
+    onLogEntry: () => {
+      void queryClient.invalidateQueries({ queryKey: ['activity'] })
+    },
     onWantedBatchProgress: refreshQueueStatus,
     onWantedBatchCompleted: refreshQueueStatus,
     onBatchExtractProgress: refreshQueueStatus,

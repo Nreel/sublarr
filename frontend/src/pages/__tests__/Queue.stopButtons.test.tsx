@@ -4,17 +4,21 @@ import { QueuePage } from '../Queue'
 
 const mockBatchStatus = vi.fn()
 const mockProbeStatus = vi.fn()
+const mockExtractStatus = vi.fn()
 const mockScannerStatus = vi.fn()
 const mockStopBatch = vi.fn()
 const mockStopProbe = vi.fn()
+const mockStopExtract = vi.fn()
 const mockCancelTask = vi.fn()
 
 vi.mock('@/hooks/useApi', () => ({
   useWantedBatchStatus: () => ({ data: mockBatchStatus() }),
   useWantedBatchProbeStatus: () => ({ data: mockProbeStatus() }),
+  useWantedBatchExtractStatus: () => ({ data: mockExtractStatus() }),
   useScannerStatus: () => ({ data: mockScannerStatus() }),
   useStopWantedBatch: () => ({ mutate: mockStopBatch, isPending: false }),
   useStopBatchProbe: () => ({ mutate: mockStopProbe, isPending: false }),
+  useStopBatchExtract: () => ({ mutate: mockStopExtract, isPending: false }),
   useCancelTask: () => ({ mutate: mockCancelTask, isPending: false }),
 }))
 vi.mock('@/hooks/useWebSocket', () => ({ useWebSocket: () => undefined }))
@@ -26,6 +30,7 @@ vi.mock('react-i18next', () => ({
 beforeEach(() => {
   mockBatchStatus.mockReturnValue(null)
   mockProbeStatus.mockReturnValue(null)
+  mockExtractStatus.mockReturnValue(null)
   mockScannerStatus.mockReturnValue(null)
 })
 

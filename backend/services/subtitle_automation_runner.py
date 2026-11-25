@@ -594,12 +594,28 @@ class SubtitleAutomationRunner:
         deadline = time.monotonic() + budget_s
         processed = 0
 
-        from db.activity import log_activity, update_activity_status
+        from db.activity import log_activity, update_activity_progress, update_activity_status
         from db.models.activity import EVENT_AUTOMATION
 
         activity_row = log_activity(
             EVENT_AUTOMATION, status="running", details={"max_items": max_items}
         )
+
+        # Snapshot of the backlog so `total` means "what this drain could reach",
+        # not whatever the queue grew to mid-tick. A failed read falls back to
+        # the drain cap.
+        try:
+            total = min(max_items, self._repo.get_counts().get("pending", 0))
+        except Exception:
+            total = max_items
+
+        # Deferred like every other emit site: importing `app` at module level
+        # would pull the Flask app into the scheduler's import graph.
+        try:
+            from app import socketio
+        except Exception:
+            socketio = None
+
         try:
             while processed < max_items:
                 # One queue item is the unit of work: claiming the row starts a
@@ -626,6 +642,18 @@ class SubtitleAutomationRunner:
                 if not self.process_one(task_types=task_types):
                     break
                 processed += 1
+                # `process_one` hands back only a bool, so the claimed row's
+                # path is not reachable here; the counter is what the UI can
+                # honestly show. Helper swallows its own failures.
+                update_activity_progress(
+                    activity_row,
+                    done=processed,
+                    total=total,
+                    current=f"item {processed}",
+                    phase="automation",
+                    event_type=EVENT_AUTOMATION,
+                    socketio=socketio,
+                )
             update_activity_status(activity_row, "success", {"processed": processed})
             return processed
         except Exception as exc:

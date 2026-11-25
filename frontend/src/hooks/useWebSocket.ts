@@ -31,6 +31,11 @@ interface UseWebSocketOptions {
   onSubtitleHealthComplete?: (data: unknown) => void
   onRemuxJobUpdate?: (data: unknown) => void
   onSyncJobUpdate?: (data: unknown) => void
+  onActivityProgress?: (data: unknown) => void
+  onWhisperProgress?: (data: unknown) => void
+  onScanProgress?: (data: unknown) => void
+  onScanComplete?: (data: unknown) => void
+  onScanError?: (data: unknown) => void
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
@@ -84,6 +89,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       ['subtitle_health_complete', 'onSubtitleHealthComplete'],
       ['remux_job_update', 'onRemuxJobUpdate'],
       ['sync_job_update', 'onSyncJobUpdate'],
+      ['activity_progress', 'onActivityProgress'],
+      ['whisper_progress', 'onWhisperProgress'],
+      // Dedup-engine duplicate scan (routes/cleanup/dedup.py)
+      ['scan_progress', 'onScanProgress'],
+      ['scan_complete', 'onScanComplete'],
+      ['scan_error', 'onScanError'],
     ]
 
     // Store named handler references so only this hook's listeners are removed on cleanup

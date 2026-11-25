@@ -17,7 +17,9 @@ const AUTOMATION_JOB_IDS = ['wanted_scanner', 'wanted_search'] as const
  * - 'idle'    — armed and waiting for the next scheduled run
  */
 export function useAutomationState(refetchMs = 10000) {
-  const { data: scannerStatus } = useScannerStatus()
+  // Same idle cadence as the scheduler/batch polls the caller passed; the
+  // scanner-status hook's own default (30s) would drift from the 60s footer.
+  const { data: scannerStatus } = useScannerStatus(refetchMs)
   const { data: scheduler } = useSchedulerJobs(refetchMs)
   const { data: batchSearch } = useWantedBatchStatus(refetchMs)
   const { data: batchProbe } = useWantedBatchProbeStatus()

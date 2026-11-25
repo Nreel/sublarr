@@ -246,6 +246,10 @@ def wanted_batch_search():
                     if cancel_event.is_set():
                         break
                     with wanted_batch_lock:
+                        # The generator drops items that exceeded
+                        # max_attempts, so its filtered total is the only
+                        # denominator that lets the bar reach 100%.
+                        wanted_batch_state["total"] = progress["total"]
                         wanted_batch_state["processed"] = progress["processed"]
                         wanted_batch_state["found"] = progress["found"]
                         wanted_batch_state["failed"] = progress["failed"]

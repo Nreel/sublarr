@@ -116,7 +116,7 @@ def compute_content_hash_from_bytes(content: bytes, language: str | None = None)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def scan_for_duplicates(media_path: str, socketio=None, cancel_event=None) -> dict:
+def scan_for_duplicates(media_path: str, socketio=None, cancel_event=None, progress_callback=None) -> dict:
     """Scan a media path recursively for duplicate subtitles.
 
     Walks the directory tree, hashes all subtitle files, stores hashes
@@ -128,6 +128,9 @@ def scan_for_duplicates(media_path: str, socketio=None, cancel_event=None) -> di
         cancel_event: Optional threading.Event; when set, the hashing loop
             stops after the file in flight (pending files are never hashed)
             and the result carries ``cancelled: True`` with partial groups.
+        progress_callback: Optional callable ``(done, total, file_path)``
+            invoked at the same throttle as the socket emit, and once after
+            the loop with an empty ``file_path`` for the finalizing step.
 
     Returns:
         Dict with total_scanned, duplicates_found, groups.
@@ -197,6 +200,8 @@ def scan_for_duplicates(media_path: str, socketio=None, cancel_event=None) -> di
                         "percent": round(processed / total * 100, 1),
                     },
                 )
+            if progress_callback is not None and processed % 10 == 0:
+                progress_callback(processed, total, futures[future])
 
     # Final progress emit
     if socketio:
@@ -208,6 +213,8 @@ def scan_for_duplicates(media_path: str, socketio=None, cancel_event=None) -> di
                 "percent": 100.0,
             },
         )
+    if progress_callback is not None:
+        progress_callback(total, total, "")
 
     # Store hashes in database
     repo = CleanupRepository()

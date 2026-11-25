@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useWantedBatchStatus, useWantedBatchProbeStatus, useScannerStatus, useStopWantedBatch, useStopBatchProbe, useCancelTask } from '@/hooks/useApi'
+import { useWantedBatchStatus, useWantedBatchProbeStatus, useWantedBatchExtractStatus, useScannerStatus, useStopWantedBatch, useStopBatchProbe, useStopBatchExtract, useCancelTask } from '@/hooks/useApi'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { ProgressBar } from '@/components/shared/ProgressBar'
 import { toast } from '@/components/shared/Toast'
 import { truncatePath } from '@/lib/utils'
-import { Layers, ListVideo, ScanSearch, Search, X } from 'lucide-react'
+import { FileDown, Layers, ListVideo, ScanSearch, Search, X } from 'lucide-react'
 
 interface ProviderSummary {
   active: number
@@ -18,9 +18,11 @@ export function QueuePage() {
   const { t } = useTranslation('activity')
   const { data: wantedBatch } = useWantedBatchStatus()
   const { data: probe } = useWantedBatchProbeStatus()
+  const { data: extract } = useWantedBatchExtractStatus()
   const { data: scanner } = useScannerStatus()
   const stopBatch = useStopWantedBatch()
   const stopProbe = useStopBatchProbe()
+  const stopExtract = useStopBatchExtract()
   const cancelScan = useCancelTask()
 
   // Every stop reports the same pair of toasts; mutation state drives the
@@ -42,7 +44,7 @@ export function QueuePage() {
     onWantedSearchCompleted: handleSearchCompleted,
   })
 
-  const isActive = wantedBatch?.running || probe?.running || scanner?.is_scanning || scanner?.is_searching
+  const isActive = wantedBatch?.running || probe?.running || extract?.running || scanner?.is_scanning || scanner?.is_searching
 
   return (
     <div className="space-y-5">
@@ -59,6 +61,11 @@ export function QueuePage() {
             />
           </div>
           <ProgressBar value={wantedBatch.processed} max={wantedBatch.total} className="mb-3" />
+          {wantedBatch.current_item && (
+            <div className="mb-3 text-xs truncate text-muted font-mono">
+              {t('queue.current')}: {truncatePath(wantedBatch.current_item, 80)}
+            </div>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-sm">
             <div>
               <span className="text-muted">{t('queue.total')}: </span>
@@ -81,11 +88,6 @@ export function QueuePage() {
               <span className="font-mono">{wantedBatch.skipped}</span>
             </div>
           </div>
-          {wantedBatch.current_item && (
-            <div className="mt-3 text-xs truncate text-muted font-mono">
-              {t('queue.current')}: {truncatePath(wantedBatch.current_item, 80)}
-            </div>
-          )}
           {providerSummary && (
             <ProviderStatusLine summary={providerSummary} />
           )}
@@ -104,11 +106,20 @@ export function QueuePage() {
               onStop={() => stopProbe.mutate(undefined, stopOptions)}
             />
           </div>
-          <ProgressBar value={probe.extracted ?? 0} max={probe.total} className="mb-3" />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+          <ProgressBar value={probe.processed ?? 0} max={probe.total} className="mb-3" />
+          {probe.current_item && (
+            <div className="mb-3 text-xs truncate text-muted font-mono">
+              {t('queue.current')}: {truncatePath(probe.current_item, 80)}
+            </div>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 text-sm">
             <div>
               <span className="text-muted">{t('queue.total')}: </span>
               <span className="font-mono">{probe.total}</span>
+            </div>
+            <div>
+              <span className="text-muted">{t('queue.processed')}: </span>
+              <span className="font-mono">{probe.processed}</span>
             </div>
             <div>
               <span className="text-muted">{t('queue.found')}: </span>
@@ -119,15 +130,57 @@ export function QueuePage() {
               <span className="font-mono">{probe.extracted}</span>
             </div>
             <div>
+              <span className="text-muted">{t('queue.skipped')}: </span>
+              <span className="font-mono">{probe.skipped}</span>
+            </div>
+            <div>
               <span className="text-muted">{t('queue.failed')}: </span>
               <span className="font-mono text-error">{probe.failed}</span>
             </div>
           </div>
-          {probe.current_item && (
-            <div className="mt-3 text-xs truncate text-muted font-mono">
-              {t('queue.current')}: {truncatePath(probe.current_item, 80)}
+        </div>
+      )}
+
+      {/* Batch Extract Status */}
+      {extract?.running && (
+        <div className="rounded-lg p-4 bg-surface border border-border border-l-[3px] border-l-accent">
+          <div className="flex items-center gap-2 mb-3">
+            <FileDown size={16} className="animate-pulse text-accent" />
+            <h2 className="text-sm font-semibold">{t('queue.batch_extract_running')}</h2>
+            <StopButton
+              label={t('queue.stop_extract')}
+              pending={stopExtract.isPending}
+              onStop={() => stopExtract.mutate(undefined, stopOptions)}
+            />
+          </div>
+          <ProgressBar value={extract.processed} max={extract.total} className="mb-3" />
+          {extract.current_item && (
+            <div className="mb-3 text-xs truncate text-muted font-mono">
+              {t('queue.current')}: {truncatePath(extract.current_item, 80)}
             </div>
           )}
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 text-sm">
+            <div>
+              <span className="text-muted">{t('queue.total')}: </span>
+              <span className="font-mono">{extract.total}</span>
+            </div>
+            <div>
+              <span className="text-muted">{t('queue.processed')}: </span>
+              <span className="font-mono">{extract.processed}</span>
+            </div>
+            <div>
+              <span className="text-muted">{t('queue.succeeded')}: </span>
+              <span className="font-mono text-success">{extract.succeeded}</span>
+            </div>
+            <div>
+              <span className="text-muted">{t('queue.skipped')}: </span>
+              <span className="font-mono">{extract.skipped}</span>
+            </div>
+            <div>
+              <span className="text-muted">{t('queue.failed')}: </span>
+              <span className="font-mono text-error">{extract.failed}</span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -144,14 +197,19 @@ export function QueuePage() {
             />
             {scanner.progress.phase && (
               <span className="text-xs px-2 py-0.5 rounded bg-page text-muted">
-                {scanner.progress.phase}
+                {t(`queue.phase_${scanner.progress.phase}`, scanner.progress.phase)}
               </span>
             )}
           </div>
+          {scanner.progress.current_item && (
+            <div className="mb-3 text-xs truncate text-muted font-mono">
+              {t('queue.current')}: {truncatePath(scanner.progress.current_item, 80)}
+            </div>
+          )}
           {scanner.progress.total > 0 && (
             <ProgressBar value={scanner.progress.current} max={scanner.progress.total} className="mb-3" />
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
             <div>
               <span className="text-muted">{t('queue.progress')}: </span>
               <span className="font-mono">

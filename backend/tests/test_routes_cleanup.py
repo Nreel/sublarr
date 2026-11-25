@@ -956,7 +956,7 @@ class TestScanWorkerContext:
 
         seen = {}
 
-        def fake_scan(media_path, socketio=None, cancel_event=None):
+        def fake_scan(media_path, socketio=None, cancel_event=None, progress_callback=None):
             seen["had_context"] = has_app_context()
             return {"duplicates_found": 0, "groups": [], "total_scanned": 0}
 
@@ -987,7 +987,7 @@ class TestScanWorkerContext:
             patch("routes.cleanup.dedup.submit_background", submitted.append),
             patch(
                 "dedup_engine.scan_for_duplicates",
-                lambda media_path, socketio=None, cancel_event=None: result,
+                lambda media_path, socketio=None, cancel_event=None, progress_callback=None: result,
             ),
         ):
             client.post("/api/v1/cleanup/scan", json={})

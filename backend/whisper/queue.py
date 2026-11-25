@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from db.activity import log_activity, update_activity_status
+from db.activity import log_activity, update_activity_progress, update_activity_status
 from db.models.activity import EVENT_WHISPER
 from db.whisper import create_whisper_job, update_whisper_job
 from whisper.audio import extract_audio_to_wav, get_audio_track_by_index, select_audio_track
@@ -24,6 +24,11 @@ if TYPE_CHECKING:
     from whisper import WhisperManager
 
 logger = logging.getLogger(__name__)
+
+# Minimum spacing between identical activity-row progress writes (the whisper
+# transcription callback fires per segment; socketio activity_progress emits
+# are throttled separately inside db.activity).
+_ACTIVITY_WRITE_INTERVAL = 1.0
 
 
 @dataclass
@@ -61,6 +66,9 @@ class WhisperQueue:
         self._cancel_flags: dict[str, threading.Event] = {}
         # activity_log row ids (written at submit, terminal status on finish).
         self._activity_rows: dict[str, int | None] = {}
+        # Per-row (monotonic time, (done, phase)) of the last activity
+        # progress write, so per-segment callbacks don't hammer the DB.
+        self._last_activity_write: dict[int, tuple[float, tuple[int, str]]] = {}
 
     def submit(
         self,
@@ -403,7 +411,9 @@ class WhisperQueue:
         finally:
             with self._lock:
                 self._cancel_flags.pop(job_id, None)
-                self._activity_rows.pop(job_id, None)
+                row_id = self._activity_rows.pop(job_id, None)
+                if row_id is not None:
+                    self._last_activity_write.pop(row_id, None)
             # Clean up temp audio file
             if temp_audio_path and os.path.exists(temp_audio_path):
                 try:
@@ -442,6 +452,9 @@ class WhisperQueue:
 
     def _emit_progress(self, socketio, job_id: str, phase: str, progress: float, message: str):
         """Emit WebSocket progress event if socketio is available."""
+        # Mirror the same progress into the job's running activity row
+        # (update_activity_progress never raises; see _update_activity_progress).
+        self._update_activity_progress(job_id, phase, socketio)
         if socketio is None:
             return
         try:
@@ -456,3 +469,41 @@ class WhisperQueue:
             )
         except Exception:
             pass  # Non-critical -- don't let WebSocket errors break the job
+
+    def _update_activity_progress(self, job_id: str, phase: str, socketio) -> None:
+        """Mirror queue progress into the job's running activity row.
+
+        One file per whisper job, so ``total`` is 1 and ``done`` flips 0 -> 1
+        once transcription finishes and the job enters the saving phase. Jobs
+        that already reached a terminal status are left alone (the helper
+        would re-set status to "running"). Identical (done, phase) writes are
+        throttled to one per _ACTIVITY_WRITE_INTERVAL so the per-segment
+        transcription callback doesn't hammer the DB.
+        """
+        with self._lock:
+            job = self._jobs.get(job_id)
+            row_id = self._activity_rows.get(job_id)
+            if row_id is None or job is None:
+                return
+            if job.status in ("completed", "failed", "cancelled"):
+                return
+            done = 1 if phase == "saving" else 0
+            now = time.monotonic()
+            prev = self._last_activity_write.get(row_id)
+            if (
+                prev is not None
+                and prev[1] == (done, phase)
+                and now - prev[0] < _ACTIVITY_WRITE_INTERVAL
+            ):
+                return
+            self._last_activity_write[row_id] = (now, (done, phase))
+            current = os.path.basename(job.file_path)
+        update_activity_progress(
+            row_id,
+            done=done,
+            total=1,
+            current=current,
+            phase=phase,
+            event_type=EVENT_WHISPER,
+            socketio=socketio,
+        )

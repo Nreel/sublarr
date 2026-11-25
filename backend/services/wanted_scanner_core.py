@@ -17,6 +17,7 @@ import logging
 import threading
 import time
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 from config import get_settings
 from db.activity import log_activity
@@ -111,7 +112,14 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
         self._search_timer = None
         self._socketio = None
         self._app = None
-        self._progress = {"current": 0, "total": 0, "phase": "", "added": 0, "updated": 0}
+        self._progress = {
+            "current": 0,
+            "total": 0,
+            "phase": "",
+            "added": 0,
+            "updated": 0,
+            "current_item": None,
+        }
         self._last_scan_at = None
         self._last_search_at = None
         # Start (not completion) stamps of the currently running pass; the
@@ -195,7 +203,14 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
         finally:
             self._pass_done = None
             self._scanning = False
-            self._progress = {"current": 0, "total": 0, "phase": "", "added": 0, "updated": 0}
+            self._progress = {
+                "current": 0,
+                "total": 0,
+                "phase": "",
+                "added": 0,
+                "updated": 0,
+                "current_item": None,
+            }
             self._scan_lock.release()
             logger.debug("Wanted scan lock released")
 
@@ -290,6 +305,7 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             # the wanted queue of every source this pass never reached. The
             # per-row checks (file gone, subtitle already there) do not need
             # the path set; an incremental pass runs the same.
+            self._progress["phase"] = "cleanup"
             removed = self._cleanup(set())
             logger.info(
                 "Wanted scan stopping as asked: +%d added, ~%d updated, -%d removed "
@@ -306,8 +322,10 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             logger.warning("Wanted scan: a source errored — skipping cleanup, nothing pruned")
             removed = 0
         elif resume:
+            self._progress["phase"] = "cleanup"
             removed = self._cleanup(scanned_paths, protect_since=resume["started_at"])
         else:
+            self._progress["phase"] = "cleanup"
             removed = self._cleanup(scanned_paths if not is_incremental else set())
 
         self._last_scan_at = datetime.now(UTC)
@@ -434,6 +452,7 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
 
         self._scanning = True
         self._scan_started_at = datetime.now(UTC).isoformat()
+        self._progress.update({"phase": "scan", "current_item": f"series {series_id}"})
         start = time.time()
 
         try:
@@ -473,6 +492,14 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             return {"error": str(e)}
         finally:
             self._scanning = False
+            self._progress = {
+                "current": 0,
+                "total": 0,
+                "phase": "",
+                "added": 0,
+                "updated": 0,
+                "current_item": None,
+            }
             self._scan_lock.release()
 
     def scan_movie(self, movie_id: int) -> dict:
@@ -482,6 +509,7 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
 
         self._scanning = True
         self._scan_started_at = datetime.now(UTC).isoformat()
+        self._progress.update({"phase": "scan", "current_item": f"movie {movie_id}"})
         start = time.time()
 
         try:
@@ -499,6 +527,7 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             movie = radarr.get_movie_by_id(movie_id)
             if not movie:
                 return {"error": f"movie_{movie_id}_not_found"}
+            self._progress["current_item"] = movie.get("title") or f"movie {movie_id}"
 
             added, updated, _ = scan_radarr_movie(
                 radarr,
@@ -525,6 +554,14 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
             return {"error": str(e)}
         finally:
             self._scanning = False
+            self._progress = {
+                "current": 0,
+                "total": 0,
+                "phase": "",
+                "added": 0,
+                "updated": 0,
+                "current_item": None,
+            }
             self._scan_lock.release()
 
     # Per-source scan helpers (_scan_all_sonarr, _scan_sonarr_instance,
@@ -639,11 +676,28 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
         self._searching = True
         self._search_started_at = datetime.now(UTC).isoformat()
         self._cancel_event.clear()
+        sink = socketio if socketio is not None else self._socketio
+
+        def _emit(event, data=None, **kwargs):
+            # The runner ticks per item on its own SocketIO event; mirror it
+            # into ``_progress`` so GET /wanted/scanner/status shows live
+            # search progress without the runner knowing about the scanner.
+            if event == "wanted_search_progress" and isinstance(data, dict):
+                self._progress.update(
+                    {
+                        "current": data.get("processed", 0),
+                        "total": data.get("total", 0),
+                        "current_item": data.get("current_item"),
+                        "phase": "searching",
+                    }
+                )
+            if sink is not None:
+                sink.emit(event, data, **kwargs)
 
         try:
             summary = run_wanted_search(
                 app=self._app,
-                socketio=socketio,
+                socketio=SimpleNamespace(emit=_emit),
                 cancel_event=self._cancel_event,
                 include_upgrades=include_upgrades,
             )
@@ -655,6 +709,14 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
         finally:
             self._searching = False
             self._cancel_event.clear()
+            self._progress = {
+                "current": 0,
+                "total": 0,
+                "phase": "",
+                "added": 0,
+                "updated": 0,
+                "current_item": None,
+            }
             self._search_lock.release()
 
     def cancel_search(self):

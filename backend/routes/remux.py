@@ -148,11 +148,25 @@ def _run_remux(job_id: str, video_path: str, stream_index: int, subtitle_track_i
     _update_job(job_id, "running")
     _arr_pause(True)
 
-    from db.activity import log_activity, update_activity_status
+    from db.activity import log_activity, update_activity_progress, update_activity_status
     from db.models.activity import EVENT_REMUX
 
     activity_row = log_activity(
         EVENT_REMUX, file_path=video_path, status="running", details={"job_id": job_id}
+    )
+
+    try:
+        from app import socketio
+    except Exception:
+        socketio = None
+    update_activity_progress(
+        activity_row,
+        done=0,
+        total=1,
+        current=os.path.basename(video_path),
+        phase="remuxing",
+        event_type=EVENT_REMUX,
+        socketio=socketio,
     )
 
     def _sink(proc: subprocess.Popen) -> None:

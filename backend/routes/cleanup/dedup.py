@@ -8,6 +8,7 @@ Endpoints:
 """
 
 import logging
+import os
 import threading
 import uuid
 
@@ -80,7 +81,7 @@ def start_scan():
     # ever surfaces in the status endpoint.
     app = current_app._get_current_object()
 
-    from db.activity import log_activity, update_activity_status
+    from db.activity import log_activity, update_activity_progress, update_activity_status
     from db.models.activity import EVENT_CLEANUP
 
     activity_row = log_activity(
@@ -90,10 +91,24 @@ def start_scan():
     def _run_scan():
         from dedup_engine import scan_for_duplicates
 
+        def _progress(done, total, fp):
+            with _scan_lock:
+                _scan_state["progress"] = done
+                _scan_state["total"] = total
+            update_activity_progress(
+                activity_row,
+                done=done,
+                total=total,
+                current=os.path.basename(fp) if fp else "finalizing",
+                phase="scanning",
+                event_type=EVENT_CLEANUP,
+                socketio=socketio,
+            )
+
         try:
             with app.app_context():
                 result = scan_for_duplicates(
-                    media_path, socketio=socketio, cancel_event=cancel_event
+                    media_path, socketio=socketio, cancel_event=cancel_event, progress_callback=_progress
                 )
                 with _scan_lock:
                     _scan_state["result"] = result
@@ -152,6 +167,10 @@ def scan_status():
                     type: boolean
                   scan_id:
                     type: string
+                  progress:
+                    type: integer
+                  total:
+                    type: integer
                   result:
                     type: object
                     nullable: true
@@ -161,6 +180,8 @@ def scan_status():
             {
                 "running": _scan_state["running"],
                 "scan_id": _scan_state["scan_id"],
+                "progress": _scan_state["progress"],
+                "total": _scan_state["total"],
                 "result": _scan_state["result"],
                 "cancelled": bool(_scan_state.get("cancelled")),
             }

@@ -9,11 +9,16 @@ twice for nothing.
 from __future__ import annotations
 
 import logging
+import os
 import threading
+import time
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
+
+#: At most one activity progress write per second; the pass runs for hours.
+_PROGRESS_INTERVAL = 1.0
 
 _lock = threading.Lock()
 # Set by request_stop(); checked between candidate iterations in _execute.
@@ -114,7 +119,13 @@ def start(
     def _run():
         with app.app_context():
             try:
-                _execute(language=language, dry_run=dry_run, limit=limit, local_only=local_only)
+                _execute(
+                    language=language,
+                    dry_run=dry_run,
+                    limit=limit,
+                    local_only=local_only,
+                    activity_row=activity_row,
+                )
             except Exception as exc:  # noqa: BLE001 — a crash must not leave it "running"
                 logger.exception("repair job failed: %s", exc)
                 _state.error = str(exc)
@@ -144,11 +155,29 @@ def start(
 
 
 def _execute(
-    *, language: str | None, dry_run: bool, limit: int | None, local_only: bool = False
+    *,
+    language: str | None,
+    dry_run: bool,
+    limit: int | None,
+    local_only: bool = False,
+    activity_row: int | None = None,
 ) -> None:
     from services.repair import resume
     from services.repair.runner import DEFERRED, iter_repairs
     from services.repair.scanner import scan
+
+    # Live progress for the activity timeline. Both imports are deferred so a
+    # pass driven without an activity row (tests) never touches the app: the
+    # helper no-ops on a None row_id, and socketio emits are best-effort.
+    socketio = None
+    if activity_row is not None:
+        from db.activity import update_activity_progress
+        from db.models.activity import EVENT_REPAIR
+        try:
+            from app import socketio
+        except Exception:  # noqa: BLE001 — no proxy, no emits
+            socketio = None
+    last_progress = 0.0
 
     if not dry_run and not local_only:
         # This sharp run claims any pending auto-resume: it either finishes the
@@ -208,6 +237,21 @@ def _execute(
         _state.done += 1
         _state.recent.insert(0, {"file": candidate.file_path, "status": outcome.status})
         del _state.recent[20:]
+
+        # Hours-long pass: mirror progress into the activity row at most once
+        # a second (the helper throttles its own socketio emits).
+        now = time.monotonic()
+        if activity_row is not None and _state.total and now - last_progress >= _PROGRESS_INTERVAL:
+            last_progress = now
+            update_activity_progress(
+                activity_row,
+                done=_state.done,
+                total=_state.total,
+                current=os.path.basename(_state.last_file),
+                phase="repairing",
+                event_type=EVENT_REPAIR,
+                socketio=socketio,
+            )
 
     logger.info(
         "repair: finished — %d restored, %d partly (%d from backups, %d re-downloaded), "

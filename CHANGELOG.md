@@ -8,6 +8,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Wanted batch-search bar stalled below 100%** — the REST status carried the
+  unfiltered wanted count while the generator dropped items that already hit
+  `max_attempts`; the shared state now adopts the generator's filtered total on
+  every yield, so socket and REST share one denominator.
+- **Batch-probe bar counted the wrong counter** — it tracked `extracted`
+  (items whose target subtitle is absent) while `found`/`skipped`/`failed`
+  advanced `processed`, so the bar stuck low with the run finished. It now
+  tracks `processed`; extracted/found/skipped/failed stay as separate counters.
+- **Batch-probe's first poll showed the previous run** — the route claimed the
+  slot (`running=True`) before the worker reset counters; init now runs
+  synchronously in the route.
+- **Batch extraction was invisible in /activity** — the Queue badge counted it
+  but no card existed; Queue tab now shows its own bar and current item.
+- **Wanted scan/search progress lied** — the scan bar restarted at 0% for every
+  Sonarr/Radarr instance, the standalone sweep never ticked, single series/movie
+  scans showed nothing, the search phase never touched `_progress` (card read
+  "0/0"), and the DB-cleanup tail looked finished at 100%. Progress is now
+  cumulative across instances, ticks per standalone folder, and carries
+  `current_item` plus a phase (`scanning`/`searching`/`cleanup`/`scan`).
+- **History rows froze at "running"** — `/activity` never refetched and only
+  remux/sync events invalidated it; whisper/automation/AniDB/repair/dedup rows
+  sat frozen until pagination. `useActivity` now polls 3s while a running row
+  exists, and the new `activity_progress`/`whisper_progress`/`scan_*` events are
+  registered and invalidate the query.
+- **Long-running activities showed no progress at all** — whisper, remux, sync,
+  subtitle automation, AniDB sync, repair and dedup scan now write
+  `details.progress = {done, total, current, phase}` into their activity rows
+  periodically (helper `db/activity.py update_activity_progress`, socketio emit
+  throttled 2s), and the History tab renders a live bar with the CURRENT item as
+  the primary label instead of a bare badge.
+- **Dedup scan percent stuck 0** — `_scan_state["progress"]`/`["total"]` were
+  initialized and never updated, and `/cleanup/scan/status` omitted them; the
+  engine's existing every-10-files gate now feeds a `progress_callback` into the
+  scan state, status payload and activity row. `scan_progress`/`scan_complete`/
+  `scan_error` were emitted by the backend but never registered client-side.
+- **Footer mislabelled activity** — the batch-probe run was labelled
+  "Extracting"; batch extract and whisper now appear as their own activities,
+  and the footer's scanner poll follows the shared 60s cadence.
 - **The quality pass froze at 0%, then jumped in one step** — in batched
   scoring mode every chunk was scored before the queue ticked a single line,
   so the bar sat at 0% through the whole scoring pass and snapped to ~84%
