@@ -53,7 +53,7 @@ class TranslationManager:
 
         Also registers the backend with ``BackendConcurrency`` (Phase A1),
         reading the per-backend slot limit from ``config_entries`` with key
-        ``translation_concurrency_<name>`` (default 3).
+        ``translation_concurrency_<name>`` (default 2).
         """
         self._backend_classes[cls.name] = cls
 
@@ -64,9 +64,9 @@ class TranslationManager:
             from translation.concurrency import get_concurrency
 
             limit_raw = get_config_entry(f"translation_concurrency_{cls.name}")
-            limit = int(limit_raw) if limit_raw else 3
+            limit = int(limit_raw) if limit_raw else 2
             if limit < 1:
-                limit = 3
+                limit = 2
             get_concurrency().register(cls.name, limit)
             logger.debug("Registered translation backend: %s (concurrency=%d)", cls.name, limit)
         except Exception:

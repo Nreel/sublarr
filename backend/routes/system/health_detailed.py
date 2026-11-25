@@ -19,7 +19,7 @@ def _ollama_in_backend_chain() -> bool:
     try:
         from db.config import get_config_entry
 
-        primary = (get_config_entry("translation_default_backend") or "ollama").strip().lower()
+        primary = (get_config_entry("translation_default_backend") or "openai_compat").strip().lower()
         fallback = (get_config_entry("translation_default_fallback") or "").strip().lower()
         return "ollama" in (primary, fallback)
     except Exception:

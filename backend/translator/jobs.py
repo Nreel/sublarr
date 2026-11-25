@@ -62,7 +62,7 @@ def _record_config_hash_for_result(result, file_path):
             # the job permanently outdated.
             from db.config import get_config_entry
 
-            backend_name = get_config_entry("translation_default_backend") or "ollama"
+            backend_name = get_config_entry("translation_default_backend") or "openai_compat"
         config_hash = settings.get_translation_config_hash(backend_name=backend_name)
         from db.translation import record_translation_config
 

@@ -2385,6 +2385,8 @@
     "field_desc_enabled": "Dieses Backend für LLM-Übersetzungen aktivieren",
     "field_desc_max_tokens": "Maximale Token-Anzahl pro API-Anfrage",
     "field_desc_temperature": "Sampling-Temperatur (0=deterministisch, 1=kreativ) — 0.1-0.3 für Übersetzungen empfohlen",
+    "field_desc_top_p": "Nucleus-Sampling (0.0-1.0) — leer lassen für den Server-Standard",
+    "field_desc_top_k": "Nur aus den K wahrscheinlichsten Tokens samplen — leer lassen für den Server-Standard",
     "field_desc_system_prompt": "Systemanweisung für das LLM — definiert Übersetzungsstil und -kontext",
     "field_desc_timeout": "Timeout in Sekunden für LLM-API-Anfragen",
     "toast_saved": "Backend-Konfiguration gespeichert",

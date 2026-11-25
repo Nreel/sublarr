@@ -189,7 +189,7 @@ class UISettings(BaseModel):
     # "Default translation backend" control reads/writes via /config). The
     # resolver reads them via db.config.get_config_entry — this default is only
     # the fallback when no config_entry row exists.
-    translation_default_backend: str = "ollama"
+    translation_default_backend: str = "openai_compat"
     translation_default_fallback: str = ""
 
     # Subtitle Providers

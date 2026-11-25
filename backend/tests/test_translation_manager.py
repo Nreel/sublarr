@@ -61,7 +61,7 @@ def test_register_backend_registers_with_concurrency(app):
     with app.app_context():
         mgr = TranslationManager()
         mgr.register_backend(FakeBackend)
-        assert get_concurrency().get_limit("my_fake") == 3  # default
+        assert get_concurrency().get_limit("my_fake") == 2  # default
 
 
 def test_config_override_honored(app):

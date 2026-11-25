@@ -180,8 +180,8 @@ class OpenAICompatBackend(LLMBackend):
             "label": "Base URL",
             "type": "text",
             "required": True,
-            "default": "https://api.openai.com/v1",
-            "help": "API base URL (e.g. https://api.openai.com/v1, http://localhost:1234/v1)",
+            "default": "http://your-server-address:port/v1",
+            "help": "LLM API endpoint. Example of setting: http://192.168.1.149:8080 | http://localhost:8080",
         },
         {
             "key": "model",
@@ -198,6 +198,22 @@ class OpenAICompatBackend(LLMBackend):
             "required": False,
             "default": "0.3",
             "help": "Lower = more deterministic (0.0-1.0)",
+        },
+        {
+            "key": "top_p",
+            "label": "Top P",
+            "type": "number",
+            "required": False,
+            "default": "",
+            "help": "Nucleus sampling (0.0-1.0). Empty = server default",
+        },
+        {
+            "key": "top_k",
+            "label": "Top K",
+            "type": "number",
+            "required": False,
+            "default": "",
+            "help": "Sample only from the K most likely tokens. Empty = server default",
         },
         {
             "key": "request_timeout",
@@ -290,6 +306,19 @@ class OpenAICompatBackend(LLMBackend):
         if from_settings is not None:
             return resolve_chat_temperature(from_settings, curated=CURATED_TEMPERATURE)
         return resolve_chat_temperature(None, curated=CURATED_TEMPERATURE)
+
+    def _resolve_top_p(self) -> float | None:
+        """Nucleus-sampling cutoff to send, or ``None`` to use the server default.
+
+        Unlike temperature, top_p is safe to leave out: an absent value means
+        the server's own default, which drifts less than temperature does.
+        """
+        return _as_float(self.config.get("top_p"))
+
+    def _resolve_top_k(self) -> int | None:
+        """Top-K cutoff to send, or ``None`` to use the server default."""
+        top_k = _as_float(self.config.get("top_k"))
+        return int(top_k) if top_k is not None else None
 
     @property
     def _request_timeout(self) -> int:
@@ -407,13 +436,20 @@ class OpenAICompatBackend(LLMBackend):
         OpenAI-compatible servers ignore fields they do not know, so the extra
         key costs nothing there.
         """
-        return {
+        payload = {
             "model": self._model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": self._resolve_temperature(),
             "cache_prompt": True,
         }
+        top_p = self._resolve_top_p()
+        if top_p is not None:
+            payload["top_p"] = top_p
+        top_k = self._resolve_top_k()
+        if top_k is not None:
+            payload["top_k"] = top_k
+        return payload
 
     def _apply_attempt_policy(
         self,
@@ -455,7 +491,9 @@ class OpenAICompatBackend(LLMBackend):
         client = self._get_client()
         body = dict(body)
         extra_body = {
-            key: body.pop(key) for key in ("cache_prompt", "chat_template_kwargs") if key in body
+            key: body.pop(key)
+            for key in ("cache_prompt", "chat_template_kwargs", "top_k")
+            if key in body
         }
         completion = client.chat.completions.create(**body, extra_body=extra_body)
         # The SDK returns a pydantic model; convert to dict for parse step.

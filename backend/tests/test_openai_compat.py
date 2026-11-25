@@ -71,11 +71,13 @@ class TestOpenAICompatAttributes:
     def test_config_fields_returned(self):
         backend = _make_backend()
         fields = backend.get_config_fields()
-        assert len(fields) == 6
+        assert len(fields) == 8
         keys = [f["key"] for f in fields]
         assert "api_key" in keys
         assert "base_url" in keys
         assert "model" in keys
+        assert "top_p" in keys
+        assert "top_k" in keys
 
     def test_api_key_property(self):
         backend = _make_backend(api_key="sk-my-key")
@@ -213,6 +215,24 @@ class TestLLMBackendHooks:
         assert payload["messages"] == msgs
         assert payload["temperature"] == 0.5
         assert payload["max_tokens"] == 1500
+
+    def test_build_request_omits_sampling_when_unset(self):
+        backend = _make_backend(top_p="", top_k="")
+        payload = backend._build_request([{"role": "user", "content": "x"}], max_tokens=100)
+        assert "top_p" not in payload
+        assert "top_k" not in payload
+
+    def test_build_request_includes_coerced_sampling(self):
+        backend = _make_backend(top_p="0.9", top_k="40")
+        payload = backend._build_request([{"role": "user", "content": "x"}], max_tokens=100)
+        assert payload["top_p"] == 0.9
+        assert payload["top_k"] == 40
+
+    def test_build_request_invalid_sampling_omitted(self):
+        backend = _make_backend(top_p="abc", top_k="not-a-number")
+        payload = backend._build_request([{"role": "user", "content": "x"}], max_tokens=100)
+        assert "top_p" not in payload
+        assert "top_k" not in payload
 
     def test_call_api_invokes_sdk(self):
         backend = _make_backend()

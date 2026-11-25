@@ -32,7 +32,7 @@ export function BackendCard({
   const { data: conc } = useTranslationConcurrency()
   const { setConcurrency: setConcMut } = useTranslationMutations()
   const currentLimit =
-    conc?.backends.find((b) => b.backend === backend.name)?.limit ?? 3
+    conc?.backends.find((b) => b.backend === backend.name)?.limit ?? 2
   const [draftLimit, setDraftLimit] = useState(currentLimit)
 
   useEffect(() => {
@@ -73,6 +73,8 @@ export function BackendCard({
     if (k === 'enabled' || k === 'enable' || k === 'active') return t('backend_card.field_desc_enabled')
     if (k === 'max_tokens' || k === 'context_length' || k === 'max_context' || k === 'context_window') return t('backend_card.field_desc_max_tokens')
     if (k === 'temperature' || k === 'temp') return t('backend_card.field_desc_temperature')
+    if (k === 'top_p') return t('backend_card.field_desc_top_p')
+    if (k === 'top_k') return t('backend_card.field_desc_top_k')
     if (k === 'system_prompt' || k === 'prompt' || k === 'prompt_template' || k === 'system_message') return t('backend_card.field_desc_system_prompt')
     if (k === 'timeout' || k === 'request_timeout' || k === 'connect_timeout') return t('backend_card.field_desc_timeout')
     return undefined

@@ -354,7 +354,7 @@ def _resolve_backend_for_context(arr_context, target_language):
     else:
         from db.config import get_config_entry
 
-        primary = get_config_entry("translation_default_backend") or "ollama"
+        primary = get_config_entry("translation_default_backend") or "openai_compat"
         fallback = get_config_entry("translation_default_fallback") or None
         if fallback == primary:
             fallback = None

@@ -12,7 +12,7 @@ export function DefaultBackendSection() {
 
   const list: TranslationBackendInfo[] = backendsData?.backends ?? []
 
-  const primary = (config?.translation_default_backend as string | undefined) ?? 'ollama'
+  const primary = (config?.translation_default_backend as string | undefined) ?? 'openai_compat'
   const fallback = (config?.translation_default_fallback as string | undefined) ?? ''
   const unconfLabel = t('translation_backends.default_backend_unconfigured')
 

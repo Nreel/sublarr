@@ -451,7 +451,7 @@ class TestResolveBackendForContext:
 
     @patch("db.config.get_config_entry")
     @patch("db.profiles.get_default_profile")
-    def test_empty_profile_values_coerce_to_ollama(self, mock_default, mock_cfg):
+    def test_empty_profile_values_coerce_to_default_backend(self, mock_default, mock_cfg):
         """Regression: a profile with empty backend + empty chain must not
         yield an empty fallback chain (which made translate_with_fallback fail
         with 'All backends failed. Last error: None'). The prod default
@@ -464,8 +464,8 @@ class TestResolveBackendForContext:
         }
         mock_cfg.side_effect = lambda k: None
         backend, chain = _resolve_backend_for_context(None, "de")
-        assert backend == "ollama"
-        assert chain == ["ollama"]
+        assert backend == "openai_compat"
+        assert chain == ["openai_compat"]
 
     @patch("db.config.get_config_entry")
     @patch("db.profiles.get_default_profile")
@@ -478,8 +478,8 @@ class TestResolveBackendForContext:
         }
         mock_cfg.side_effect = lambda k: None
         backend, chain = _resolve_backend_for_context(None, "de")
-        assert backend == "ollama"
-        assert chain == ["ollama"]
+        assert backend == "openai_compat"
+        assert chain == ["openai_compat"]
 
     @patch("db.config.get_config_entry")
     @patch("db.profiles.get_default_profile")
@@ -496,15 +496,15 @@ class TestResolveBackendForContext:
 
     @patch("db.config.get_config_entry")
     @patch("db.profiles.get_default_profile")
-    def test_empty_profile_and_empty_global_falls_back_to_ollama(self, mock_default, mock_cfg):
+    def test_empty_profile_and_empty_global_falls_back_to_default_backend(self, mock_default, mock_cfg):
         from translator._helpers import _resolve_backend_for_context
 
         mock_default.return_value = {"translation_backend": "", "fallback_chain": []}
         mock_cfg.side_effect = lambda k: None
 
         backend, chain = _resolve_backend_for_context(None, "de")
-        assert backend == "ollama"
-        assert chain == ["ollama"]
+        assert backend == "openai_compat"
+        assert chain == ["openai_compat"]
 
     @patch("db.config.get_config_entry")
     @patch("db.profiles.get_default_profile")

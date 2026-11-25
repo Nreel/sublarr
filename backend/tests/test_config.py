@@ -149,9 +149,9 @@ def test_translation_default_backend_fields_exposed():
     """The global default-backend keys are UISettings so the /config API
     surfaces + accepts them (the Backends-page control reads/writes them).
     Regression: they were config_entries-only and invisible to /config, so the
-    control always displayed the fallback 'ollama'."""
+    control always displayed the fallback default."""
     settings = get_settings()
-    assert settings.translation_default_backend == "ollama"
+    assert settings.translation_default_backend == "openai_compat"
     assert settings.translation_default_fallback == ""
     # must be part of the serialized settings surface (what /config returns)
     dumped = settings.model_dump()
