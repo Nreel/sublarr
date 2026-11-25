@@ -128,6 +128,8 @@ Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
 
 ## 💻 Development
 
+Workflow (branching, commits, release order): [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ```bash
 # First-time setup (Python + Node dependencies, optional pre-commit hooks)
 npm run setup:sh      # Linux/Mac
@@ -144,6 +146,49 @@ cd frontend && npm test
 cd backend && ruff check . && ruff format --check .
 cd frontend && npm run lint && npx tsc --noEmit
 ```
+
+### Building the image
+
+```bash
+scripts/docker-build.sh        # Linux/Mac  (Windows: scripts/docker-build.ps1)
+```
+
+Wraps `docker build` with `VERSION` baked from `backend/VERSION` and prints a
+version suggestion for your changes. Pass extra args, e.g.
+`scripts/docker-build.sh -t sublarr:dev .`.
+
+### Deploying a test image to a server
+
+Quick iteration on a real server without touching the compose file between builds:
+
+```bash
+cp scripts/deploy.local.env.example scripts/deploy.local.env   # gitignored; see SSH setup inside
+npm run deploy:dry                                             # print every command, run none
+npm run deploy:ps1                                             # Windows
+npm run deploy:sh                                              # Linux/Mac
+```
+
+The script builds the current working tree (uncommitted changes included),
+ships the image over SSH (`scp` / `ssh docker load`) and — with
+`DEPLOY_COMPOSE_DIR` set — recreates the stack (`docker compose up -d
+--force-recreate`). `deploy.local.env` controls:
+
+| Key | Effect |
+|---|---|
+| `DEPLOY_HOST` | SSH target (`user@host` or a `~/.ssh/config` alias); auth via SSH keys, nothing stored here |
+| `DEPLOY_IMAGE` / `DEPLOY_TAG` | Image name and tag |
+| `DEPLOY_OVERWRITE=true` | Constant tag (default `dev`): every deploy replaces it, old image pruned — the server compose keeps pointing at the same tag |
+| `DEPLOY_OVERWRITE=false` | Tag = `sha-<git sha>`; each commit keeps its own image |
+| `DEPLOY_PLATFORM` | Cross-build for a different server arch, e.g. `linux/arm64` (buildx + QEMU); empty builds this machine's arch |
+| `DEPLOY_COMPOSE_DIR` / `DEPLOY_REMOTE_CMD` | Post-load command on the server (compose restart, or anything custom) |
+
+### Images from CI
+
+Pushed commits can also be built by GitHub Actions — workflow **"Build & Push
+Docker Image"** (manual dispatch): multi-arch (amd64+arm64), pushes
+`ghcr.io/nreel/sublarr:<branch>` and `:sha-<git sha>`; an optional `version`
+input adds a version tag and mirrors `-rc` builds to Docker Hub. Releases are
+tagged and published by `release.yml` (`:latest` + version tags).
 
 Every instance serves its own API reference at `/api/docs` (Swagger UI) and `/api/v1/openapi.json`. Further reading: [docs/API.md](docs/API.md) · [docs/CUSTOM_PROVIDER_API.md](docs/CUSTOM_PROVIDER_API.md) · [docs/THIRD-PARTY-LICENSES.md](docs/THIRD-PARTY-LICENSES.md) · [ROADMAP.md](ROADMAP.md).
 
