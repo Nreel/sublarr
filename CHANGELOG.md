@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **The quality pass froze at 0%, then jumped in one step** — in batched
+  scoring mode every chunk was scored before the queue ticked a single line,
+  so the bar sat at 0% through the whole scoring pass and snapped to ~84%
+  when it ended (prod 2026-11-25, 420 lines). Verdicts now land lazily, one
+  chunk at a time in cue order: each chunk's lines are ticked right after its
+  request returns, and verdicts reused from the translation memory are
+  counted before the first call. Retry order and per-line fallback are
+  unchanged.
 - **The quality pass still froze the progress bar at 100%** — commit 684d34d3
   gave `QueueState` a `quality` phase and `eval_done`, but the percent was still
   computed from `done_lines/total_lines` (translation is finished when scoring

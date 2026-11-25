@@ -147,55 +147,71 @@ def _evaluate_and_retry_lines(
         else:
             pending.append(idx)
 
+    # Reused verdicts are finished work: count them before any model call so
+    # the bar never sits at 0% on a file whose verdicts are mostly stored.
+    processed = reused
+    if queue is not None:
+        queue.update_progress(job_id, eval_done=processed)
+    pending_set = set(pending)
+
     scored: dict[int, int] = {}
-    start = 0
-    while start < len(pending):
-        # One LLM round trip per line (per chunk when batched), plus up to two
-        # more per weak line, all sequential — for a 600-line subtitle this
-        # loop *is* the tick. Without a check here the scheduler's stop
-        # request is only seen once the whole file is done: prod 2026-09-17
-        # took 71 minutes to reach its next check point against a 900 s grace.
-        if abort_requested():
-            raise TranslationAbortedError(
-                f"asked to stop after scoring {len(scored)} of {len(pending)} line(s); "
-                "the batches themselves were written to the translation memory before "
-                "this pass, so a re-run starts from them rather than from nothing"
-            )
-        group = pending[start : start + eval_batch]
-        if eval_mode == "batched" and len(group) > 1:
-            batch = manager.evaluate_lines_quality(
-                [(source_lines[i], translated_lines[i]) for i in group],
-                source_lang,
-                target_lang,
-                fallback_chain,
-            )
-            if batch is not None and len(batch) == len(group):
-                scored.update(zip(group, batch))
-                start += len(group)
-                continue
-            logger.info(
-                "Batched quality eval unusable for %d line(s); falling back to per-line",
-                len(group),
-            )
-        for i in group:
+    pending_ptr = 0
+
+    def _score_pending_through(idx: int) -> None:
+        """Score pending lines up to ``idx`` — one chunk per request in batched
+        mode, one request per line otherwise.
+
+        Verdicts land lazily, so ``eval_done`` advances while the scoring
+        loop runs. Scoring the whole file first and ticking only afterwards
+        left the bar at 0% for the entire pass and then jumped it in one step
+        (prod 2026-11-25, batched mode, 420 lines)."""
+        nonlocal pending_ptr
+        while pending_ptr < len(pending) and pending[pending_ptr] <= idx:
+            # One LLM round trip per line (per chunk when batched), plus up to two
+            # more per weak line, all sequential — for a 600-line subtitle this
+            # loop *is* the tick. Without a check here the scheduler's stop
+            # request is only seen once the whole file is done: prod 2026-09-17
+            # took 71 minutes to reach its next check point against a 900 s grace.
             if abort_requested():
                 raise TranslationAbortedError(
-                    f"asked to stop while scoring line {i}; "
+                    f"asked to stop before scoring pending lines from index {pending_ptr}; "
                     "the batches themselves were written to the translation memory before "
                     "this pass, so a re-run starts from them rather than from nothing"
                 )
-            scored[i] = manager.evaluate_line_quality(
-                source_lines[i], translated_lines[i], source_lang, target_lang, fallback_chain
-            )
-        start += len(group)
+            group = pending[pending_ptr : pending_ptr + eval_batch]
+            if eval_mode == "batched" and len(group) > 1:
+                batch = manager.evaluate_lines_quality(
+                    [(source_lines[i], translated_lines[i]) for i in group],
+                    source_lang,
+                    target_lang,
+                    fallback_chain,
+                )
+                if batch is not None and len(batch) == len(group):
+                    scored.update(zip(group, batch))
+                    pending_ptr += len(group)
+                    continue
+                logger.info(
+                    "Batched quality eval unusable for %d line(s); falling back to per-line",
+                    len(group),
+                )
+            for i in group:
+                if abort_requested():
+                    raise TranslationAbortedError(
+                        f"asked to stop while scoring line {i}; "
+                        "the batches themselves were written to the translation memory before "
+                        "this pass, so a re-run starts from them rather than from nothing"
+                    )
+                scored[i] = manager.evaluate_line_quality(
+                    source_lines[i], translated_lines[i], source_lang, target_lang, fallback_chain
+                )
+            pending_ptr += len(group)
 
     # Retry order stays cue order; a fix is always a single-line re-ask plus
     # a single-line re-eval, so batching buys nothing on that path.
-    processed = 0
     for idx in range(len(source_lines)):
         if abort_requested():
             raise TranslationAbortedError(
-                f"asked to stop after scoring {processed} of {len(source_lines)} line(s); "
+                f"asked to stop after handling {processed} of {len(source_lines)} line(s); "
                 "the batches themselves were written to the translation memory before "
                 "this pass, so a re-run starts from them rather than from nothing"
             )
@@ -203,16 +219,18 @@ def _evaluate_and_retry_lines(
         trans = translated_lines[idx]
 
         if idx not in scored:
-            # This exact translation already went through this pass AND
-            # passed it. Asking the model to judge it a second time buys the
-            # same answer. A remembered FAIL must NOT be reused: the retry
-            # below would be skipped, the known-bad line shipped again on
-            # every run, and _remember_score re-persisted it — the memory
-            # poisoning loop this pass used to have.
-            processed += 1
-            if queue is not None:
-                queue.update_progress(job_id, eval_done=processed)
-            continue
+            if idx not in pending_set:
+                # This exact translation already went through this pass AND
+                # passed it. Asking the model to judge it a second time buys
+                # the same answer. A remembered FAIL must NOT be reused: the
+                # retry below would be skipped, the known-bad line shipped
+                # again on every run, and _remember_score re-persisted it —
+                # the memory poisoning loop this pass used to have.
+                # Counted up front, before the first model call.
+                continue
+            # Verdicts for this line's chunk land now; the queue ticks the
+            # lines of each chunk right after its request returns.
+            _score_pending_through(idx)
 
         score = scored[idx]
         best_trans = trans

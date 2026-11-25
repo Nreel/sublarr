@@ -166,6 +166,49 @@ def test_batched_mode_retries_stay_per_line(_isolate_db, use_manager, monkeypatc
     assert scores == [95, 95]
 
 
+def test_batched_mode_ticks_progress_as_chunks_land(_isolate_db, use_manager, monkeypatch):
+    from translation.queue_state import (
+        get_queue_state,
+        reset_current_job_id,
+        reset_for_tests,
+        set_current_job_id,
+    )
+
+    reset_for_tests()
+    queue = get_queue_state()
+    queue.register_job(
+        job_id="j1",
+        file_path="/x/a.mkv",
+        source_lang="en",
+        target_lang="de",
+        backend="openai_compat",
+        total_lines=4,
+    )
+    queue.update_progress("j1", done=4)
+
+    mgr = use_manager(_BatchManager(batch_scores=[70]))
+    eval_done_at_batch_call = []
+    original_batch = mgr.evaluate_lines_quality
+
+    def counted_batch(pairs, source_lang, target_lang, chain):
+        eval_done_at_batch_call.append(queue.active_snapshot()[0]["eval_done"])
+        return original_batch(pairs, source_lang, target_lang, chain)
+
+    monkeypatch.setattr(mgr, "evaluate_lines_quality", counted_batch)
+    _use_mode(monkeypatch, "batched", 2)
+    token = set_current_job_id("j1")
+    try:
+        _evaluate(["a", "b", "c", "d"], ["x", "y", "z", "w"])
+    finally:
+        reset_current_job_id(token)
+
+    assert mgr.batch_calls == 2
+    # The second chunk is asked only after the first chunk's lines were ticked:
+    # progress moves per chunk instead of sitting at 0% until the pass ends.
+    assert eval_done_at_batch_call == [0, 2]
+    assert queue.active_snapshot()[0]["eval_done"] == 4
+
+
 def test_pass_marks_quality_phase_and_progress(_isolate_db, use_manager, monkeypatch):
     from translation.queue_state import (
         get_queue_state,
