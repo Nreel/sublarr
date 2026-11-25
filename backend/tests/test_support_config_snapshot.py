@@ -40,7 +40,10 @@ def _sentinel_settings():
     values = {}
     sentinels = {}
     for name, ann in _string_fields():
-        if name in ("cleanup_signs_removal_level", "translation_quality_mode"):  # validated enum-like strings
+        if name in (
+            "cleanup_signs_removal_level",
+            "translation_quality_mode",
+        ):  # validated enum-like strings
             continue
         token = f"SNT{abs(hash(name)) % 10**8:08d}{name.replace('_', '')[:12]}"
         sentinels[name] = token

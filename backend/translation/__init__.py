@@ -44,9 +44,7 @@ def _endpoint_answered(exc: Exception) -> bool:
     batch is recoverable, so the exception path must name the backend that
     answered. Connection errors carry no status and stay "none".
     """
-    return any(
-        isinstance(getattr(exc, attr, None), int) for attr in ("status_code", "status")
-    )
+    return any(isinstance(getattr(exc, attr, None), int) for attr in ("status_code", "status"))
 
 
 class TranslationManager:
@@ -540,9 +538,7 @@ class TranslationManager:
         logger.debug("No LLM backend available for batched quality eval")
         return None
 
-    def _call_backend_raw(
-        self, backend, prompt: str, max_tokens: int = 64
-    ) -> "str | None":
+    def _call_backend_raw(self, backend, prompt: str, max_tokens: int = 64) -> "str | None":
         """Call a backend with a raw prompt and return the raw text response.
 
         Supports Ollama (_call_ollama) and OpenAI-compatible (_call_openai) backends.

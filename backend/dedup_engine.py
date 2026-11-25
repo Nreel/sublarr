@@ -116,7 +116,9 @@ def compute_content_hash_from_bytes(content: bytes, language: str | None = None)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def scan_for_duplicates(media_path: str, socketio=None, cancel_event=None, progress_callback=None) -> dict:
+def scan_for_duplicates(
+    media_path: str, socketio=None, cancel_event=None, progress_callback=None
+) -> dict:
     """Scan a media path recursively for duplicate subtitles.
 
     Walks the directory tree, hashes all subtitle files, stores hashes

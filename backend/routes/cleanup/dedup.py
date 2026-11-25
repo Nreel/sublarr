@@ -108,7 +108,10 @@ def start_scan():
         try:
             with app.app_context():
                 result = scan_for_duplicates(
-                    media_path, socketio=socketio, cancel_event=cancel_event, progress_callback=_progress
+                    media_path,
+                    socketio=socketio,
+                    cancel_event=cancel_event,
+                    progress_callback=_progress,
                 )
                 with _scan_lock:
                     _scan_state["result"] = result

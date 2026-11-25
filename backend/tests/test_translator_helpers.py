@@ -496,7 +496,9 @@ class TestResolveBackendForContext:
 
     @patch("db.config.get_config_entry")
     @patch("db.profiles.get_default_profile")
-    def test_empty_profile_and_empty_global_falls_back_to_default_backend(self, mock_default, mock_cfg):
+    def test_empty_profile_and_empty_global_falls_back_to_default_backend(
+        self, mock_default, mock_cfg
+    ):
         from translator._helpers import _resolve_backend_for_context
 
         mock_default.return_value = {"translation_backend": "", "fallback_chain": []}

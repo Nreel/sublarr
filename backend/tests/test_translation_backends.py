@@ -390,7 +390,9 @@ def test_translate_with_fallback_http_status_failure_names_backend(manager):
             lookahead=None,
             job_id=None,
         ):
-            exc = RuntimeError("POST http://192.168.1.149:8080/v1/chat/completions: 502 bad gateway")
+            exc = RuntimeError(
+                "POST http://192.168.1.149:8080/v1/chat/completions: 502 bad gateway"
+            )
             exc.status_code = 502
             raise exc
 

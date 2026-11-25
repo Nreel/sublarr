@@ -173,6 +173,7 @@ def _execute(
     if activity_row is not None:
         from db.activity import update_activity_progress
         from db.models.activity import EVENT_REPAIR
+
         try:
             from app import socketio
         except Exception:  # noqa: BLE001 — no proxy, no emits
