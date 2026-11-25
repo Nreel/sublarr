@@ -182,7 +182,13 @@ class QueueState:
             return [self._serialize_recent(r) for r in self._recent]
 
     def _serialize_active(self, state: _JobState) -> dict:
-        pct = (state.done_lines / state.total_lines * 100.0) if state.total_lines else 0.0
+        # During the quality pass the visible work is scoring, not translation:
+        # done_lines already sits at total_lines, so percent must track eval_done
+        # or the bar would freeze at 100% while the scoring loop still runs.
+        if state.phase == "quality":
+            pct = (state.eval_done / state.total_lines * 100.0) if state.total_lines else 0.0
+        else:
+            pct = (state.done_lines / state.total_lines * 100.0) if state.total_lines else 0.0
         elapsed = time.monotonic() - state.started_mono
         eta = None
         if state.phase == "quality":

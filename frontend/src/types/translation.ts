@@ -161,6 +161,7 @@ export type TranslationActiveJob = {
   cost_so_far_micro_usd: number
   cancel_requested: boolean
   phase?: string
+  eval_done?: number
 }
 
 export type TranslationRecentJob = {

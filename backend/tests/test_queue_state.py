@@ -200,5 +200,7 @@ def test_quality_phase_progress_and_eta():
     snap = q.active_snapshot()[0]
     assert snap["phase"] == "quality"
     assert snap["eval_done"] == 10
-    assert snap["progress"]["pct"] == 100.0
+    # Percent must track scoring, not the finished translation, so the bar
+    # never freezes at 100% while the quality pass runs.
+    assert snap["progress"]["pct"] == 1.0
     assert snap["eta_seconds"] is not None and snap["eta_seconds"] > 0

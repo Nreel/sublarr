@@ -125,6 +125,16 @@ def list_jobs():
                               type: string
                             cost_so_far_micro_usd:
                               type: integer
+                            phase:
+                              type: string
+                              description: >-
+                                "translating" while batches are translated,
+                                "quality" during the post-translation scoring
+                                pass; pct then tracks eval_done, not done.
+                            eval_done:
+                              type: integer
+                              description: >-
+                                Lines scored so far during the quality phase.
                   total:
                     type: integer
                   page:
@@ -173,6 +183,7 @@ def _attach_line_progress(jobs: list) -> None:
             "backend": snap["backend"],
             "cost_so_far_micro_usd": snap["cost_so_far_micro_usd"],
             "phase": snap["phase"],
+            "eval_done": snap["eval_done"],
         }
 
 

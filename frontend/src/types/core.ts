@@ -8,6 +8,7 @@ export interface JobLineProgress {
   backend: string
   cost_so_far_micro_usd: number
   phase?: string
+  eval_done?: number
 }
 
 export interface Job {

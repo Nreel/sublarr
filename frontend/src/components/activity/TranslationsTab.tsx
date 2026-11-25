@@ -59,20 +59,30 @@ const TranslationJobRow = memo(function TranslationJobRow({
       </div>
       {progress && (
         <>
-          <ProgressBar value={progress.done} max={progress.total} />
-          <div
-            className="flex flex-wrap items-center gap-x-3 text-xs"
-            style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
-          >
-            <span>{t('translations.lines', { done: progress.done, total: progress.total })}</span>
-            {progress.phase === 'quality' && (
-              <span>{t('translations.phase_quality')}</span>
-            )}
-            {progress.eta_seconds != null && (
-              <span>{t('translations.eta', { seconds: progress.eta_seconds })}</span>
-            )}
-            <span>{progress.backend}</span>
-          </div>
+          {/* During the quality pass the visible work is scoring: the bar and
+              counter follow eval_done so nothing freezes at 100%. */}
+          {(() => {
+            const quality = progress.phase === 'quality'
+            const shown = quality ? (progress.eval_done ?? 0) : progress.done
+            return (
+              <>
+                <ProgressBar value={shown} max={progress.total} />
+                <div
+                  className="flex flex-wrap items-center gap-x-3 text-xs"
+                  style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+                >
+                  <span>{t('translations.lines', { done: shown, total: progress.total })}</span>
+                  {quality && (
+                    <span>{t('translations.phase_quality')}</span>
+                  )}
+                  {progress.eta_seconds != null && (
+                    <span>{t('translations.eta', { seconds: progress.eta_seconds })}</span>
+                  )}
+                  <span>{progress.backend}</span>
+                </div>
+              </>
+            )
+          })()}
         </>
       )}
     </div>

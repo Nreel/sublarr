@@ -58,7 +58,8 @@ export function ActiveJobCard({
             </div>
             <div className="mt-1 flex justify-between text-xs text-muted">
               <span>
-                {job.progress.done}/{job.progress.total} (
+                {job.phase === 'quality' ? job.eval_done ?? 0 : job.progress.done}/
+                {job.progress.total} (
                 {job.progress.pct.toFixed(1)}%)
               </span>
               <span>

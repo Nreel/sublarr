@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **The quality pass still froze the progress bar at 100%** — commit 684d34d3
+  gave `QueueState` a `quality` phase and `eval_done`, but the percent was still
+  computed from `done_lines/total_lines` (translation is finished when scoring
+  starts, so it read 100%), `/jobs` omitted `eval_done`, and the frontend never
+  read it. During the post-translation scoring pass the UI showed Running 100%
+  with nothing moving (prod 2026-11-25, 420/420 lines). `QueueState` now
+  computes `pct` from `eval_done` during the quality phase, `/jobs` carries
+  `eval_done`/`phase`, and TranslationsTab/ActiveJobCard render the bar and
+  counter from `eval_done` while scoring.
 - **`\N` in a subtitle line killed the whole episode on a JSON-enforcing
   endpoint** — the prompt tells the model to preserve the ASS hard break, and
   `escape_for_prompt` left `\N` verbatim in the batch body. The strict retry
