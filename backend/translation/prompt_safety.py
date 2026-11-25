@@ -113,6 +113,18 @@ def escape_for_prompt(text: str | None, max_chars: int = MAX_LINE_CHARS) -> str:
     if not text:
         return ""
     escaped = text.replace("\r\n", "\\r\\n").replace("\r", "\\r").replace("\n", "\\n")
+    # The ASS hard break ``\N`` reaches prompts verbatim (ass_utils's tag regex
+    # matches only ``{\...}`` blocks, so it never strips it). A server that is
+    # asked for ``response_format={"type": "json_object"}`` validates the reply
+    # with stdlib json, and ``\N`` is not a legal JSON escape — gemma echoing
+    # it back produced a 502 ("Invalid \escape") on prod batch 24 of
+    # Re:Zero S01E12 on 2026-11-25 and aborted the whole file. ``\n`` IS a
+    # legal escape, and every consumer of the answer already re-spells it:
+    # ``ass_lexer.align_break_spelling`` maps ``\n`` and real newlines back to
+    # ``\N`` when the source used ``\N``, and llm_utils's repair treats both
+    # spellings as the same marker. Spelling breaks as ``\n`` here therefore
+    # costs nothing downstream, and the source text itself is untouched.
+    escaped = escaped.replace("\\N", "\\n")
     # Strip C0 control bytes that LLM tokenisers/parsers may treat as
     # delimiters or string terminators: NUL, vertical tab, form feed.
     for ctrl in ("\x00", "\x0b", "\x0c"):

@@ -1055,7 +1055,12 @@ class Settings:
             f"Never merge two input lines into one output line: an input line that is only\n"
             f"part of a sentence stays its own line, because the lines are timed subtitle\n"
             f"events, not prose.\n"
-            f"Preserve \\N exactly as \\N (hard line break).\n"
+            # ``\N`` never reaches the model any more — escape_for_prompt
+            # re-spells it as ``\n`` (see prompt_safety.py) because a server
+            # enforcing json_object cannot represent ``\N`` as a valid JSON
+            # escape. The instruction names the spelling the model actually
+            # sees; ``align_break_spelling`` restores ``\N`` on the way out.
+            f"Preserve \\n exactly as \\n (line break).\n"
             f"Return ONLY the numbered translations — no commentary.\n\n"
         )
 

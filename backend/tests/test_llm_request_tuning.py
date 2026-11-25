@@ -321,6 +321,47 @@ class TestRequestBodyFlags:
         for call in mock_client.chat.completions.create.call_args_list:
             assert "response_format" not in call.kwargs
 
+    def test_502_json_validation_failure_is_read_as_a_refusal(self, app):
+        """A proxy that validates the reply answers 502 when the model's JSON is
+        malformed (prod 2026-11-25: gemma echoed ``\\N``, the server raised
+        ``Invalid \\escape`` and the SDK replayed the same doomed request 3x).
+        That is a refusal to serve json_object, so the batch is re-asked without
+        it and the endpoint stops being asked for the rest of the file.
+        """
+        backend = _openai_backend()
+        mock_client = MagicMock()
+        refused = _RefusalError(
+            "Error code: 502 - model did not return valid JSON: "
+            "Invalid \\escape: line 3 column 40 (char 65)",
+            502,
+        )
+        mock_client.chat.completions.create.side_effect = [
+            _completion("Hallo"),
+            refused,
+            _completion("1: Hallo\n2: Welt\n3: Dritt"),
+        ]
+        backend._client = mock_client
+        with app.app_context():
+            backend.translate_batch(["Hello", "World", "Third"], "en", "de")
+        calls = [c.kwargs for c in mock_client.chat.completions.create.call_args_list]
+        assert len(calls) == 3
+        assert calls[1]["response_format"] == {"type": "json_object"}
+        assert "response_format" not in calls[2]
+        assert backend._response_format_rejected is True
+
+    def test_502_without_parse_wording_is_not_read_as_a_refusal(self, app):
+        """An overload 502 says nothing about JSON; the field stays requested."""
+        backend = _openai_backend()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = [
+            _completion("Hallo"),
+            _RefusalError("502: gateway overloaded", 502),
+        ]
+        backend._client = mock_client
+        with app.app_context(), pytest.raises(RuntimeError, match="502: gateway overloaded"):
+            backend.translate_batch(["Hello", "World", "Third"], "en", "de")
+        assert backend._response_format_rejected is False
+
     def test_non_4xx_is_not_read_as_a_response_format_refusal(self, app):
         backend = _openai_backend()
         mock_client = MagicMock()

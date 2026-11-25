@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 from decimal import Decimal
 
@@ -44,6 +45,27 @@ CURATED_TEMPERATURE = 0.3
 _JSON_LIST_KEYS = ("translations", "lines", "results", "output")
 
 
+# Backslashes that are not a legal JSON escape. ``\N`` (the ASS hard break) is
+# the one that matters: a server that does not validate the reply itself hands
+# the malformed text to us, where ``json.loads`` used to raise and the batch
+# silently degraded to newline-splitting. ``\u`` is left alone — repairing a
+# malformed ``\uXX`` would be guessing at the codepoint.
+_BAD_JSON_ESCAPE_RE = re.compile(r"\\(?![nrtbf\"/u])")
+
+
+def _strip_code_fence(text: str) -> str:
+    """Drop a ``` / ```json fence a model wrapped around a JSON reply."""
+    if not text.startswith("```"):
+        return text
+    first_newline = text.find("\n")
+    if first_newline == -1:
+        return text
+    body = text[first_newline + 1 :]
+    if body.rstrip().endswith("```"):
+        body = body.rstrip()[:-3].rstrip()
+    return body
+
+
 def _json_translations(text: str) -> list[str] | None:
     """Unwrap a JSON-shaped reply into one string per entry, or ``None``.
 
@@ -52,15 +74,25 @@ def _json_translations(text: str) -> list[str] | None:
     (or minified), and splitting that text on newlines counts structural
     lines — ``{``, ``"translations": [` … — as content, turning 25 expected
     lines into 27. A bare JSON array is accepted too. Only arrays whose
-    entries are all strings are unwrapped; anything else (including text
-    that merely starts with ``[`` or ``{``) falls back to plain splitting.
+    entries are all strings are unwrapped; anything else (including text that
+    merely starts with ``[`` or ``{``) falls back to plain splitting.
+
+    Two repairs run only after the first ``json.loads`` fails, so well-formed
+    replies are never rewritten: a code fence is peeled off, and backslashes
+    that are not a legal JSON escape are doubled — the shape a model writes
+    when it echoes subtitle text containing a line-break marker it was told to
+    preserve.
     """
+    text = _strip_code_fence(text)
     if not text or text[0] not in "[{":
         return None
     try:
         data = json.loads(text)
     except ValueError:
-        return None
+        try:
+            data = json.loads(_BAD_JSON_ESCAPE_RE.sub(r"\\\\", text))
+        except ValueError:
+            return None
     if isinstance(data, list):
         items = data
     elif isinstance(data, dict):
@@ -98,18 +130,46 @@ def _http_status(exc: Exception) -> int | None:
     return None
 
 
-def _response_format_rejection(exc: Exception) -> bool:
-    """Whether a 4xx was the server refusing ``response_format``.
+# Phrases a proxy emits when it validated the reply itself and the model's
+# JSON was malformed — Python's ``json`` module wording, forwarded as a 5xx
+# body. The endpoint's own 502 ("model did not return valid JSON: Invalid
+# \escape: line 3 column 40 (char 65)") for Re:Zero S01E12 batch 24 on
+# 2026-11-25 is exactly this: constrained decoding asked for JSON, the model
+# echoed a marker that is not a valid escape, and every one of the SDK's
+# replays produced the same deterministic failure.
+_JSON_PARSE_FAILURES = (
+    "did not return valid json",
+    "invalid \\escape",
+    "invalid control character",
+    "unterminated string",
+    "extra data",
+    "expecting",
+)
 
-    llama.cpp's server and plain vLLM reject the field outright; OpenAI and
-    Azure accept it. A rejection is per-endpoint, not per-batch, so it is
-    remembered for the rest of the file rather than retried line after line.
+
+def _response_format_rejection(exc: Exception) -> bool:
+    """Whether the endpoint refused to serve ``response_format``.
+
+    llama.cpp's server and plain vLLM reject the field outright (4xx naming
+    it); a validating proxy answers 5xx with the parse error instead, which is
+    the same refusal in different words. A rejection is per-endpoint, not
+    per-batch, so it is remembered for the rest of the file rather than retried
+    line after line.
+
+    A 5xx that merely names the field (``500: response_format backend
+    crashed``) is a server crash, not a refusal — dropping ``response_format``
+    there would hide a broken endpoint and quietly change the reply shape for
+    the rest of the file. Only parse-failure wording reads as a refusal on 5xx.
     """
     status = _http_status(exc)
-    if status is not None and not 400 <= status < 500:
-        return False
     text = str(exc).lower()
-    return "response_format" in text or "json_object" in text
+    names_field = "response_format" in text or "json_object" in text
+    parses = any(marker in text for marker in _JSON_PARSE_FAILURES)
+    if status is None:
+        return names_field
+    if not 400 <= status < 500:
+        return parses
+    return names_field or parses
 
 
 def _endpoint_error(endpoint: str, exc: Exception) -> RuntimeError:

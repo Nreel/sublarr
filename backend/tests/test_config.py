@@ -98,7 +98,13 @@ def test_prompt_template():
     assert "English" in prompt or "en" in prompt.lower()
     assert "German" in prompt or "de" in prompt.lower()
     assert "Translate" in prompt
-    assert "\\N" in prompt
+    # The break the model is told to keep must be representable in a JSON
+    # reply: ``\N`` is not a legal JSON escape, so a server enforcing
+    # json_object 502s when the model echoes it (prod 2026-11-25). The prompt
+    # spells the break as ``\n``; ass_lexer.align_break_spelling restores
+    # ``\N`` on the way out.
+    assert "\\N" not in prompt
+    assert "\\n" in prompt
 
 
 def test_safe_config():

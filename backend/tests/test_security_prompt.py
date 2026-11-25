@@ -89,6 +89,27 @@ class TestPromptInjectionGuard:
         numbered_lines = [l for l in prompt.split("\n") if l.strip() and l.strip()[0].isdigit()]
         assert len(numbered_lines) == len(lines)
 
+    def test_hard_break_is_spelled_for_json_replies(self):
+        """``\\N`` is not a legal JSON escape, so it must never reach the model.
+
+        Prod 2026-11-25: the strict retry asks for ``response_format=json_object``
+        and the endpoint validated the reply with stdlib json; gemma echoed the
+        ASS hard break it had been told to preserve, the server answered
+        ``Invalid \\escape``, and the whole file aborted. ``\\n`` is a legal
+        escape and ``ass_lexer.align_break_spelling`` re-spells it to ``\\N`` on
+        the way out, so the marker survives the round trip.
+        """
+        from translation.llm_utils import _escape_subtitle_line, build_translation_prompt
+
+        source = "As their superior \\Nto keep the masses waiting."
+        escaped = _escape_subtitle_line(source)
+        assert "\\N" not in escaped
+        assert "\\n" in escaped
+
+        prompt = build_translation_prompt([source], source_lang="en", target_lang="de")
+        assert "\\N" not in prompt, "prompt must not ask for a marker json cannot carry"
+        assert "\\n" in prompt
+
     def test_null_byte_stripped(self):
         """Null bytes are silently stripped (P3 hardening)."""
         from translation.llm_utils import _escape_subtitle_line

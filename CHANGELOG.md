@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`\N` in a subtitle line killed the whole episode on a JSON-enforcing
+  endpoint** — the prompt tells the model to preserve the ASS hard break, and
+  `escape_for_prompt` left `\N` verbatim in the batch body. The strict retry
+  sends `response_format={"type": "json_object"}`, and a proxy that validates
+  the reply with stdlib `json` rejects `\N` (not a legal JSON escape): prod
+  answered `502 - model did not return valid JSON: Invalid \escape: line 3
+  column 40 (char 65)` for `Re:Zero S01E12` batch 24 on 2026-11-25, the SDK
+  replayed the doomed request three times, and the file aborted. Batch bodies
+  now spell the break as `\n` — a legal escape — and
+  `ass_lexer.align_break_spelling` re-spells it back to `\N` (real newlines
+  included) when the source used `\N`, so the layout survives the round trip.
+- **A 502 that says the reply was not valid JSON was never read as a refusal
+  to serve `response_format`** — `_response_format_rejection` matched only 4xx
+  naming the field, so every strict retry of the rest of the file re-asked for
+  `json_object` and failed identically. 5xx whose body carries json-parse
+  wording (`did not return valid JSON`, `Invalid \escape`, `Extra data`,
+  `Unterminated string`, `Invalid control character`) now counts as a refusal:
+  the batch is re-asked without the field once and the endpoint stops being
+  asked for the whole file. A 5xx that merely names the field (`500:
+  response_format backend crashed`) is a server crash, not a refusal, and stays
+  as it was.
+- **A live endpoint answering 5xx aborted the file instead of recovering** —
+  HTTP failures raised from `_endpoint_error` left `backend_name="none"`, which
+  `manager._no_backend_ran` reads as a dead chain: no warmer retry, no split.
+  Failures carrying a status code now name the backend that answered; a refused
+  connection (no status) still reads as dead, as designed.
+- **Malformed JSON replies degraded to newline-splitting** — a server that
+  does not validate the reply hands the malformed text to Sublarr, where
+  `json.loads` raised and a reply echoing a line-break marker came back
+  mis-mapped. `_json_translations` now peels a ``` ```json ``` fence off first
+  and doubles backslashes that are not a legal JSON escape (only after the
+  first parse fails, so well-formed replies are never rewritten; malformed
+  `\uXXXX` is left alone rather than guessed).
 - **A line-count failure aborted the whole episode instead of splitting the
   batch** — when a backend answered a batch with the wrong number of lines,
   `translate_with_fallback` stamped the failure result with

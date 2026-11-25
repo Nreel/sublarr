@@ -34,6 +34,21 @@ def _accepts_kwarg(fn, name: str) -> bool:
     return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
 
 
+def _endpoint_answered(exc: Exception) -> bool:
+    """Whether the request reached an endpoint that answered with a status.
+
+    ``manager._no_backend_ran`` reads ``backend_name="none"`` as "the chain is
+    dead" and aborts the whole file rather than warming or splitting a batch —
+    correct for a refused connection, wrong for a server that answered 5xx. A
+    502 from a live endpoint (overload, a proxy hiccup) is transient and the
+    batch is recoverable, so the exception path must name the backend that
+    answered. Connection errors carry no status and stay "none".
+    """
+    return any(
+        isinstance(getattr(exc, attr, None), int) for attr in ("status_code", "status")
+    )
+
+
 class TranslationManager:
     """Manages translation backends and orchestrates fallback chains.
 
@@ -271,6 +286,11 @@ class TranslationManager:
                 last_error = str(e)
                 cb.record_failure()
                 self._record_failure(backend_name, str(e))
+                if _endpoint_answered(e):
+                    # The endpoint answered — it is alive, this batch's request
+                    # was not served. Name it so the batching layer can warm or
+                    # split instead of aborting the file ("none" = dead chain).
+                    answered_backend = backend_name
                 logger.warning("Backend %s failed: %s", backend_name, e)
 
         if attempted == 0:

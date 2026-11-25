@@ -425,6 +425,23 @@ class TestTranslateBatchViaLLMBackend:
         assert result.success is True
         assert result.translated_lines == ["[Music]", "[Fan]"]
 
+    def test_json_translations_repairs_malformed_escapes_and_fences(self):
+        """A server that does not validate the reply hands malformed JSON to us.
+
+        Regression (prod 2026-11-25): the reply echoed a line break as ``\\N``,
+        ``json.loads`` raised, and the batch degraded to plain newline
+        splitting — entries containing a break came back mis-mapped. ``\\u`` is
+        left alone: repairing a malformed ``\\uXX`` is guessing a codepoint.
+        """
+        from translation.openai_compat import _json_translations
+
+        raw = '["As their superior \\Nto keep the masses waiting"]'
+        assert _json_translations(raw) == ["As their superior \\Nto keep the masses waiting"]
+        assert _json_translations('["bad \\uZZ escape"]') is None
+        assert _json_translations('```json\n["Hola", "Mundo"]\n```') == ["Hola", "Mundo"]
+        # Well-formed replies are not rewritten.
+        assert _json_translations('["C:\\path"]') == ["C:\\path"]
+
 
 class TestHealthCheck:
     """Tests for health_check method."""

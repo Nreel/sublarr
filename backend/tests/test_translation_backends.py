@@ -363,6 +363,68 @@ def test_translate_with_fallback_content_failure_names_answered_backend(manager)
     assert _no_backend_ran(result) is False
 
 
+def test_translate_with_fallback_http_status_failure_names_backend(manager):
+    """A 5xx from a live endpoint is not a dead chain.
+
+    Prod 2026-11-25 raised ``RuntimeError("POST …: Error code: 502 …")`` from
+    ``openai_compat._endpoint_error``: the SDK's error carried ``status_code``
+    but the exception branch left ``backend_name`` unset, so ``"none"`` read as
+    "no backend ran" and the file aborted with no warm retry or split. A
+    refused connection carries no status and still reads as dead.
+    """
+    from translator.manager import _no_backend_ran
+
+    class MockBackendHttpFail(MockBackend):
+        name = "mock_http"
+        display_name = "Mock HTTP Fail"
+
+        def translate_batch(
+            self,
+            lines,
+            source_lang,
+            target_lang,
+            glossary_entries=None,
+            series_context=None,
+            *,
+            lookback=None,
+            lookahead=None,
+            job_id=None,
+        ):
+            exc = RuntimeError("POST http://192.168.1.149:8080/v1/chat/completions: 502 bad gateway")
+            exc.status_code = 502
+            raise exc
+
+    manager.register_backend(MockBackendHttpFail)
+    result = manager.translate_with_fallback(["Hi"], "en", "de", fallback_chain=["mock_http"])
+    assert result.success is False
+    assert result.backend_name == "mock_http"
+    assert _no_backend_ran(result) is False
+
+    class MockBackendConnectionFail(MockBackend):
+        name = "mock_conn"
+        display_name = "Mock Connection Fail"
+
+        def translate_batch(
+            self,
+            lines,
+            source_lang,
+            target_lang,
+            glossary_entries=None,
+            series_context=None,
+            *,
+            lookback=None,
+            lookahead=None,
+            job_id=None,
+        ):
+            raise ConnectionError("localhost:11434 refused connection")
+
+    manager.register_backend(MockBackendConnectionFail)
+    result = manager.translate_with_fallback(["Hi"], "en", "de", fallback_chain=["mock_conn"])
+    assert result.success is False
+    assert result.backend_name == "none"
+    assert _no_backend_ran(result) is True
+
+
 def test_translate_with_fallback_empty_chain_reports_no_backend(manager):
     """An empty chain must NOT report 'Last error: None' — it never ran a
     backend. Regression for the misleading error the empty default profile
