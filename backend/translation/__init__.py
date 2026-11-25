@@ -166,6 +166,9 @@ class TranslationManager:
         """
         last_error = None
         attempted = 0
+        # Backend that answered with unusable content (vs. a dead chain);
+        # see the content-error branch below.
+        answered_backend = ""
 
         # The executing job (registered by services.translation_jobs.run_job),
         # if any. Backends use it for their pre-spend cancel check.
@@ -254,7 +257,14 @@ class TranslationManager:
                 # reach the default threshold and would otherwise stall every
                 # unrelated translation behind an OPEN breaker. Still recorded
                 # in the stats so the failure stays visible.
+                #
+                # Stamp the backend that answered so the caller can tell this
+                # apart from a dead chain ("none"): a line-count mismatch is
+                # recoverable by halving the batch, and manager._no_backend_ran
+                # reads "none" as "no backend ran" and aborts the whole file
+                # instead of splitting.
                 last_error = str(e)
+                answered_backend = backend_name
                 self._record_failure(backend_name, str(e))
                 logger.warning("Backend %s rejected the batch content: %s", backend_name, e)
             except Exception as e:
@@ -276,7 +286,12 @@ class TranslationManager:
 
         return TranslationResult(
             translated_lines=[],
-            backend_name="none",
+            # "none" means "no backend ran" — only true when the chain was
+            # empty/unregistered/circuit-open. When a backend answered with
+            # unusable content, name it: the batching layer splits content
+            # failures (manager._no_backend_ran) and must not treat them as
+            # a dead chain.
+            backend_name=answered_backend or "none",
             error=error,
             success=False,
         )

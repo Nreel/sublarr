@@ -10,6 +10,7 @@ OpenAI, Azure OpenAI, LM Studio, vLLM, and other compatible services.
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from decimal import Decimal
@@ -36,6 +37,46 @@ DEFAULT_CHAT_ENDPOINT = "https://api.openai.com/v1/chat/completions"
 # above llm_utils.MIN_CHAT_TEMPERATURE: the floor exists so nothing is ever
 # forwarded to llama.cpp's own 0.8 default.
 CURATED_TEMPERATURE = 0.3
+
+# Object keys servers have been observed to wrap a translation array under when
+# ``response_format={"type": "json_object"}`` is requested. Order matters only
+# for pick-listing; any list-of-strings value is accepted.
+_JSON_LIST_KEYS = ("translations", "lines", "results", "output")
+
+
+def _json_translations(text: str) -> list[str] | None:
+    """Unwrap a JSON-shaped reply into one string per entry, or ``None``.
+
+    The strict retry sends ``response_format={"type": "json_object"}``; a
+    server that honors it returns ``{"translations": [...]}`` pretty-printed
+    (or minified), and splitting that text on newlines counts structural
+    lines — ``{``, ``"translations": [` … — as content, turning 25 expected
+    lines into 27. A bare JSON array is accepted too. Only arrays whose
+    entries are all strings are unwrapped; anything else (including text
+    that merely starts with ``[`` or ``{``) falls back to plain splitting.
+    """
+    if not text or text[0] not in "[{":
+        return None
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return None
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        items = None
+        for key in _JSON_LIST_KEYS:
+            value = data.get(key)
+            if isinstance(value, list):
+                items = value
+                break
+        if items is None:
+            return None
+    else:
+        return None
+    if not items or not all(isinstance(item, str) for item in items):
+        return None
+    return [item for item in items if item.strip()]
 
 
 def _as_float(value: object) -> float | None:
@@ -548,9 +589,13 @@ class OpenAICompatBackend(LLMBackend):
             raise RuntimeError(f"OpenAI response missing 'message.content': {raw!r}")
 
         text = content.strip()
-        # Splitting only — numbering, stray break markers and wrapped lines are
-        # repaired centrally by LLMBackend._attempt.
-        translations = text.split("\n") or [text]
+        # A strict retry asks for ``response_format={"type": "json_object"}``;
+        # servers honor that with ``{"translations": [...]}`` (pretty-printed
+        # or minified). Splitting that text on newlines counts braces and
+        # array markers as content lines — a 25-line batch came back as 27 —
+        # so JSON is unwrapped first. Numbering, stray break markers and
+        # wrapped lines are repaired centrally by LLMBackend._attempt.
+        translations = _json_translations(text) or text.split("\n") or [text]
 
         usage = raw.get("usage") or {}
         # usage may be a pydantic-ish object; accommodate both shapes.

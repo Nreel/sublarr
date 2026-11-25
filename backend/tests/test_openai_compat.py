@@ -5,6 +5,7 @@ client init, health_check, and the three LLMBackend hooks
 (_assemble_messages / _build_request / _call_api / _parse_response).
 """
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -357,6 +358,52 @@ class TestTranslateBatchViaLLMBackend:
 
         with pytest.raises(LineCountMismatchError):
             backend.translate_batch(["Hello", "World", "Third"], "en", "de")
+
+    @patch("translation.openai_compat._HAS_OPENAI", True)
+    def test_json_object_reply_unwrapped_to_lines(self):
+        """A reply in the ``json_object`` shape the strict retry asks for must
+        yield one line per array entry, not one line per newline. Regression:
+        pretty-printed ``{"translations": [...]}`` was split on ``\\n``, so
+        ``{`` / ``"translations": [` / ``]`` / ``}` counted as content and a
+        25-line batch came back "27 lines after retry, expected 25"."""
+        backend = _make_backend()
+        mock_client = MagicMock()
+        mock_completion = MagicMock()
+        pretty = json.dumps({"translations": ["Hola", "Mundo"]}, indent=2)
+        mock_completion.model_dump.return_value = {
+            "choices": [{"message": {"content": pretty}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 10},
+            "model": "gpt-4o-mini",
+        }
+        mock_client.chat.completions.create.return_value = mock_completion
+        backend._client = mock_client
+
+        result = backend.translate_batch(["Hello", "World"], "en", "es")
+        assert result.success is True
+        assert result.translated_lines == ["Hola", "Mundo"]
+
+        # Bare minified array, wrapped or not, unwraps the same way.
+        mock_completion.model_dump.return_value = {
+            "choices": [
+                {"message": {"content": json.dumps(["Hola", "Mundo"])}, "finish_reason": "stop"}
+            ],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 10},
+            "model": "gpt-4o-mini",
+        }
+        result = backend.translate_batch(["Hello", "World"], "en", "es")
+        assert result.success is True
+        assert result.translated_lines == ["Hola", "Mundo"]
+
+        # Text that merely starts with '[' or '{' is not JSON and must not
+        # be unwrapped (plain "[Music]" subtitle lines survive).
+        mock_completion.model_dump.return_value = {
+            "choices": [{"message": {"content": "[Music]\n[Fan]"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 10},
+            "model": "gpt-4o-mini",
+        }
+        result = backend.translate_batch(["Song start", "Song end"], "en", "es")
+        assert result.success is True
+        assert result.translated_lines == ["[Music]", "[Fan]"]
 
 
 class TestHealthCheck:

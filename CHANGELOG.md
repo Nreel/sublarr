@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **A line-count failure aborted the whole episode instead of splitting the
+  batch** — when a backend answered a batch with the wrong number of lines,
+  `translate_with_fallback` stamped the failure result with
+  `backend_name="none"`, which `manager._no_backend_ran` reads as "no backend
+  ran" — a dead chain that splitting cannot fix. So the split-recovery path
+  (warmer retry, then halving) was unreachable and the file died at batch 1
+  with e.g. "Translation failed on batch 1: All backends failed. Last error:
+  openai_compat returned 27 lines after retry, expected 25". Content failures
+  now name the backend that answered; only an empty/unregistered/circuit-open
+  chain reports `"none"`, so unusable content halves and completes as the
+  batching layer was designed to.
+- **openai_compat strict retries parsed JSON replies as raw text** — the
+  strict retry after a line-count failure sends
+  `response_format={"type": "json_object"}`; servers honor it with a
+  pretty-printed `{"translations": [...]}`, whose structural lines (`{`,
+  `"translations": [` …) were counted as content — a 25-line batch came back
+  "27 lines". Replies in that shape are now unwrapped to one line per array
+  entry; replies that merely start with `[`/`{` still split on newlines.
 - **Health page shows exact timestamps** — every time column on `/health`
   (`problems.updated_at`, provider `last_failure_at`, translation
   `recent_errors.started_at`, `pipeline_errors.created_at`, scheduler/whisper/

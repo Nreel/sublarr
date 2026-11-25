@@ -328,6 +328,41 @@ def test_translate_with_fallback_all_fail(manager):
     assert "All backends failed" in result.error
 
 
+def test_translate_with_fallback_content_failure_names_answered_backend(manager):
+    """A backend that answered with unusable content must name itself, not
+    ``"none"``: translator.manager._no_backend_ran reads ``"none"`` as a dead
+    chain and aborts the whole file instead of halving the batch. Regression
+    for "openai_compat returned 27 lines after retry, expected 25" ending an
+    episode with no split recovery."""
+    from translation.llm_base import LineCountMismatchError
+    from translator.manager import _no_backend_ran
+
+    class MockBackendContentFail(MockBackend):
+        name = "mock_content"
+        display_name = "Mock Content Fail"
+
+        def translate_batch(
+            self,
+            lines,
+            source_lang,
+            target_lang,
+            glossary_entries=None,
+            series_context=None,
+            *,
+            lookback=None,
+            lookahead=None,
+            job_id=None,
+        ):
+            raise LineCountMismatchError("mock_content returned 2 lines after retry, expected 1")
+
+    manager.register_backend(MockBackendContentFail)
+    result = manager.translate_with_fallback(["Hi"], "en", "de", fallback_chain=["mock_content"])
+    assert result.success is False
+    assert "All backends failed" in result.error
+    assert result.backend_name == "mock_content"
+    assert _no_backend_ran(result) is False
+
+
 def test_translate_with_fallback_empty_chain_reports_no_backend(manager):
     """An empty chain must NOT report 'Last error: None' — it never ran a
     backend. Regression for the misleading error the empty default profile
