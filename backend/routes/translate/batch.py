@@ -197,9 +197,9 @@ def batch_start():
 
                     try:
                         result = translate_file(f["path"], force=force)
-                    except Exception as e:
+                    except Exception:
                         logger.exception("Batch: failed on %s", f["path"])
-                        result = {"success": False, "error": str(e), "stats": {}}
+                        result = {"success": False, "error": "Translation failed", "stats": {}}
 
                     # Tally exactly once per file. Before this restructure
                     # the counters were incremented INSIDE the try, so a

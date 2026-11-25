@@ -127,12 +127,12 @@ def start_scan():
         except Exception as e:
             logger.exception("Dedup scan failed: %s", e)
             with _scan_lock:
-                _scan_state["result"] = {"error": str(e)}
+                _scan_state["result"] = {"error": "Dedup scan failed"}
                 _scan_state["running"] = False
             update_activity_status(activity_row, "failed", {"error": str(e)})
             try:
                 with app.app_context():
-                    socketio.emit("scan_error", {"error": str(e)})
+                    socketio.emit("scan_error", {"error": "Dedup scan failed"})
             except Exception:
                 logger.debug("emit scan_error itself failed", exc_info=True)
 

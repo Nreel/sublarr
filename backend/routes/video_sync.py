@@ -119,9 +119,9 @@ def _run_sync(
             raise ValueError(f"Unknown engine: {engine!r}")
         _update_job(job_id, "completed", result=result)
         update_activity_status(activity_row, "success")
-    except Exception as exc:
+    except Exception:
         logger.exception("Sync job %s failed", job_id)
-        _update_job(job_id, "failed", error=str(exc))
+        _update_job(job_id, "failed", error="Sync failed")
     finally:
         with _jobs_lock:
             _job_status = _jobs.get(job_id, {}).get("status")

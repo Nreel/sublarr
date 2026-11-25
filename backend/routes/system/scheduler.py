@@ -283,7 +283,7 @@ def run_now(job_id: str):
         return (
             jsonify(
                 {
-                    "error": str(exc),
+                    "error": str(exc),  # user-facing-error
                     "error_type": "OneshotAlreadyPendingError",
                 }
             ),
@@ -454,7 +454,7 @@ def modify(job_id: str):
         return (
             jsonify(
                 {
-                    "error": str(exc),
+                    "error": str(exc),  # user-facing-error
                     "error_type": "ValidationError",
                 }
             ),

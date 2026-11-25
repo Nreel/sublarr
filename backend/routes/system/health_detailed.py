@@ -4,6 +4,7 @@ import logging
 
 from flask import jsonify
 
+from error_utils import public_error_text
 from routes.system import bp
 
 logger = logging.getLogger(__name__)
@@ -88,7 +89,7 @@ def health_detailed():
         if not db_ok:
             overall_healthy = False
     except Exception as exc:
-        subsystems["database"] = {"healthy": False, "message": str(exc)}
+        subsystems["database"] = {"healthy": False, "message": public_error_text(exc)}
         overall_healthy = False
 
     # Schema revision recorded by the startup `alembic upgrade head`. Absent for
@@ -126,7 +127,7 @@ def health_detailed():
     except Exception as exc:
         subsystems["ollama"] = {
             "healthy": False,
-            "message": str(exc),
+            "message": public_error_text(exc),
             "in_use": ollama_is_configured,
         }
         if ollama_is_configured:
@@ -152,7 +153,7 @@ def health_detailed():
             "details": providers_detail,
         }
     except Exception as exc:
-        subsystems["providers"] = {"healthy": False, "message": str(exc)}
+        subsystems["providers"] = {"healthy": False, "message": public_error_text(exc)}
 
     # Disk
     try:
@@ -212,7 +213,7 @@ def health_detailed():
                         "message": "No health check available",
                     }
             except Exception as be:
-                backends_health[bname] = {"healthy": False, "message": str(be)}
+                backends_health[bname] = {"healthy": False, "message": public_error_text(be)}
         subsystems["translation_backends"] = {
             "healthy": any(b["healthy"] for b in backends_health.values())
             if backends_health
@@ -222,7 +223,7 @@ def health_detailed():
         if not subsystems["translation_backends"]["healthy"]:
             overall_healthy = False
     except Exception as exc:
-        subsystems["translation_backends"] = {"healthy": False, "message": str(exc)}
+        subsystems["translation_backends"] = {"healthy": False, "message": public_error_text(exc)}
         overall_healthy = False
 
     # Media Servers
@@ -254,7 +255,7 @@ def health_detailed():
                 "message": "No media servers configured",
             }
     except Exception as exc:
-        subsystems["media_servers"] = {"healthy": False, "message": str(exc)}
+        subsystems["media_servers"] = {"healthy": False, "message": public_error_text(exc)}
         overall_healthy = False
 
     # Whisper Backends
@@ -278,7 +279,7 @@ def health_detailed():
                     subsystems["whisper_backends"] = {
                         "healthy": False,
                         "active_backend": active_backend.name,
-                        "message": str(we),
+                        "message": public_error_text(we),
                     }
             else:
                 subsystems["whisper_backends"] = {
@@ -296,7 +297,7 @@ def health_detailed():
         subsystems["whisper_backends"] = {
             "healthy": True,
             "active_backend": None,
-            "message": str(exc),
+            "message": public_error_text(exc),
         }
 
     # Arr Connectivity (Sonarr + Radarr instances)
@@ -322,7 +323,9 @@ def health_detailed():
                         }
                     )
             except Exception as se:
-                sonarr_checks.append({"instance_name": iname, "healthy": False, "message": str(se)})
+                sonarr_checks.append(
+                    {"instance_name": iname, "healthy": False, "message": public_error_text(se)}
+                )
 
         radarr_checks = []
         for inst in get_radarr_instances():
@@ -344,7 +347,7 @@ def health_detailed():
                     )
             except Exception as re_exc:
                 radarr_checks.append(
-                    {"instance_name": iname, "healthy": False, "message": str(re_exc)}
+                    {"instance_name": iname, "healthy": False, "message": public_error_text(re_exc)}
                 )
 
         all_arr = sonarr_checks + radarr_checks
@@ -356,7 +359,7 @@ def health_detailed():
         if not subsystems["arr_connectivity"]["healthy"]:
             overall_healthy = False
     except Exception as exc:
-        subsystems["arr_connectivity"] = {"healthy": False, "message": str(exc)}
+        subsystems["arr_connectivity"] = {"healthy": False, "message": public_error_text(exc)}
         overall_healthy = False
 
     # Scheduler Status
@@ -405,7 +408,7 @@ def health_detailed():
             "tasks": tasks,
         }
     except Exception as exc:
-        subsystems["scheduler"] = {"healthy": True, "message": str(exc)}
+        subsystems["scheduler"] = {"healthy": True, "message": public_error_text(exc)}
 
     status_code = 200 if overall_healthy else 503
     if overall_healthy:

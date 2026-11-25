@@ -68,9 +68,9 @@ def search_wanted(item_id):
             try:
                 result = search_wanted_item(item_id)
                 emit_event("wanted_item_searched", result)
-            except Exception as e:
+            except Exception:
                 logger.exception("Wanted search failed for item_id=%s", item_id)
-                emit_event("wanted_item_searched", {"wanted_id": item_id, "error": str(e)})
+                emit_event("wanted_item_searched", {"wanted_id": item_id, "error": "Search failed"})
 
     submit_background(_run)
 
@@ -124,9 +124,19 @@ def process_wanted(item_id):
             try:
                 result = process_wanted_item(item_id)
                 emit_event("wanted_item_processed", result)
-            except Exception as e:
+                if result.get("upgraded"):
+                    emit_event(
+                        "upgrade_complete",
+                        {
+                            "file_path": result.get("output_path"),
+                            "provider": result.get("provider"),
+                        },
+                    )
+            except Exception:
                 logger.exception("Wanted process failed for item_id=%s", item_id)
-                emit_event("wanted_item_processed", {"wanted_id": item_id, "error": str(e)})
+                emit_event(
+                    "wanted_item_processed", {"wanted_id": item_id, "error": "Processing failed"}
+                )
 
     submit_background(_run)
 
