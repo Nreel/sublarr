@@ -46,7 +46,7 @@ CLEANUP_FUSE_MIN_ITEMS = 20
 FULL_SCAN_INTERVAL = 6
 
 
-def _own_translation_kept_open(item: dict, path: str, target_lang: str, fmt: str) -> bool:
+def _own_translation_kept_open(item: dict, path: str, target_lang: str, fmt: str, subtitle_type: str = "full") -> bool:
     """Whether the subtitle on disk is our own translation and the item's
     profile keeps seeking the original.
 
@@ -54,11 +54,12 @@ def _own_translation_kept_open(item: dict, path: str, target_lang: str, fmt: str
     right after the scan filed it, meant the original was never sought (prod
     2026-11-05: 1,584 of 1,791 machine-translated .ass had no row). A profile
     that cannot be read keeps the row: a read error is no reason to delete.
+    ``subtitle_type`` judges a forced row on its own download history (#51).
     """
     from db.providers import is_machine_translated
     from services.mt_provisional import _keep_seeking_or_none
 
-    if not target_lang or not is_machine_translated(path, target_lang, fmt):
+    if not target_lang or not is_machine_translated(path, target_lang, fmt, subtitle_type):
         return False
     return _keep_seeking_or_none(item) is not False
 
@@ -616,8 +617,15 @@ class WantedScanner(_WantedSchedulerMixin, _WantedScanSourcesMixin):
                 # (``detect_existing_target_for_lang(..., subtitle_type="forced")``),
                 # so without it those rows were never dropped and were searched
                 # on every pass.
-                if target_lang and detect_existing_target_for_lang(
-                    path, target_lang, _cleanup_probe(path, settings), subtitle_type="forced"
+                detected_forced = (
+                    detect_existing_target_for_lang(
+                        path, target_lang, _cleanup_probe(path, settings), subtitle_type="forced"
+                    )
+                    if target_lang
+                    else None
+                )
+                if detected_forced and not _own_translation_kept_open(
+                    item, path, target_lang, detected_forced, subtitle_type="forced"
                 ):
                     to_remove_ids.append(item["id"])
                     continue

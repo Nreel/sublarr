@@ -427,6 +427,14 @@ def scan_radarr_movie(
             existing_forced = detect_existing_target_for_lang(
                 mapped_path, target_lang, probe_data, subtitle_type="forced"
             )
+            if (
+                keep_seeking_mt
+                and existing_forced in ("ass", "srt")
+                and is_machine_translated(mapped_path, target_lang, existing_forced, subtitle_type="forced")
+            ):
+                # Our own forced translation is not a finished result (#51):
+                # the row stays in play so cleanup and mt_reseek can see it.
+                existing_forced = None
             if existing_forced is None:
                 forced_title = f"{title} [Forced]"
                 _, forced_was_updated = upsert_wanted_item(
@@ -603,6 +611,16 @@ def scan_sonarr_series(
                 existing_forced = detect_existing_target_for_lang(
                     mapped_path, target_lang, probe_data, subtitle_type="forced"
                 )
+                if (
+                    keep_seeking_mt
+                    and existing_forced in ("ass", "srt")
+                    and is_machine_translated(
+                        mapped_path, target_lang, existing_forced, subtitle_type="forced"
+                    )
+                ):
+                    # Our own forced translation is not a finished result (#51):
+                    # the row stays in play so cleanup and mt_reseek can see it.
+                    existing_forced = None
                 if existing_forced is None:
                     forced_title = f"{title} [Forced]"
                     _, forced_was_updated = upsert_wanted_item(

@@ -187,15 +187,17 @@ def get_download_decision_log(download_id: int) -> str | None:
     return _get_repo().get_decision_log(download_id)
 
 
-def is_machine_translated(file_path: str, language: str = "", fmt: str = "") -> bool:
+def is_machine_translated(file_path: str, language: str = "", fmt: str = "", subtitle_type: str = "full") -> bool:
     """Whether the subtitle serving this video in this language is our own.
 
     A machine translation is the last resort, never the best available subtitle,
     so callers must not treat one as a finished result. ``fmt`` narrows it to
-    the file of that format. Fails safe to False.
+    the file of that format. ``subtitle_type`` narrows the row history to that
+    kind - a forced/HI sidecar is judged on its own downloads (#51). Fails safe
+    to False.
     """
     try:
-        return _get_repo().is_machine_translated(file_path, language, fmt)
+        return _get_repo().is_machine_translated(file_path, language, fmt, subtitle_type)
     except Exception:  # noqa: BLE001 — provenance is advisory; never break a scan
         logger.debug("is_machine_translated failed for %s", file_path, exc_info=True)
         return False
