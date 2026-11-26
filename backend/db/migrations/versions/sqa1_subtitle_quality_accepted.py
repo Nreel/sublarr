@@ -6,7 +6,7 @@ sits on the download rows of a file and language; a newer download starts
 unaccepted again.
 
 Revision ID: sqa1_subtitle_quality_accepted
-Revises: gtl1_glossary_target_language
+Revises: slp1_source_language_priority
 """
 
 import sqlalchemy as sa
@@ -14,7 +14,7 @@ from alembic import op
 from sqlalchemy import inspect
 
 revision = "sqa1_subtitle_quality_accepted"
-down_revision = "gtl1_glossary_target_language"
+down_revision = "slp1_source_language_priority"
 branch_labels = None
 depends_on = None
 
