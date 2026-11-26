@@ -115,7 +115,26 @@ def _blocked_socket_connect(self, address):
     )
 
 
+_real_socket_connect = socket.socket.connect
 socket.socket.connect = _blocked_socket_connect
+
+
+@pytest.fixture
+def real_socket_connect():
+    """Temporarily restore the real ``socket.connect`` for one test.
+
+    The hub net guard (providers/hub/net_guard.py) checks socket targets in an
+    audit hook that only fires inside the C ``socket.connect``; the blanket
+    monkeypatch above bypasses that verdict, so guard tests that assert the
+    policy outcome need the real method for their duration. Guarded targets
+    still refuse through the hook — no test reaches the network. The blanket
+    block stays the default for every other test.
+    """
+    socket.socket.connect = _real_socket_connect
+    try:
+        yield
+    finally:
+        socket.socket.connect = _blocked_socket_connect
 
 
 @event.listens_for(Engine, "connect")
