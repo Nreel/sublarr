@@ -5,6 +5,35 @@ All notable changes to Sublarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.24.4] - 2026-11-27
+
+### Fixed
+- **ASS/SSA wrapping dropped override tags** — line wrapping now keeps `{...}` overrides intact and joins wrapped lines with `\N` instead of a bare newline.
+- **`short_line_merge` merged overlapping events** — same-style events are merged only when their timings do not overlap.
+- **Repair replay drifted from the 1.6.5 common fixes** — the legacy replay path runs on a frozen snapshot of the 1.6.5 fixes (`services/repair/legacy_common_fixes.py`), so repaired files match what 1.6.5 would have produced.
+- **Auto-sync rows stayed open when the subtitle or video was gone** — such rows are now closed instead of retrying forever.
+- **A lost auto-sync enqueue race poisoned the DB session** — the losing enqueue no longer leaves the session in a failed state for the rest of the pass.
+- **Marketplace redirect re-check** — redirect targets are re-checked against the allow-list at redirect time, not only at request time.
+- **Titrari real-site rewrite** — provider calls follow the site's current endpoints and response shapes.
+- **Titrari offered non-subtitle pages** — only results with a real subtitle detail link are offered.
+- **Remux trio** — retention honours the configured keep rules, purge removes finished work, and the origin backup is restored when a remux fails.
+- **Settings texts were double-encoded** — mojibake in English settings strings is repaired (`localeEncoding` fix in the frontend locale data).
+- **Editor showed a plain "Valid"** — validation warnings are now shown instead of an unqualified Valid badge.
+- **Dashboard locale blocks nothing read** — dead locale blocks were dropped.
+- **Wanted/profile source languages** — profile source languages are normalised per entry (canonical lowercase primary subtag) instead of being refused wholesale; provider-source steps, the extraction hand-off and the series detail follow the profile's most-preferred source. Fork adaptation: source languages stay an ordered list, normalised per entry.
+- **A forced/HI download hid the machine-translated main subtitle** — provenance reads full-subtitle rows only (legacy NULL counts as full), and forced rows are judged on their own download history (`subtitle_type` threaded through the scans and cleanup).
+- **Library Anime and Low-score filter chips used fake data** — the chips filter on real data (anime mappings, accepted-quality flags).
+- **Before the first setup the API answered anyone** — unconfigured API now answers only the local network; the live connection follows the same gate before setup and under UI auth, and comes back after signing in. Fork adaptation: the live connection keeps the fork's polling websocket transport.
+- **Accepting a low-score subtitle did not persist (#255)** — the decision is stored on the download rows (`quality_accepted`, alembic revision `sqa1`, re-pointed onto the fork's head `slp1` so there is exactly one migration head).
+
+### Added
+- **Exception text no longer leaves the API** — error responses carry safe text; `tools/lint_no_exception_text_in_responses.py` gates it in CI.
+- **Security-invariants lint gate** — `tools/lint_security_invariants.py` asserts no SQL string building and no shell execution (hub/preset security hardening included); CI runs it.
+- **Penalty weight range checks** — scoring preset penalty weights are validated against their allowed ranges. Fork adaptation: the fork's ±100 clamp on weights is kept.
+
+### Tests
+- Regression tests lock the reported GitHub bugs that had none or only weak ones (enzyme dependency pinned check included); password boundary tests run off the shared rate limiter.
+
 ## [1.24.3] - 2026-11-25
 
 ### Fixed
