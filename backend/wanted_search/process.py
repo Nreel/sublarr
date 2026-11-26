@@ -37,6 +37,39 @@ from wanted_search.post_processor import (
 logger = logging.getLogger(__name__)
 
 
+def _item_source_language(item: dict, settings) -> str:
+    """The source language this item translates from (#80, fork's ordered list).
+
+    The governing profile's most-preferred ``source_languages`` entry, else
+    the global one — the direction Step 5 and the extraction hand-off use,
+    and the first language Steps 2/4 walk. A profile that cannot be read
+    falls back to the global source with a warning; an entry that is not a
+    language tag is skipped like in ``_source_priority``.
+    """
+    from config_language_data import normalize_language_code
+
+    try:
+        from services.mt_provisional import _resolve_profile_for_item
+
+        profile = _resolve_profile_for_item(item) or {}
+    except Exception as exc:  # noqa: BLE001 — the global source is a safe default
+        logger.warning(
+            "Wanted %s: cannot read the profile source language (%s) — using the global one",
+            item.get("id"),
+            exc,
+        )
+        profile = {}
+    for code in profile.get("source_languages") or []:
+        if not code:
+            continue
+        tag = normalize_source_tag(normalize_language_code(code))
+        if tag is None:
+            logger.warning("Wanted %s: ignoring invalid profile source %r", item.get("id"), code)
+            continue
+        return tag
+    return getattr(settings, "source_language", "") or ""
+
+
 def _source_priority(ctx: dict) -> list[str]:
     """Ordered source languages for this item's download-and-translate steps.
 

@@ -29,13 +29,20 @@ from services.standalone_library import (
 
 
 def _profile_source(profile: dict | None, settings) -> tuple[str, str]:
-    """The series' translation source: its profile's, else the global one (#80)."""
-    code = (profile or {}).get("source_language") or ""
-    if not code:
-        return settings.source_language, settings.source_language_name
-    from config_language_data import language_name
+    """The series' translation source: its profile's most-preferred entry, else the global one (#80).
 
-    return code, (profile or {}).get("source_language_name") or language_name(code)
+    The fork's profile stores an ordered ``source_languages`` list; the first
+    entry is what the wanted search walks first, so the page shows that one.
+    """
+    from config_language_data import language_name, normalize_language_code
+
+    from services.profile_service import normalize_source_tag
+
+    for raw in (profile or {}).get("source_languages") or []:
+        tag = normalize_source_tag(normalize_language_code(raw)) if raw else None
+        if tag:
+            return tag, language_name(tag)
+    return settings.source_language, settings.source_language_name
 
 
 def _get_standalone_series_detail(series_id: int, settings) -> dict | None:
