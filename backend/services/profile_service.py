@@ -38,11 +38,14 @@ _COMBINE_LANG_RE = _re.compile(r"^[a-z]{2,3}\Z")
 
 
 def _clean_source_list(value) -> list[str]:
-    """Validate the API's ``source_languages`` list (ordered priority).
+    """Validate and normalise the API's ``source_languages`` list (ordered priority).
 
     Absent/``None`` → ``["en"]`` default; a bare string is accepted as a
     single-entry list (legacy archives); anything else is a validation error.
-    Normalisation/dedup happens in the repository's cleaner.
+    Valid entries are normalised (lower-case primary subtag, trimmed spaces)
+    instead of refused — profiles saved before the validation stay usable.
+    Junk entries are refused with a per-entry message. Dedup happens in the
+    repository's cleaner.
     """
     if value is None:
         return ["en"]
@@ -50,7 +53,15 @@ def _clean_source_list(value) -> list[str]:
         value = [value]
     if not isinstance(value, list) or not all(isinstance(v, str) and v.strip() for v in value):
         raise ProfileValidationError("source_languages must be a list of language codes")
-    return value
+    tags = []
+    for entry in value:
+        tag = normalize_source_tag(entry)
+        if tag is None:
+            raise ProfileValidationError(
+                f"source_languages entry {entry!r} must be a language code like 'en' or 'pt-BR'"
+            )
+        tags.append(tag)
+    return tags
 
 
 _SOURCE_LANG_RE = _re.compile(r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?\Z")

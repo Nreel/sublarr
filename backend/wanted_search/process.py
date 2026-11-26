@@ -50,9 +50,22 @@ def _source_priority(ctx: dict) -> list[str]:
     """
     from config_language_data import normalize_language_code
 
-    priority = [
-        normalize_language_code(c) for c in (ctx["_pf"].get("source_languages") or []) if c
-    ] or [normalize_language_code(getattr(ctx["settings"], "source_language", "") or "")]
+    priority = []
+    for code in ctx["_pf"].get("source_languages") or []:
+        if not code:
+            continue
+        tag = normalize_source_tag(normalize_language_code(code))
+        if tag is None:
+            logger.warning(
+                "Wanted %s: ignoring invalid profile source %r",
+                ctx.get("item", {}).get("id"),
+                code,
+            )
+            continue
+        priority.append(tag)
+    priority = priority or [
+        normalize_language_code(getattr(ctx["settings"], "source_language", "") or "")
+    ]
     target = normalize_language_code(ctx["item_lang"] or "")
     return [code for code in priority if code and code != target]
 
