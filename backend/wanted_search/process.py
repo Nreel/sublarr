@@ -70,6 +70,11 @@ def _item_source_language(item: dict, settings) -> str:
     return getattr(settings, "source_language", "") or ""
 
 
+def _ctx_source_language(ctx: dict) -> str:
+    """The item's source language from ctx, else the global one."""
+    return ctx.get("source_language") or getattr(ctx["settings"], "source_language", "") or ""
+
+
 def _source_priority(ctx: dict) -> list[str]:
     """Ordered source languages for this item's download-and-translate steps.
 
@@ -1684,7 +1689,9 @@ def _search_flipped_item(
         ),
         "query": query,
         "source_query": source_query,
-        "source_language": source_lang,
+        # #80: the profile's most-preferred source, else the global one —
+        # what Steps 2/4 walk first and the drain queues translations from.
+        "source_language": _item_source_language(item, settings),
         "ass_had_results": False,
         "dry_run": dry_run,
         "allow_translate_fallback": allow_translate_fallback,
