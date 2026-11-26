@@ -42,4 +42,6 @@ def test_fresh_collision_backup_survives_retention(tmp_path):
 def test_collision_suffix_is_stripped_from_the_video_name(tmp_path):
     bak = "/media/Show/.sublarr/trash/2026-11-25/Episode.mkv.1775388610.1a2b3c4d.bak"
 
-    assert _derive_video_path(bak) == "/media/Show/Episode.mkv"
+    # _derive_video_path joins through os.path, so on Windows the result uses
+    # backslashes; compare normalized paths instead of a POSIX-only string.
+    assert os.path.normpath(_derive_video_path(bak)) == os.path.normpath("/media/Show/Episode.mkv")
