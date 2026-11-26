@@ -360,9 +360,9 @@ def retry_job(job_id):
         try:
             queue.enqueue(_run_job, new_job, job_id=new_job["id"])
         except Exception as exc:
-            update_job(new_job["id"], "failed", error=f"Queue unavailable: {exc}")
+            update_job(new_job["id"], "failed", error="Queue unavailable")
             logger.warning("Retry enqueue failed for %s: %s", file_path, exc)
-            return jsonify({"error": f"Failed to queue retry: {exc}"}), 503
+            return jsonify({"error": "Failed to queue retry"}), 503
     else:
         _app = current_app._get_current_object()
 
@@ -373,9 +373,9 @@ def retry_job(job_id):
         try:
             submit_background(_run_with_ctx)
         except Exception as exc:
-            update_job(new_job["id"], "failed", error=f"Failed to start retry: {exc}")
+            update_job(new_job["id"], "failed", error="Failed to start retry")
             logger.exception("Retry submit failed for %s", file_path)
-            return jsonify({"error": f"Failed to start retry: {exc}"}), 503
+            return jsonify({"error": "Failed to start retry"}), 503
 
     return jsonify(
         {

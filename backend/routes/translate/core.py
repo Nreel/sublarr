@@ -111,9 +111,9 @@ def translate_async():
         # The row already exists. Left "queued" it never resolves: /jobs
         # shows a phantom job forever and clear-queued has to sweep it.
         # Resolve it now with the reason.
-        update_job(job["id"], "failed", error=f"Queue unavailable: {exc}")
+        update_job(job["id"], "failed", error="Queue unavailable")
         logger.warning("Translate enqueue failed for %s: %s", file_path, exc)
-        return jsonify({"error": f"Failed to queue translation: {exc}"}), 503
+        return jsonify({"error": "Failed to queue translation"}), 503
 
     return jsonify(
         {
@@ -251,7 +251,7 @@ def translate_sync():
         return jsonify(result), status_code
     except Exception as e:
         if job is not None:
-            update_job(job["id"], "failed", error=str(e))
+            update_job(job["id"], "failed", error="Translation failed")
         raise TranslationError(
             str(e),
             context={"file_path": file_path},

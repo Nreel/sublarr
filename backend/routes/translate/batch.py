@@ -308,7 +308,7 @@ def batch_start():
                 }
             )
         logger.exception("Batch: submit to background worker failed")
-        return jsonify({"error": f"Failed to start batch: {exc}"}), 503
+        return jsonify({"error": "Failed to start batch"}), 503
 
     return jsonify(
         {

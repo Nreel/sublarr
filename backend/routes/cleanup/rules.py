@@ -273,14 +273,17 @@ def run_rule(rule_id: int):
         )
         return jsonify(result)
     except CleanupBusyError as e:
+        # user-facing-error
         update_activity_status(activity_row, "failed", {"error": str(e)})
         return jsonify({"error": str(e)}), 409  # user-facing-error
     except ValueError as e:
+        # user-facing-error
         update_activity_status(activity_row, "failed", {"error": str(e)})
         code = 404 if "not found" in str(e) else 400
         return jsonify({"error": str(e)}), code  # user-facing-error
     except Exception as e:
         logger.exception("Rule %d failed: %s", rule_id, e)
+        # user-facing-error
         update_activity_status(activity_row, "failed", {"error": str(e)})
         return jsonify({"error": "Internal server error"}), 500
 

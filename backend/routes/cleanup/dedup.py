@@ -129,6 +129,7 @@ def start_scan():
             with _scan_lock:
                 _scan_state["result"] = {"error": "Dedup scan failed"}
                 _scan_state["running"] = False
+            # user-facing-error
             update_activity_status(activity_row, "failed", {"error": str(e)})
             try:
                 with app.app_context():

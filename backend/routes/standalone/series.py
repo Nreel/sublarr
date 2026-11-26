@@ -230,8 +230,9 @@ def scan_series(series_id):
             summary = scanner.scan_series(series_id)
     except Exception as e:
         logger.exception("Failed to scan series %s: %s", series_id, e)
+        # The crash text is surfaced in the series UI record.
         record_series_scan_failure(
-            ref.id, standalone=ref.is_standalone, message=f"scan crashed: {e}"
+            ref.id, standalone=ref.is_standalone, message=f"scan crashed: {e}"  # user-facing-error
         )
         return jsonify({"error": "Internal server error"}), 500
 

@@ -210,16 +210,16 @@ def retranslate_single(job_id):
         try:
             queue.enqueue(_run, new_job, job_id=new_job["id"])
         except Exception as exc:
-            update_job(new_job["id"], "failed", error=f"Queue unavailable: {exc}")
+            update_job(new_job["id"], "failed", error="Queue unavailable")
             logger.warning("Re-translate enqueue failed for %s: %s", file_path, exc)
-            return jsonify({"error": f"Failed to queue re-translation: {exc}"}), 503
+            return jsonify({"error": "Failed to queue re-translation"}), 503
     else:
         try:
             submit_background(_run)
         except Exception as exc:
-            update_job(new_job["id"], "failed", error=f"Failed to start: {exc}")
+            update_job(new_job["id"], "failed", error="Failed to start")
             logger.exception("Re-translate submit failed for %s", file_path)
-            return jsonify({"error": f"Failed to start re-translation: {exc}"}), 503
+            return jsonify({"error": "Failed to start re-translation"}), 503
 
     return jsonify(
         {
@@ -458,7 +458,7 @@ def retranslate_batch():
                 }
             )
         logger.exception("Re-translate batch: submit to background worker failed")
-        return jsonify({"error": f"Failed to start re-translation batch: {exc}"}), 503
+        return jsonify({"error": "Failed to start re-translation batch"}), 503
 
     return jsonify(
         {

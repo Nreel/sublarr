@@ -188,7 +188,7 @@ def process_series(series_id):
         with _batch_lock:
             _batch_running = False
         logger.exception("Batch process: submit to background worker failed")
-        return jsonify({"error": f"Failed to start batch: {exc}"}), 503
+        return jsonify({"error": "Failed to start batch"}), 503
     return jsonify({"status": "started", "series_id": series_id}), 202
 
 
@@ -226,7 +226,7 @@ def process_all():
         with _batch_lock:
             _batch_running = False
         logger.exception("Batch process-all: submit to background worker failed")
-        return jsonify({"error": f"Failed to start batch: {exc}"}), 503
+        return jsonify({"error": "Failed to start batch"}), 503
     return jsonify({"status": "started", "filter": filter_mode}), 202
 
 
