@@ -35,6 +35,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Tests
 - Regression tests lock the reported GitHub bugs that had none or only weak ones (enzyme dependency pinned check included); password boundary tests run off the shared rate limiter.
 
+### Upstream backport (Abrechen2/sublarr master, base bc2a5716)
+
+Cherry-picked commits, pick order (upstream SHA -> fork SHA):
+- 1d93312c -> cc7b3ba4 ASS/SSA wrapping keeps override tags, uses `\N`
+- 41888af5 -> 41261aeb short_line_merge merges only non-overlapping same-style events
+- 3f3d97d7 -> 72a350b4 repair replay pinned to 1.6.5 common fixes
+- f6c3eecc -> 8e9e3492 auto-sync rows closed when subtitle or video is gone
+- d490a452 -> f536ec84 lost enqueue race no longer poisons the DB session
+- dac48d88 -> 60a11189 editor shows validation warnings
+- 71f858c4 -> 1f353460 double-encoded English settings repaired
+- d4c32e63 -> 7f000fd5 unread dashboard locale blocks dropped
+- cdd796ef -> c351e747 Titrari offers only real subtitle detail links
+- dc9f26fe -> 85c8abef marketplace redirect targets re-checked
+- 4c67d5ae -> dd63c211 Titrari real-site rewrite
+- 76d7b06b -> e61d6770 remux retention keeps fresh collision-suffix backups
+- 7109804e -> 5cb9e646 restore purges only the video's own trashed sidecars
+- 490eee98 -> cf922d3c remux backups restore only onto their origin video
+- 6cc1de7c -> 1a0a934f raw exception text kept out of API responses
+- 2971dd78 -> d0e5ff95 public remux job error message test
+- abee1206 -> 8bea1bda hub archive pin matches full member path
+- 2ecfbc7a -> 88d5391c hub bundles go through the download-URL policy
+- 622ee0ca -> e691d74a preset import range checks, atomic save
+- 89680193 -> 01d0f2e0 weight/modifier saves validate first, write atomically
+- 05820967 -> 0a9edd96 penalty-rule weight range checks, oversized -> 400
+- b7e2a33c -> 4c920caf security-invariants CI lint (no SQL building, no shell)
+- da385263 -> 37324330 profile source languages normalised, not refused
+- 242ba60d -> 1796c690 provider-source steps follow the profile source
+- dadfaa8b -> 6cc74b95 forced/HI download no longer hides the MT main sub
+- e35b8604 -> 1a520824 library Anime/Low-score chips use real data
+- f2cf4032 -> 68ca6c60 API answers only the local network before setup
+- 9aa93cfa -> 712297c0 live connection follows the API gate
+- 31fc5bcd -> 914d728a live connection returns after signing in
+- bb451d6c -> b53e5b4d low-score subtitle accept persists (#255)
+- 53a30727 -> 8c6c5d65 SeriesDetail page test mocks the accept composable
+- 91e81986 -> c30898b2 reported-bug regression locks
+- 6b76d734 -> 14059313 password boundary tests off the shared rate limiter
+- 17ce26b2 -> 3a746ade excluded subtitle cannot be out-bonused (#34)
+
+Fork adaptation commits:
+- f6277bc3 remux stamp-stripping assertion made platform-independent
+- 6cb13906 fork-only exception-text sweep + sanctioned-site markers
+- 90a1caa3 conftest real_socket_connect fixture for hub net-guard tests
+- 32273a93 per-entry source-language normalisation in the fork's ordered list
+- 8d099ce0 _item_source_language/_profile_source ported to the fork list shape
+- bd027ee2 ctx source-language helpers for the fork's wanted search
+- 03ef4541 subtitle_type threaded through forced scan/cleanup branches
+- 7eaa5bfe alembic sqa1 re-pointed gtl1 -> slp1 (single head)
+- 097dac51 changelog entry for #34/#30
+- 7446746e changelog + version 1.24.4
+
+Deliberate skips:
+- b623bb50, 63d8f301 version bumps (fork is 1.24.x)
+- upstream CHANGELOG hunks dropped in every pick (fork changelog is rewritten)
+- 05820967's `_profile_source` hunk (fork uses the ordered list shape)
+- 7a89497e, 4d5edce9 absorbed into the da385263 adaptation
+- 3fb65e15 changelog entry folded into this section
+- merge commits not cherry-picked (their payload commits were applied)
+
 ## [1.24.3] - 2026-11-25
 
 ### Fixed
