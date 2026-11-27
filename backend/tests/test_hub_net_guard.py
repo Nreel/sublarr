@@ -60,7 +60,9 @@ def local_file(tmp_path):
 # -- the guard itself ------------------------------------------------------------
 
 
-def test_outside_the_guard_loopback_and_files_still_work(loopback_server, local_file, real_socket_connect):
+def test_outside_the_guard_loopback_and_files_still_work(
+    loopback_server, local_file, real_socket_connect
+):
     """Positive control: the guard is scoped, the rest of Sublarr is untouched."""
     with urllib.request.urlopen(f"http://127.0.0.1:{loopback_server}/") as resp:
         assert resp.read() == SRT
@@ -172,7 +174,9 @@ def test_an_operator_host_is_reachable_but_no_other_lan_host(no_proxy_env, fake_
             _open_offline("http://192.168.178.21/api")
 
 
-def test_an_operator_host_name_allows_only_its_own_addresses(no_proxy_env, fake_dns, real_socket_connect):
+def test_an_operator_host_name_allows_only_its_own_addresses(
+    no_proxy_env, fake_dns, real_socket_connect
+):
     with outbound_guard("subsarr", operator_urls=["http://subsarr.lan:8080"]):
         assert _open_offline("http://subsarr.lan:8080/api") == SRT
         sock = socket.socket()

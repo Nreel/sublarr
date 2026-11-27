@@ -178,7 +178,8 @@ def memory_purge():
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     result = db.session.execute(
-        text(f"DELETE FROM translation_memory {where}"), params
+        text(f"DELETE FROM translation_memory {where}"),  # nosemgrep
+        params,
     )  # sql-identifiers-only
     db.session.commit()
     deleted = result.rowcount or 0

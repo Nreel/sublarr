@@ -106,7 +106,7 @@ def _untracked_repairs(engine) -> dict:
         return {"registered": registered, "applied": [], "pending": registered}
     with engine.connect() as conn:
         rows = conn.execute(
-            sa.text(
+            sa.text(  # nosemgrep
                 f"SELECT revision, applied_at, affected FROM {MARKER_TABLE}"
             )  # sql-identifiers-only
         ).all()

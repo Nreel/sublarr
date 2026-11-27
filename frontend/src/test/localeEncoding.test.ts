@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 // UTF-8 text read once as Windows-1252 and saved again ("âˆ’" for "−",
 // "â€”" for "—", "Ã¼" for "ü"). It showed up in the English scoring settings.
-const MOJIBAKE = /â€|âˆ|Ã[\u0080-¿]|Â[ -¿]/
+const MOJIBAKE = /â€|âˆ|Ã[\u0080-¿]|Â[\u00a0-\u00bf]/
 
 const localesDir = join(__dirname, '..', 'i18n', 'locales')
 

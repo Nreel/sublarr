@@ -46,7 +46,9 @@ CLEANUP_FUSE_MIN_ITEMS = 20
 FULL_SCAN_INTERVAL = 6
 
 
-def _own_translation_kept_open(item: dict, path: str, target_lang: str, fmt: str, subtitle_type: str = "full") -> bool:
+def _own_translation_kept_open(
+    item: dict, path: str, target_lang: str, fmt: str, subtitle_type: str = "full"
+) -> bool:
     """Whether the subtitle on disk is our own translation and the item's
     profile keeps seeking the original.
 

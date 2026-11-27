@@ -430,7 +430,9 @@ def scan_radarr_movie(
             if (
                 keep_seeking_mt
                 and existing_forced in ("ass", "srt")
-                and is_machine_translated(mapped_path, target_lang, existing_forced, subtitle_type="forced")
+                and is_machine_translated(
+                    mapped_path, target_lang, existing_forced, subtitle_type="forced"
+                )
             ):
                 # Our own forced translation is not a finished result (#51):
                 # the row stays in play so cleanup and mt_reseek can see it.

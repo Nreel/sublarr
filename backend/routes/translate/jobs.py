@@ -372,7 +372,7 @@ def retry_job(job_id):
 
         try:
             submit_background(_run_with_ctx)
-        except Exception as exc:
+        except Exception:
             update_job(new_job["id"], "failed", error="Failed to start retry")
             logger.exception("Retry submit failed for %s", file_path)
             return jsonify({"error": "Failed to start retry"}), 503

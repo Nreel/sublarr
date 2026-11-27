@@ -182,7 +182,7 @@ def process_series(series_id):
 
     try:
         submit_background(_run, app)
-    except Exception as exc:
+    except Exception:
         # The worker never started: release the claim, or every later
         # /library/.../process answers 409 until a restart (#248 shape).
         with _batch_lock:
@@ -220,7 +220,7 @@ def process_all():
 
     try:
         submit_background(_run, app)
-    except Exception as exc:
+    except Exception:
         # The worker never started: release the claim, or every later
         # /library/process-all answers 409 until a restart (#248 shape).
         with _batch_lock:

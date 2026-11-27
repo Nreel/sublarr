@@ -187,7 +187,9 @@ def get_download_decision_log(download_id: int) -> str | None:
     return _get_repo().get_decision_log(download_id)
 
 
-def is_machine_translated(file_path: str, language: str = "", fmt: str = "", subtitle_type: str = "full") -> bool:
+def is_machine_translated(
+    file_path: str, language: str = "", fmt: str = "", subtitle_type: str = "full"
+) -> bool:
     """Whether the subtitle serving this video in this language is our own.
 
     A machine translation is the last resort, never the best available subtitle,

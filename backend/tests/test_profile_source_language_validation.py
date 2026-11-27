@@ -27,7 +27,9 @@ def test_create_refuses_entries_that_are_not_language_tags(bad):
 
 @pytest.mark.parametrize("good", ["en", "ja", "pt-BR", "zh-Hans"])
 def test_create_accepts_language_tags(good):
-    assert validate_create_profile_data({**_BASE, "source_languages": [good]})["source_langs"] == [good]
+    assert validate_create_profile_data({**_BASE, "source_languages": [good]})["source_langs"] == [
+        good
+    ]
 
 
 def test_create_defaults_to_en():
@@ -45,11 +47,15 @@ def test_update_refuses_a_bad_entry():
 def test_create_normalises_case_and_spaces_per_entry(raw, clean):
     # A profile saved before the validation may hold "EN"; refusing it would
     # block every later save of that profile from the UI.
-    assert validate_create_profile_data({**_BASE, "source_languages": [raw]})["source_langs"] == [clean]
+    assert validate_create_profile_data({**_BASE, "source_languages": [raw]})["source_langs"] == [
+        clean
+    ]
 
 
 def test_update_normalises_a_legacy_list_and_keeps_priority_order():
-    assert validate_update_profile_fields({"source_languages": ["EN", " de "]})["source_languages"] == [
+    assert validate_update_profile_fields({"source_languages": ["EN", " de "]})[
+        "source_languages"
+    ] == [
         "en",
         "de",
     ]

@@ -216,7 +216,7 @@ def retranslate_single(job_id):
     else:
         try:
             submit_background(_run)
-        except Exception as exc:
+        except Exception:
             update_job(new_job["id"], "failed", error="Failed to start")
             logger.exception("Re-translate submit failed for %s", file_path)
             return jsonify({"error": "Failed to start re-translation"}), 503
@@ -442,7 +442,7 @@ def retranslate_batch():
 
     try:
         submit_background(_run_retranslate)
-    except Exception as exc:
+    except Exception:
         # Runner never started: release the guard flag, or /retranslate/batch
         # is bricked with 409 until restart.
         with retranslate_lock:

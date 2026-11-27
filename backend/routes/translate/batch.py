@@ -289,7 +289,7 @@ def batch_start():
 
     try:
         submit_background(_run_batch)
-    except Exception as exc:
+    except Exception:
         # The runner never started: release the flag or EVERY later /batch
         # call returns 409 "Batch already running" until the process
         # restarts.

@@ -595,7 +595,8 @@ class StandaloneScanner(_StandaloneProcessMixin):
             row = (
                 get_db()
                 .execute(
-                    text(f"SELECT 1 FROM {table} WHERE id=:id"), {"id": int(title_id)}
+                    text(f"SELECT 1 FROM {table} WHERE id=:id"),  # nosemgrep
+                    {"id": int(title_id)},
                 )  # sql-identifiers-only
                 .fetchone()
             )

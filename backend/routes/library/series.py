@@ -35,7 +35,6 @@ def _profile_source(profile: dict | None, settings) -> tuple[str, str]:
     entry is what the wanted search walks first, so the page shows that one.
     """
     from config_language_data import language_name, normalize_language_code
-
     from services.profile_service import normalize_source_tag
 
     for raw in (profile or {}).get("source_languages") or []:
