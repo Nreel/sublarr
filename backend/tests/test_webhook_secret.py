@@ -107,3 +107,20 @@ def test_the_generic_config_writer_refuses_the_webhook_secret():
     from routes.config.keys import is_writable_config_key
 
     assert not is_writable_config_key("webhook_secret")
+
+
+def test_ui_auth_enabled_does_not_block_the_webhook_secret(client, monkeypatch):
+    """With UI auth on, the session gate ran before the handler and answered
+    every webhook: ``X-Api-Key: <webhook secret>`` is not the API key, so Sonarr
+    got 401 "Authentication required" although the secret is the intended
+    credential. Webhook routes authenticate themselves, so the gate must skip
+    them (regression, deployed 2026-11-27)."""
+    import ui_auth
+
+    monkeypatch.setattr(ui_auth, "is_ui_auth_enabled", lambda: True)
+    accepted = _post(client, "sonarr", SECRET)
+    assert accepted.status_code == 200
+    refused = _post(client, "sonarr", "wrong")
+    assert refused.status_code == 401
+    # Handler's refusal, not the gate's — the prefix stayed exempt-but-authenticated.
+    assert refused.get_json() == {"error": "Unauthorized"}

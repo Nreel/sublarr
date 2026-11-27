@@ -5,6 +5,11 @@ All notable changes to Sublarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **UI auth blocked webhook secrets** — with UI auth enabled, the session gate answered every `/api/v1/webhook/*` request before the handler, so an arr sending `X-Api-Key: <webhook secret>` got 401 "Authentication required". Webhook routes authenticate themselves, so the gate now skips that prefix (like `auth.py`'s gate does); the secret and the legacy API key work again, wrong keys are still refused by the handler.
+
 ## [1.24.4] - 2026-11-27
 
 ### Fixed

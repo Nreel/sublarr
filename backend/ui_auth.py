@@ -292,7 +292,11 @@ def request_origin_is_foreign() -> bool:
 
 
 _EXEMPT_PATHS = {"/api/v1/health"}
-_EXEMPT_PREFIXES = ("/api/v1/auth/", "/socket.io/")
+# /api/v1/webhook/* authenticates itself (routes.webhooks.webhook_authorized,
+# #71) and auth.py's gate skips the same paths; this gate must not block them,
+# or an arr sending X-Api-Key: <webhook secret> — which is not the API key —
+# would answer 401 "Authentication required" before the handler ever runs.
+_EXEMPT_PREFIXES = ("/api/v1/auth/", "/socket.io/", "/api/v1/webhook/")
 
 
 def _setup_blocks_request() -> bool:
