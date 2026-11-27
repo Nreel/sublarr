@@ -8,14 +8,12 @@
  */
 import { Copy, Webhook } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
 import { SettingsSection } from '@/components/settings/SettingsSection'
 import { SettingRow } from '@/components/shared/SettingRow'
 import { toast } from '@/components/shared/Toast'
-import { getWebhookSecret } from '@/api/client'
 import { copyToClipboard } from '@/lib/clipboard'
 import { withBase } from '@/basePath'
-import { QUERY_KEY, WebhookSecretSection } from './WebhookSecretSection'
+import { WebhookSecretSection } from './WebhookSecretSection'
 
 const WEBHOOKS = [
   { service: 'Sonarr', hook: 'sonarr', descKey: 'webhooks_page.sonarr_desc' },
@@ -26,18 +24,13 @@ const WEBHOOKS = [
 export function WebhooksSection() {
   const { t } = useTranslation('settings')
   const baseUrl = window.location.origin
-  // Same cache key as WebhookSecretSection: one GET, refreshed on regenerate.
-  // Sonarr/Radarr webhook settings cannot send custom headers, so the copyable
-  // URL must carry the credential itself as ?apikey= (accepted by webhook_authorized).
-  const secretQuery = useQuery({ queryKey: QUERY_KEY, queryFn: getWebhookSecret, staleTime: 0 })
-  const secret = secretQuery.data?.webhook_secret ?? ''
 
   return (
     <div className="space-y-4">
       <WebhookSecretSection />
       {WEBHOOKS.map((w) => {
         // The URL Sonarr/Radarr/Jellyfin must call, prefix included when Sublarr sits behind one.
-        const fullUrl = `${baseUrl}${withBase(`/api/v1/webhook/${w.hook}`)}${secret ? `?apikey=${encodeURIComponent(secret)}` : ''}`
+        const fullUrl = `${baseUrl}${withBase(`/api/v1/webhook/${w.hook}`)}`
         return (
           <SettingsSection
             key={w.service}

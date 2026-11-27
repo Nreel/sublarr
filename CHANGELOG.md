@@ -5,11 +5,6 @@ All notable changes to Sublarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Fixed
-- **Sonarr/Radarr webhooks answered 401 (#71 follow-up)** — `/api/v1/webhook/*` accepted the webhook secret or API key only in the `X-Api-Key` header, which Sonarr and Radarr cannot send; they pass credentials as `?apikey=`. The routes now accept both forms (same contract as the global auth gate), and the copyable webhook URLs in Settings → System → Hooks carry the secret as `?apikey=` so one paste works.
-
 ## [1.24.4] - 2026-11-27
 
 ### Fixed
