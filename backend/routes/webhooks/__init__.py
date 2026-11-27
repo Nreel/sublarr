@@ -38,8 +38,14 @@ def webhook_authorized(settings) -> bool:
     plugins (code check 2026-11-05, #71). The API key keeps working here until
     the operator turns ``webhook_legacy_auth`` off, so an update does not
     break existing connections.
+
+    The credential arrives as ``X-Api-Key`` or as the ``?apikey=`` query
+    param. Sonarr and Radarr webhook settings cannot send custom headers —
+    their convention is the query param — so header-only acceptance made
+    every arr webhook answer 401 no matter which key was pasted. This is the
+    same contract as the global gate in auth.py.
     """
-    provided = request.headers.get("X-Api-Key", "")
+    provided = request.headers.get("X-Api-Key", "") or request.args.get("apikey", "")
     if not provided:
         return False
     secret = getattr(settings, "webhook_secret", "")

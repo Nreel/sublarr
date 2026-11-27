@@ -1262,7 +1262,7 @@
     "radarr_desc": "Paste into Radarr → Settings → Connect → Webhook",
     "jellyfin_desc": "Paste into Jellyfin → Dashboard → Webhooks plugin",
     "secret_title": "Webhook secret",
-    "secret_desc": "Sonarr, Radarr and Jellyfin send this secret as the X-Api-Key header. It opens the webhooks and nothing else – unlike the API key.",
+    "secret_desc": "The webhook URLs below already carry this secret as ?apikey= – Sonarr and Radarr cannot send headers. Jellyfin can also send it as the X-Api-Key header. It opens the webhooks and nothing else – unlike the API key.",
     "secret_label": "Secret",
     "secret_show": "Show secret",
     "secret_hide": "Hide secret",

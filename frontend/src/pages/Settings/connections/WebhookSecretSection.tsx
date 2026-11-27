@@ -17,6 +17,7 @@ import { copyToClipboard } from '@/lib/clipboard'
 import { useUpdateConfig } from '@/hooks/useApi'
 
 const QUERY_KEY = ['webhook-secret']
+export { QUERY_KEY }
 
 export function WebhookSecretSection() {
   const { t } = useTranslation('settings')

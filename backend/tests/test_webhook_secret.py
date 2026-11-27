@@ -43,6 +43,15 @@ def _post(client, service, key, **overrides):
         )
 
 
+def _post_query(client, service, key, **overrides):
+    """Sonarr/Radarr convention: credential in the ?apikey= query param."""
+    with patch("config.get_settings", return_value=_settings(**overrides)):
+        url = f"/api/v1/webhook/{service}"
+        if key is not None:
+            url += f"?apikey={key}"
+        return client.post(url, json=TEST_EVENT)
+
+
 SERVICES = ["sonarr", "radarr"]
 
 
@@ -60,6 +69,29 @@ def test_the_api_key_still_works_while_legacy_auth_is_on(client, service):
 def test_the_api_key_is_refused_once_legacy_auth_is_off(client, service):
     assert _post(client, service, API_KEY, webhook_legacy_auth=False).status_code == 401
     assert _post(client, service, SECRET, webhook_legacy_auth=False).status_code == 200
+
+
+@pytest.mark.parametrize("service", SERVICES)
+def test_the_webhook_secret_is_accepted_as_query_param(client, service):
+    # Sonarr/Radarr cannot send headers; a bare URL they paste must work.
+    assert _post_query(client, service, SECRET).status_code == 200
+
+
+@pytest.mark.parametrize("service", SERVICES)
+def test_the_api_key_works_as_query_param_while_legacy_auth_is_on(client, service):
+    assert _post_query(client, service, API_KEY).status_code == 200
+
+
+@pytest.mark.parametrize("service", SERVICES)
+def test_query_param_api_key_is_refused_once_legacy_auth_is_off(client, service):
+    assert _post_query(client, service, API_KEY, webhook_legacy_auth=False).status_code == 401
+    assert _post_query(client, service, SECRET, webhook_legacy_auth=False).status_code == 200
+
+
+@pytest.mark.parametrize("service", SERVICES)
+@pytest.mark.parametrize("key", ["wrong", ""])
+def test_wrong_query_param_is_refused(client, service, key):
+    assert _post_query(client, service, key).status_code == 401
 
 
 @pytest.mark.parametrize("service", SERVICES)
