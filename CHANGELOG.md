@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Library Anime and Low-score filter chips used fake data** — the chips filter on real data (anime mappings, accepted-quality flags).
 - **Before the first setup the API answered anyone** — unconfigured API now answers only the local network; the live connection follows the same gate before setup and under UI auth, and comes back after signing in. Fork adaptation: the live connection keeps the fork's polling websocket transport.
 - **Accepting a low-score subtitle did not persist (#255)** — the decision is stored on the download rows (`quality_accepted`, alembic revision `sqa1`, re-pointed onto the fork's head `slp1` so there is exactly one migration head).
+- **An excluded subtitle could be out-bonused (#34)** — exclusion now lands in its own band below the kill switch (-1998..-1000), so unbounded provider modifiers cannot lift an excluded candidate back; the band adjustment is recorded as `exclusion_band` so score equals the breakdown sum (#30).
 
 ### Added
 - **Exception text no longer leaves the API** — error responses carry safe text; `tools/lint_no_exception_text_in_responses.py` gates it in CI.
